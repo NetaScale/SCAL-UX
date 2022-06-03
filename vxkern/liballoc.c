@@ -2,6 +2,8 @@
 
 /**  Durand's Amazing Super Duper Memory functions.  */
 
+#define INFO
+
 #define VERSION 	"1.1"
 #define ALIGNMENT	16ul//4ul				///< This is the byte alignment that memory must be allocated on. IMPORTANT for GTK and other stuff.
 
@@ -49,10 +51,15 @@
 #define LIBALLOC_DEAD	0xdeaddead
 
 #if defined DEBUG || defined INFO
-#include <stdio.h>
-#include <stdlib.h>
+//#include <stdio.h>
+//#include <stdlib.h>
 
-#define FLUSH()		fflush( stdout )
+//#define FLUSH()		fflush( stdout )
+
+#include "vxkern.h"
+#define printf kprintf
+#define atexit(...)
+#define FLUSH(...)
 
 #endif
 
@@ -156,7 +163,7 @@ static void liballoc_dump()
 #ifdef DEBUG
 		while ( maj != NULL )
 		{
-			printf( "liballoc: %x: total = %i, used = %i\n",
+			printf( "liballoc: %lx: total = %i, used = %i\n",
 						maj, 
 						maj->size,
 						maj->usage );
@@ -164,7 +171,7 @@ static void liballoc_dump()
 			min = maj->first;
 			while ( min != NULL )
 			{
-				printf( "liballoc:    %x: %i bytes\n",
+				printf( "liballoc:    %lx: %i bytes\n",
 							min, 
 							min->size );
 				min = min->next;
@@ -224,7 +231,7 @@ static struct liballoc_major *allocate_new_page( unsigned int size )
 		l_allocated += maj->size;
 
 		#ifdef DEBUG
-		printf( "liballoc: Resource allocated %x of %i pages (%i bytes) for %i size.\n", maj, st, maj->size, size );
+		printf( "liballoc: Resource allocated %lx of %i pages (%i bytes) for %i size.\n", maj, st, maj->size, size );
 
 		printf( "liballoc: Total memory usage = %i KB\n",  (int)((l_allocated / (1024))) );
 		FLUSH();
@@ -263,7 +270,7 @@ void *PREFIX(malloc)(size_t req_size)
 	{
 		l_warningCount += 1;
 		#if defined DEBUG || defined INFO
-		printf( "liballoc: WARNING: alloc( 0 ) called from %x\n",
+		printf( "liballoc: WARNING: alloc( 0 ) called from %lx\n",
 							__builtin_return_address(0) );
 		FLUSH();
 		#endif
@@ -295,14 +302,14 @@ void *PREFIX(malloc)(size_t req_size)
 		}
 
 		#ifdef DEBUG
-		printf( "liballoc: set up first memory major %x\n", l_memRoot );
+		printf( "liballoc: set up first memory major %lx\n", l_memRoot );
 		FLUSH();
 		#endif
 	}
 
 
 	#ifdef DEBUG
-	printf( "liballoc: %x PREFIX(malloc)( %i ): ", 
+	printf( "liballoc: %lx PREFIX(malloc)( %i ): ", 
 					__builtin_return_address(0),
 					size );
 	FLUSH();
@@ -344,7 +351,7 @@ void *PREFIX(malloc)(size_t req_size)
 		if ( diff < (size + sizeof( struct liballoc_minor )) )
 		{
 			#ifdef DEBUG
-			printf( "CASE 1: Insufficient space in block %x\n", maj);
+			printf( "CASE 1: Insufficient space in block %lx\n", maj);
 			FLUSH();
 			#endif
 				
@@ -398,7 +405,7 @@ void *PREFIX(malloc)(size_t req_size)
 			ALIGN( p );
 			
 			#ifdef DEBUG
-			printf( "CASE 2: returning %x\n", p); 
+			printf( "CASE 2: returning %lx\n", p); 
 			FLUSH();
 			#endif
 			liballoc_unlock();		// release the lock
@@ -434,7 +441,7 @@ void *PREFIX(malloc)(size_t req_size)
 			ALIGN( p );
 
 			#ifdef DEBUG
-			printf( "CASE 3: returning %x\n", p); 
+			printf( "CASE 3: returning %lx\n", p); 
 			FLUSH();
 			#endif
 			liballoc_unlock();		// release the lock
@@ -481,7 +488,7 @@ void *PREFIX(malloc)(size_t req_size)
 						ALIGN( p );
 
 						#ifdef DEBUG
-						printf( "CASE 4.1: returning %x\n", p); 
+						printf( "CASE 4.1: returning %lx\n", p); 
 						FLUSH();
 						#endif
 						liballoc_unlock();		// release the lock
@@ -523,7 +530,7 @@ void *PREFIX(malloc)(size_t req_size)
 
 
 						#ifdef DEBUG
-						printf( "CASE 4.2: returning %x\n", p); 
+						printf( "CASE 4.2: returning %lx\n", p); 
 						FLUSH();
 						#endif
 						
@@ -600,7 +607,7 @@ void PREFIX(free)(void *ptr)
 	{
 		l_warningCount += 1;
 		#if defined DEBUG || defined INFO
-		printf( "liballoc: WARNING: PREFIX(free)( NULL ) called from %x\n",
+		printf( "liballoc: WARNING: PREFIX(free)( NULL ) called from %lx\n",
 							__builtin_return_address(0) );
 		FLUSH();
 		#endif
@@ -628,7 +635,7 @@ void PREFIX(free)(void *ptr)
 		{
 			l_possibleOverruns += 1;
 			#if defined DEBUG || defined INFO
-			printf( "liballoc: ERROR: Possible 1-3 byte overrun for magic %x != %x\n",
+			printf( "liballoc: ERROR: Possible 1-3 byte overrun for magic %lx != %lx\n",
 								min->magic,
 								LIBALLOC_MAGIC );
 			FLUSH();
@@ -639,7 +646,7 @@ void PREFIX(free)(void *ptr)
 		if ( min->magic == LIBALLOC_DEAD )
 		{
 			#if defined DEBUG || defined INFO
-			printf( "liballoc: ERROR: multiple PREFIX(free)() attempt on %x from %x.\n", 
+			printf( "liballoc: ERROR: multiple PREFIX(free)() attempt on %lx from %lx.\n", 
 									ptr,
 									__builtin_return_address(0) );
 			FLUSH();
@@ -648,7 +655,7 @@ void PREFIX(free)(void *ptr)
 		else
 		{
 			#if defined DEBUG || defined INFO
-			printf( "liballoc: ERROR: Bad PREFIX(free)( %x ) called from %x\n",
+			printf( "liballoc: ERROR: Bad PREFIX(free)( %lx ) called from %lx\n",
 								ptr,
 								__builtin_return_address(0) );
 			FLUSH();
@@ -661,7 +668,7 @@ void PREFIX(free)(void *ptr)
 	}
 
 	#ifdef DEBUG
-	printf( "liballoc: %x PREFIX(free)( %x ): ", 
+	printf( "liballoc: %lx PREFIX(free)( %lx ): ", 
 				__builtin_return_address( 0 ),
 				ptr );
 	FLUSH();
@@ -774,7 +781,7 @@ void*   PREFIX(realloc)(void *p, size_t size)
 			{
 				l_possibleOverruns += 1;
 				#if defined DEBUG || defined INFO
-				printf( "liballoc: ERROR: Possible 1-3 byte overrun for magic %x != %x\n",
+				printf( "liballoc: ERROR: Possible 1-3 byte overrun for magic %lx != %lx\n",
 									min->magic,
 									LIBALLOC_MAGIC );
 				FLUSH();
@@ -785,7 +792,7 @@ void*   PREFIX(realloc)(void *p, size_t size)
 			if ( min->magic == LIBALLOC_DEAD )
 			{
 				#if defined DEBUG || defined INFO
-				printf( "liballoc: ERROR: multiple PREFIX(free)() attempt on %x from %x.\n", 
+				printf( "liballoc: ERROR: multiple PREFIX(free)() attempt on %lx from %lx.\n", 
 										ptr,
 										__builtin_return_address(0) );
 				FLUSH();
@@ -794,7 +801,7 @@ void*   PREFIX(realloc)(void *p, size_t size)
 			else
 			{
 				#if defined DEBUG || defined INFO
-				printf( "liballoc: ERROR: Bad PREFIX(free)( %x ) called from %x\n",
+				printf( "liballoc: ERROR: Bad PREFIX(free)( %lx ) called from %lx\n",
 									ptr,
 									__builtin_return_address(0) );
 				FLUSH();

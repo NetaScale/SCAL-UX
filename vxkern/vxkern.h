@@ -4,6 +4,11 @@
 #include "nanoprintf.h"
 
 #define kprintf(...) npf_pprintf(limterm_putc, NULL, __VA_ARGS__)
+#define assert(...)                           \
+	{                                     \
+		if (!(__VA_ARGS__))           \
+			fatal(#__VA_ARGS__); \
+	}
 #define fatal(...)                      \
 	{                               \
 		kprintf(__VA_ARGS__);   \

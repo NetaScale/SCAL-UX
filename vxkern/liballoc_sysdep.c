@@ -19,11 +19,8 @@ liballoc_alloc(size_t pages)
 {
 	paddr_t paddr = pmap_alloc_page(pages);
 	if (paddr == NULL) {
-		kprintf("failed to get pages\n");
-		while (true) {
-		}
+		fatal("failed to get pages\n");
 	}
-	kprintf("got page %p/%p\n", paddr, P2V(paddr));
 	return P2V(paddr);
 }
 

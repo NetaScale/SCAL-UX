@@ -126,7 +126,7 @@ _start(void)
 			    entries[i]->length / PGSIZE);
 
 			/* mark off the pages used */
-			for (b = 0; b < PGROUNDUP(used) / PGSIZE; b++)
+			for (b = 0; b < used; b++)
 				bm->pages[b].type = kPageVMInternal;
 
 			/* now zero the remainder */
