@@ -52,29 +52,6 @@ limterm_putc(int ch, void *ctx)
 	    terminal_request.response->terminals[0], (const char *)&ch, 1);
 }
 
-/*
- * early allocator function - a watermark allocator - it robs pages from the 1st
- * pregion.
- */
-int early_alloc(size_t size)
-{
-	static uintptr_t last_offs;
-
-	/* find 1st useable page */
-	if (last_offs == 0) {
-		for (int i = 0; ; i++){
-			if (g_1st_mem->pages[i].type != kPageVMInternal) {
-				last_offs = i * PGSIZE;
-				break;
-			}
-		}
-	}
-
-	kprintf("allocating at offset %lu\n", last_offs);
-
-	return 0;
-}
-
 // The following will be our kernel's entry point.
 void
 _start(void)

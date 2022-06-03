@@ -17,14 +17,14 @@ vm_init(paddr_t kphys)
 	/* kernel virtual mapping */
 	objs[0]->gen.phys = kphys;
 	objs[0]->gen.length = 0x80000000;
-	vm_map_object(map, objs[0], (void *)0xffffffff80000000, 0x80000000);
+	vm_map_object(map, objs[0], (void *)0xffffffff80000000, 0x1000);
 
 	/* hhdm */
 	objs[1]->gen.phys = 0x0;
 	objs[1]->gen.length = 0x100000000;
-	vm_map_object(map, objs[1], (void *)0xffff80000000, 0x100000000);
-
+	vm_map_object(map, objs[1], (void *)0xffff800000000000, 0x1000);
 	kprintf("vm_init done\n");
+	while (1) {}
 }
 
 vm_map_t *

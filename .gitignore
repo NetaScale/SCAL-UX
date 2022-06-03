@@ -5,3 +5,4 @@ barebones.iso
 compile_commands.json
 .cache/
 .gdbinit
+mine/
