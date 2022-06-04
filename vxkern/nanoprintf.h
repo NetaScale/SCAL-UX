@@ -684,6 +684,8 @@ int npf_vpprintf(npf_putc pc, void *pc_ctx, char const *format, va_list args) {
   pc_cnt.ctx = pc_ctx;
   pc_cnt.n = 0;
 
+  lock(&lock_msgbuf);
+
   while (*cur) {
     int const fs_len = (*cur != '%') ? 0 : npf_parse_format_spec(cur, &fs);
     if (!fs_len) { NPF_PUTC(*cur++); continue; }
@@ -992,6 +994,8 @@ int npf_vpprintf(npf_putc pc, void *pc_ctx, char const *format, va_list args) {
     }
 #endif
   }
+
+  unlock(&lock_msgbuf);
 
   return pc_cnt.n;
 }

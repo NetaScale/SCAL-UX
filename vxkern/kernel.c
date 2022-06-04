@@ -2,11 +2,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define NANOPRINTF_IMPLEMENTATION
-#include "nanoprintf.h"
+#include "amd64.h"
 #include "vxkern.h"
 #include "vm.h"
 #include "liballoc.h"
+#include "intr.h"
+
+#define NANOPRINTF_IMPLEMENTATION
+#include "nanoprintf.h"
 
 struct limine_terminal *terminal;
 vm_pregion_t *g_1st_mem = NULL;
@@ -16,13 +19,13 @@ vm_pregion_t *g_last_mem = NULL;
 // the compiler does not optimise them away, so, usually, they should
 // be made volatile or equivalent.
 
-static volatile struct limine_kernel_address_request kernel_address_request = {
-	.id = LIMINE_KERNEL_ADDRESS_REQUEST,
+static volatile struct limine_hhdm_request hhdm_request = {
+	.id = LIMINE_HHDM_REQUEST,
 	.revision = 0
 };
 
-static volatile struct limine_terminal_request terminal_request = {
-	.id = LIMINE_TERMINAL_REQUEST,
+static volatile struct limine_kernel_address_request kernel_address_request = {
+	.id = LIMINE_KERNEL_ADDRESS_REQUEST,
 	.revision = 0
 };
 
@@ -31,10 +34,19 @@ static volatile struct limine_memmap_request memmap_request = {
 	.revision = 0
 };
 
-static volatile struct limine_hhdm_request hhdm_request = {
-	.id = LIMINE_HHDM_REQUEST,
+static volatile struct limine_smp_request smp_request = {
+	.id = LIMINE_SMP_REQUEST,
 	.revision = 0
 };
+
+static volatile struct limine_terminal_request terminal_request = {
+	.id = LIMINE_TERMINAL_REQUEST,
+	.revision = 0
+};
+
+static uint64_t bsp_lapic_id;
+static int cpus_up = 0;
+spinlock_t lock_msgbuf;
 
 static void
 done(void)
@@ -49,7 +61,32 @@ void
 limterm_putc(int ch, void *ctx)
 {
 	terminal_request.response->write(
-	    terminal_request.response->terminals[0], (const char *)&ch, 1);
+		terminal_request.response->terminals[0], (const char *)&ch, 1);
+}
+
+void
+common_init(struct limine_smp_info *smpi)
+{
+	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
+
+	kprintf("setup cpu %d\n", smpi->processor_id);
+
+	wrmsr(kAMD64MSRKernelGSBase, smpi->extra_argument);
+	cpu->num = smpi->processor_id;
+	cpu->lapic_id = smpi->lapic_id;
+
+	idt_load();
+	lapic_enable(0xff);
+
+	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
+}
+
+void
+ap_init(struct limine_smp_info *smpi)
+{
+	common_init(smpi);
+
+	done();
 }
 
 // The following will be our kernel's entry point.
@@ -113,13 +150,39 @@ _start(void)
 			if (g_1st_mem == NULL) {
 				g_1st_mem = g_last_mem = bm;
 				/* set 1st offs here maybe */
-			}
-			else
+			} else
 				g_last_mem = g_last_mem->next = bm;
 		}
 	}
 
 	vm_init((paddr_t)kernel_address_request.response->physical_base);
+	idt_init();
+
+	struct limine_smp_response *smpr = smp_request.response;
+	cpu_t *cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
+
+	kprintf("%lu cpus\n", smpr->cpu_count);
+
+	bsp_lapic_id = smpr->bsp_lapic_id;
+
+	for (size_t i = 0; i < smpr->cpu_count; i++) {
+		struct limine_smp_info *smpi = smpr->cpus[i];
+		smpi->extra_argument = (uint64_t)&cpus[i];
+		if (smpi->lapic_id == bsp_lapic_id) {
+			common_init(smpi);
+		} else {
+			smpi->goto_address = ap_init;
+		}
+	}
+
+	kprintf("waiting for all CPUs to come up\n");
+	while (cpus_up != smpr->cpu_count)
+		__asm__("pause");
+
+	kprintf("all CPUs up\n");
+
+	uint64_t *ill = (uint64_t *)0x0000000200000000ull;
+	*ill = 42;
 
 	// We're done, just hang...
 	done();
