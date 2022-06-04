@@ -14,6 +14,23 @@ typedef struct {
 } __attribute__((packed)) idt_entry_t;
 
 typedef struct intr_frame {
+	uint64_t rax;
+	uint64_t rbx;
+	uint64_t rcx;
+	uint64_t rdx;
+	uint64_t rdi;
+	uint64_t rsi;
+	uint64_t r8;
+	uint64_t r9;
+	uint64_t r10;
+	uint64_t r11;
+	uint64_t r12;
+	uint64_t r13;
+	uint64_t r14;
+	uint64_t r15;
+	uint64_t rbp;
+	uint64_t code;
+
 	uintptr_t ip;
 	uint64_t cs;
 	uint64_t flags;
@@ -52,29 +69,35 @@ idt_load()
 
 	asm volatile("lidt %0" : : "m"(idtr));
 	asm("sti");
-	kprintf("idt loaded\n");
 }
 
-__attribute__((interrupt)) void
-pagefault(intr_frame_t *frame, uintptr_t ec)
+void
+handle_int(intr_frame_t *frame, uintptr_t num)
 {
+	/*
 	uint64_t cr2;
 	asm("mov %%cr2, %%rax\n"
 	    "mov %%rax, %0"
 	    : "=m"(cr2)
 	    :
 	    : "%rax");
-	kprintf("page fault: ip 0x%lx, code 0x%lx, addr 0x%lx\n", frame->ip, ec,
-	    cr2);
-	for (;;)
-		asm("hlt");
+	*/
+
+	kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->ip,
+	    frame->code);
+	if (num == 14)
+		for (;;)
+			asm("hlt");
 }
+
+extern void *isr_thunk_14;
+extern void *isr_thunk_80;
 
 void
 idt_init()
 {
-	idt_set(0xE, (vaddr_t)pagefault, 0x8E, 0);
-	idt_load();
+	idt_set(0xE, (vaddr_t)&isr_thunk_14, 0x8E, 0);
+	idt_set(80, (vaddr_t)&isr_thunk_80, 0x8E, 0);
 }
 
 static uint32_t

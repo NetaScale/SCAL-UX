@@ -181,8 +181,12 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
+	kprintf("test int\n");
+	asm volatile("int $80");
+	kprintf("test pgfault\n");
 	uint64_t *ill = (uint64_t *)0x0000000200000000ull;
 	*ill = 42;
+	kprintf("int successfully tested\n");
 
 	// We're done, just hang...
 	done();
