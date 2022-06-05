@@ -1,0 +1,3 @@
+[submodule "vendor/objfw"]
+	path = vendor/objfw
+	url = git@github.com:NetaScale/ObjFW.git
