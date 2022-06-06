@@ -29,6 +29,11 @@ static volatile struct limine_kernel_address_request kernel_address_request = {
 	.revision = 0
 };
 
+static volatile struct limine_kernel_file_request kernel_file_request = {
+	.id = LIMINE_KERNEL_FILE_REQUEST,
+	.revision = 0
+};
+
 static volatile struct limine_memmap_request memmap_request = {
 	.id = LIMINE_MEMMAP_REQUEST,
 	.revision = 0
@@ -194,11 +199,13 @@ _start(void)
 		done();
 	}
 
+	kmod_parsekern(kernel_file_request.response->kernel_file->address);
+
 	struct limine_file * mod = module_request.response->modules[0];
 
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 
-	loadelf(mod->address);
+	kmod_load(mod->address);
 
 
 #if 0 

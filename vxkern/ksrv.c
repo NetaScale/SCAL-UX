@@ -2,34 +2,12 @@
  * support for loadable kernel servers
  */
 
-#include <sys/elf64.h>
-
 #include "klibc.h"
+#include "ksrv.h"
 
 #define MAX2(x, y) ((x > y) ? x : y)
 
-typedef struct kmod {
-	char *base;
-	size_t mem_size; /* total size of virt address space */
-
-	Elf64_Dyn *dyn;
-
-	/*
-	 * Elf64_Word nbuckets;
-	 * Elf64_Word nchain;
-	 * Elf64_Word bucket[nbucket];
-	 * Elf64_Word chain[nchain];
-	 */
-	const Elf64_Word *hashtab;
-
-	void (**init_array)(void);
-	size_t init_array_size;
-
-	char *strtab;
-
-	const Elf64_Sym *symtab;
-	size_t symtab_size;
-} kmod_t;
+kmod_t *kmods;
 
 static void
 doRela()
@@ -37,7 +15,67 @@ doRela()
 	kprintf("hello from doRela\n");
 }
 
-int
+static uint32_t
+elf64_hash(const char *name)
+{
+	uint32_t h = 0, g;
+	for (; *name; name++) {
+		h = (h << 4) + (uint8_t)*name;
+		uint32_t g = h & 0xf0000000;
+		if (g)
+			h ^= g >> 24;
+		h &= 0x0FFFFFFF;
+	}
+	return h;
+}
+
+static const Elf64_Sym *
+elf64_hashlookup(const Elf64_Sym *symtab, const char *strtab,
+    const uint32_t *hashtab, const char *symname)
+{
+	const uint32_t hash = elf64_hash(symname);
+	const uint32_t nbucket = hashtab[0];
+
+	for (uint32_t i = hashtab[2 + hash % nbucket]; i;
+	     i = hashtab[2 + nbucket + i]) {
+		if (strcmp(symname, strtab + symtab[i].st_name) == 0)
+			return &symtab[i];
+	}
+
+	return NULL;
+}
+
+void
+kmod_parsekern(void *addr)
+{
+	Elf64_Ehdr *ehdr = addr;
+	kmod_t kmod = { 0 };
+
+	kprintf("reading kernel: addr %p...\n", addr);
+
+	for (int x = 0; x < ehdr->e_shentsize * ehdr->e_shnum;
+	     x += ehdr->e_shentsize) {
+		Elf64_Shdr *shdr = (addr + ehdr->e_shoff + x);
+		if (shdr->sh_type == SHT_SYMTAB) {
+			Elf64_Shdr *strtabshdr;
+
+			assert(shdr->sh_entsize == sizeof(Elf64_Sym));
+
+			kmod.symtab = addr + shdr->sh_offset;
+			kmod.symtab_size = shdr->sh_size / sizeof(Elf64_Sym);
+
+			strtabshdr = addr + ehdr->e_shoff +
+			    ehdr->e_shentsize * shdr->sh_link;
+			kmod.strtab = addr + strtabshdr->sh_offset;
+
+			break;
+		}
+	}
+
+	assert(kmod.symtab != NULL);
+}
+
+static int
 do_reloc(kmod_t *kmod, const Elf64_Rela *reloc)
 {
 	uint64_t *dest = (uint64_t *)(kmod->base + reloc->r_offset);
@@ -75,7 +113,7 @@ do_reloc(kmod_t *kmod, const Elf64_Rela *reloc)
  * - assumes load kmod.base of 0x0
  */
 void
-loadelf(void *addr)
+kmod_load(void *addr)
 {
 	Elf64_Ehdr ehdr;
 	kmod_t kmod = { 0 };
@@ -122,7 +160,7 @@ loadelf(void *addr)
 		else if (phdr.p_type == PT_NOTE ||
 		    phdr.p_type == PT_GNU_EH_FRAME ||
 		    phdr.p_type == PT_GNU_STACK || phdr.p_type == PT_GNU_RELRO)
-			;
+			/* epsilon */;
 		else
 			kprintf("...unrecognised type, ignoring\n");
 	}

@@ -1,6 +1,8 @@
 #ifndef VXKERN_H_
 #define VXKERN_H_
 
+#include <stdbool.h>
+
 #include "nanoprintf.h"
 
 #define kprintf(...) npf_pprintf(limterm_putc, NULL, __VA_ARGS__)
@@ -22,7 +24,8 @@ typedef volatile int spinlock_t;
 
 void limterm_putc(int, void *);
 
-void loadelf(void *addr);
+void kmod_parsekern(void *addr);
+void kmod_load(void *addr);
 
 extern spinlock_t lock_msgbuf;
 
