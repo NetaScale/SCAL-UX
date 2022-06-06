@@ -2,7 +2,7 @@
 #define KLIBC_H_
 
 #include "liballoc.h"
-#include "vxkern.h"
+#include <sys/vxkern.h>
 
 #define fflush(...)
 #define printf(...) kprintf(__VA_ARGS__)

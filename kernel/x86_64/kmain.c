@@ -1,15 +1,16 @@
-#include <limine.h>
+#include <sys/amd64_misc.h>
+#include <sys/limine.h>
+#include <sys/vxkern.h>
+
 #include <stddef.h>
 #include <stdint.h>
 
-#include "amd64.h"
-#include "vxkern.h"
-#include "vm.h"
-#include "liballoc.h"
 #include "intr.h"
+#include "liballoc.h"
+#include <sys/vm.h>
 
 #define NANOPRINTF_IMPLEMENTATION
-#include "nanoprintf.h"
+#include "sys/nanoprintf.h"
 
 struct limine_terminal *terminal;
 vm_pregion_t *g_1st_mem = NULL;

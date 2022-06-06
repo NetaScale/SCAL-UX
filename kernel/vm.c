@@ -1,6 +1,6 @@
 #include "liballoc.h"
-#include "vm.h"
-#include "vxkern.h"
+#include <sys/vm.h>
+#include <sys/vxkern.h>
 
 void
 vm_init(paddr_t kphys)

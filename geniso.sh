@@ -3,7 +3,7 @@ make -C vendor/limine
 
 	rm -rf iso_root
 	mkdir -p iso_root
-	cp build/vxkern/vxkern build/TestDriver/libTestDriver.so \
+	cp build/kernel/x86_64/vxkern build/TestDriver/libTestDriver.so \
 		limine.cfg vendor/limine/limine.sys vendor/limine/limine-cd.bin \
 		vendor/limine/limine-cd-efi.bin iso_root/
 	xorriso -as mkisofs -b limine-cd.bin \

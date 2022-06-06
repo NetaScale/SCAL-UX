@@ -9,7 +9,6 @@ of performance are better-implemented in C than Valutron code.
 
 It also provides a part of the Valutron Subsystem for UNIX-based Applications
 (or VSUA), a compatibility layer to allow some applications written to the
-POSIX standard to run as native processes. Most of the elements typically found
-in a Unix kernel will eventually be implemented instead in Valutron code.
+POSIX standard to run as native processes.
 
-The VXK targets x86_64 PCs for now.
+The VXK targets only x86_64 PCs for now.

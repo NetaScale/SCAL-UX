@@ -1,6 +1,6 @@
 #include "liballoc.h"
-#include "vm.h"
-#include "vxkern.h"
+#include <sys/vm.h>
+#include <sys/vxkern.h>
 
 int
 liballoc_lock()

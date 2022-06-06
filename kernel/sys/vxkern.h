@@ -1,9 +1,9 @@
 #ifndef VXKERN_H_
 #define VXKERN_H_
 
-#include <stdbool.h>
+#include <sys/nanoprintf.h>
 
-#include "nanoprintf.h"
+#include <stdbool.h>
 
 #define kprintf(...) npf_pprintf(limterm_putc, NULL, __VA_ARGS__)
 #define kvpprintf(...) npf_vpprintf(limterm_putc, NULL, __VA_ARGS__)
@@ -45,6 +45,6 @@ unlock(spinlock_t *lock)
 }
 
 /* needs lock/unlock */
-#include "nanoprintf.h"
+#include "sys/nanoprintf.h"
 
 #endif /* VXKERN_H_ */

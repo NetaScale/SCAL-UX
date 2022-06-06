@@ -1,9 +1,9 @@
 #include <stdint.h>
 
-#include "amd64.h"
+#include <sys/amd64_misc.h>
 #include "liballoc.h"
-#include "vm.h"
-#include "vxkern.h"
+#include <sys/vm.h>
+#include <sys/vxkern.h>
 
 enum {
 	kMMUPresent = 0x1,
