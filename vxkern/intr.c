@@ -74,20 +74,21 @@ idt_load()
 void
 handle_int(intr_frame_t *frame, uintptr_t num)
 {
-	/*
-	uint64_t cr2;
-	asm("mov %%cr2, %%rax\n"
-	    "mov %%rax, %0"
-	    : "=m"(cr2)
-	    :
-	    : "%rax");
-	*/
-
 	kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->ip,
 	    frame->code);
-	if (num == 14)
+	if (num == 14) {
+		uint64_t cr2;
+		asm("mov %%cr2, %%rax\n"
+		    "mov %%rax, %0"
+		    : "=m"(cr2)
+		    :
+		    : "%rax");
+
+		kprintf("cr2 was %p\n", cr2);
+
 		for (;;)
 			asm("hlt");
+	}
 }
 
 extern void *isr_thunk_14;

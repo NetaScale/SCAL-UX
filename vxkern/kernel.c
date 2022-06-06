@@ -34,6 +34,11 @@ static volatile struct limine_memmap_request memmap_request = {
 	.revision = 0
 };
 
+static volatile struct limine_module_request module_request = {
+	.id = LIMINE_MODULE_REQUEST,
+	.revision = 0
+};
+
 static volatile struct limine_smp_request smp_request = {
 	.id = LIMINE_SMP_REQUEST,
 	.revision = 0
@@ -181,12 +186,29 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
+	int doathing();
+	doathing();
+
+	if (module_request.response->module_count != 1) {
+		kprintf("expected a module\n");
+		done();
+	}
+
+	struct limine_file * mod = module_request.response->modules[0];
+
+	kprintf("mod %s: %p\n", mod->path, mod->address);
+
+	loadelf(mod->address);
+
+
+#if 0 
 	kprintf("test int\n");
 	asm volatile("int $80");
 	kprintf("test pgfault\n");
 	uint64_t *ill = (uint64_t *)0x0000000200000000ull;
 	*ill = 42;
 	kprintf("int successfully tested\n");
+#endif
 
 	// We're done, just hang...
 	done();
