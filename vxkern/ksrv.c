@@ -7,13 +7,7 @@
 
 #define MAX2(x, y) ((x > y) ? x : y)
 
-kmod_t *kmods;
-
-static void
-doRela()
-{
-	kprintf("hello from doRela\n");
-}
+struct kmod_head kmods;
 
 static uint32_t
 elf64_hash(const char *name)
@@ -21,7 +15,7 @@ elf64_hash(const char *name)
 	uint32_t h = 0, g;
 	for (; *name; name++) {
 		h = (h << 4) + (uint8_t)*name;
-		uint32_t g = h & 0xf0000000;
+		g = h & 0xf0000000;
 		if (g)
 			h ^= g >> 24;
 		h &= 0x0FFFFFFF;
@@ -45,13 +39,65 @@ elf64_hashlookup(const Elf64_Sym *symtab, const char *strtab,
 	return NULL;
 }
 
+/*
+ * Lookup a symbol, searching each kmod to check whether it contains it.
+ *
+ * assumes: no duplicate names
+ */
+static const void *
+kmod_lookupsym(const char *name)
+{
+	kmod_t *kmod;
+
+	TAILQ_FOREACH(kmod, &kmods, entries)
+	{
+		const Elf64_Sym *sym = NULL;
+		int bind;
+
+		if (kmod->hashtab)
+			sym = elf64_hashlookup(kmod->symtab, kmod->strtab,
+			    kmod->hashtab, name);
+		else if (kmod->symtab)
+			for (int i = 0; i < kmod->symtab_size; i++) {
+				const char *cand = kmod->strtab +
+				    kmod->symtab[i].st_name;
+				if (strcmp(name, cand) == 0) {
+					sym = &kmod->symtab[i];
+					break;
+				}
+			}
+
+		if (!sym)
+			continue;
+
+		bind = ELF64_ST_BIND(sym->st_info);
+		if (bind != STB_GLOBAL && bind != STB_WEAK &&
+		    bind != STB_GNU_UNIQUE) {
+			kprintf("binding for %s is not global/weak/unique",
+			    name);
+			continue;
+		}
+
+		if (kmod->hashtab) /* meaning is a shared library */
+			return kmod->base + sym->st_value;
+		else
+			return (void *)
+			    sym->st_value; /* kernel addrs are absolute */
+	}
+
+	return NULL;
+}
+
 void
 kmod_parsekern(void *addr)
 {
 	Elf64_Ehdr *ehdr = addr;
-	kmod_t kmod = { 0 };
+	kmod_t *kmod = kmalloc(sizeof *kmod);
 
 	kprintf("reading kernel: addr %p...\n", addr);
+
+	TAILQ_INIT(&kmods);
+	TAILQ_INSERT_HEAD(&kmods, kmod, entries);
 
 	for (int x = 0; x < ehdr->e_shentsize * ehdr->e_shnum;
 	     x += ehdr->e_shentsize) {
@@ -61,18 +107,31 @@ kmod_parsekern(void *addr)
 
 			assert(shdr->sh_entsize == sizeof(Elf64_Sym));
 
-			kmod.symtab = addr + shdr->sh_offset;
-			kmod.symtab_size = shdr->sh_size / sizeof(Elf64_Sym);
+			kmod->symtab = addr + shdr->sh_offset;
+			kmod->symtab_size = shdr->sh_size / sizeof(Elf64_Sym);
 
 			strtabshdr = addr + ehdr->e_shoff +
 			    ehdr->e_shentsize * shdr->sh_link;
-			kmod.strtab = addr + strtabshdr->sh_offset;
+			kmod->strtab = addr + strtabshdr->sh_offset;
 
 			break;
 		}
 	}
 
-	assert(kmod.symtab != NULL);
+	assert(kmod->symtab != NULL);
+}
+
+/* return true if this reloc type doesn't need a symbol resolved */
+bool
+reloc_need_resolution(int type)
+{
+	switch (type) {
+	case R_X86_64_RELATIVE:
+		return false;
+
+	default:
+		return true;
+	}
 }
 
 static int
@@ -82,22 +141,40 @@ do_reloc(kmod_t *kmod, const Elf64_Rela *reloc)
 	unsigned int symn = ELF64_R_SYM(reloc->r_info);
 	const Elf64_Sym *sym = &kmod->symtab[symn];
 	const char *symname = kmod->strtab + sym->st_name;
-	void *symv = 0x0; /* symbol virtual address */
+	const void *symv = 0x0; /* symbol virtual address */
+	int type = ELF64_R_TYPE(reloc->r_info);
 
-	kprintf("sym %s: relocation: %lu/symidx %hu: ", symname,
+	kprintf("sym %s: relocation type %lu/symidx %hu: ", symname,
 	    ELF64_R_TYPE(reloc->r_info), sym->st_shndx);
 
-	if (sym->st_shndx == SHN_UNDEF) {
-		kprintf("undefined, resolving globally\n");
-		symv = doRela;
+	if (reloc_need_resolution(type) && sym->st_shndx == SHN_UNDEF) {
+		kprintf("undefined, resolving globally:\n");
+		symv = kmod_lookupsym(symname);
+		if (!symv) {
+			kprintf("missing symbol %s, quitting\n", symname);
+			while (true)
+				asm("pause");
+			return -1;
+		} else {
+			kprintf("resolved to %p\n", symv);
+		}
 	} else {
 		symv = kmod->base + sym->st_value;
-		kprintf("relocating from 0x%lx to %p\n", sym->st_value, symv);
+		kprintf("0x%lx -> %p\n", sym->st_value, symv);
 	}
 
-	switch (ELF64_R_TYPE(reloc->r_info)) {
+	switch (type) {
+	case R_X86_64_64:
+		*dest = (uint64_t)symv + reloc->r_addend;
+		break;
+
+	case R_X86_64_GLOB_DAT:
 	case R_X86_64_JMP_SLOT:
 		*dest = (uint64_t)symv;
+		break;
+
+	case R_X86_64_RELATIVE:
+		*dest = (uint64_t)kmod->base + reloc->r_addend;
 		break;
 
 	default:
@@ -118,6 +195,8 @@ kmod_load(void *addr)
 	Elf64_Ehdr ehdr;
 	kmod_t kmod = { 0 };
 	void (*mod_init)(void) = NULL;
+	void (**initfns)(void) = NULL;
+	size_t initfnscnt;
 
 	kprintf("loading an elf...\n");
 	memcpy(&ehdr, addr, sizeof(Elf64_Ehdr));
@@ -183,6 +262,14 @@ kmod_load(void *addr)
 			kmod.symtab_size = kmod.hashtab[1];
 			break;
 
+		case DT_INIT_ARRAY:
+			initfns = (void (*)(void))(kmod.base + ent->d_un.d_ptr);
+			break;
+
+		case DT_INIT_ARRAYSZ:
+			initfnscnt = ent->d_un.d_val / sizeof(void (*)(void));
+			break;
+
 		/* ignore the rest */
 		default:
 			break;
@@ -191,13 +278,12 @@ kmod_load(void *addr)
 
 	for (int i = 0; i < kmod.symtab_size; i++) {
 		const char *symname = kmod.strtab + kmod.symtab[i].st_name;
-		kprintf("symbol %s: %p\n", symname, kmod.symtab[i].st_value);
 		if (strcmp(symname, "modinit") == 0)
 			mod_init = (void *)(kmod.symtab[i].st_value +
 			    kmod.base);
 	}
 
-	kprintf("begin relocation...\n");
+	kprintf("looking at reloc tables\n");
 	for (int x = 0; x < ehdr.e_shentsize * ehdr.e_shnum;
 	     x += ehdr.e_shentsize) {
 		Elf64_Shdr shdr;
@@ -212,12 +298,14 @@ kmod_load(void *addr)
 			for (; reloc < lim; reloc++)
 				if (do_reloc(&kmod, reloc) == -1)
 					return;
-		} else {
-			printf("shdr type %d\n", shdr.sh_type);
 		}
 	}
 
-	kprintf("...loaded..\n\n");
+	for (int i = 0; i < initfnscnt; i++) {
+		kprintf("calling initfn %d\n", i);
+		initfns[i]();
+	}
+	kprintf("calling modinit\n");
 	mod_init();
 	kprintf("modinit done\n");
 }

@@ -1,6 +1,5 @@
 #include "vxkern.h"
 
-#if 0
 __attribute__((__objc_root_class__)) @interface OFObject {
 	Class _isa;
 }
@@ -18,33 +17,17 @@ __attribute__((__objc_root_class__)) @interface OFObject {
 
 @implementation TestObject
 +(void) initialize {
-	kprintf("Hello World\n");
+	kprintf("Hello from TestObject's initializer\n");
+}
+
++(void)doathing {
+	kprintf("got the message\n");
 }
 @end
 
-
-@interface TestObject2 : OFObject
-+ (void)initialize;
-@end
-
-@implementation TestObject2
-+(void) initialize {
-	kprintf("Hello World 2\n");
-}
-@end
-
-extern void *__objc_exec_class;
-#endif
-
-void testfun();
-
-void modinit2()
-{
-	testfun();
-	kprintf("Hello\n");
-}
 
 void modinit()
 {
-	modinit2();
+	kprintf("trying to message TestObject...\n");
+	[TestObject doathing];
 }

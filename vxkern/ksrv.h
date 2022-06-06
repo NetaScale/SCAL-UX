@@ -7,7 +7,7 @@
 #include <stddef.h>
 
 typedef struct kmod {
-	LIST_ENTRY(entry);
+	TAILQ_ENTRY(kmod) entries;
 
 	char *base;
 	size_t mem_size; /* total size of virt address space */
@@ -31,6 +31,6 @@ typedef struct kmod {
 	size_t symtab_size;
 } kmod_t;
 
-extern kmod_t *kmods;
+extern TAILQ_HEAD(kmod_head, kmod) kmods;
 
 #endif /* KSRV_H_ */
