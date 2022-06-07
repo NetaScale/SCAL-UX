@@ -146,7 +146,11 @@ _start(void)
 			bm->paddr = (void *)entries[i]->base;
 			bm->npages = entries[i]->length / PGSIZE;
 
-			used = sizeof(vm_page_t) + ((bm->npages + 7) / 8);
+			used = ROUNDUP(sizeof(vm_pregion_t) +
+				sizeof(vm_page_t) * bm->npages,
+			    PGSIZE);
+
+			kprintf("used %lu KiB for page map\n", used / 1024);
 
 			kprintf("Usable memory area: 0x%lx "
 			    "(%lu mb long, %lu pages)\n",
@@ -155,7 +159,7 @@ _start(void)
 			    entries[i]->length / PGSIZE);
 
 			/* mark off the pages used */
-			for (b = 0; b < used; b++)
+			for (b = 0; b < used / PGSIZE; b++)
 				bm->pages[b].type = kPageVMInternal;
 
 			/* now zero the remainder */
@@ -170,12 +174,14 @@ _start(void)
 		}
 	}
 
+	done();
+
 	vm_init((paddr_t)kernel_address_request.response->physical_base);
 	idt_init();
 	kprintf("activating pmap\n");
 	pmap_activate(kmap->pmap);
 	kprintf("activated pmap\n");
-	done();
+	//done();
 
 	struct limine_smp_response *smpr = smp_request.response;
 	cpu_t *cpus = kmalloc(sizeof *cpus * smpr->cpu_count);

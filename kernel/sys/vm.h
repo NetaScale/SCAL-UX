@@ -21,8 +21,10 @@
 #define HHDM_BASE 0xffff800000000000
 #define KERN_BASE 0xffffffff80000000
 
-#define P2V(addr) (((void*)addr) + HHDM_BASE)
-#define V2P(addr) (((void*)addr) - HHDM_BASE)
+#define P2V(addr) (((void *)addr) + HHDM_BASE)
+#define V2P(addr) (((void *)addr) - HHDM_BASE)
+
+#define VADDR_MAX ((vaddr_t)UINT64_MAX)
 
 /* physical address */
 typedef void *paddr_t;
@@ -52,7 +54,8 @@ typedef struct vm_map_entry {
 
 typedef struct vm_object {
 	enum {
-		kVMGeneric, /* generic contiguous region of memory */
+		kVMGeneric,   /* contiguous region of memory, kernel-internal */
+		kVMAnonymous, /* anonymous memory, lazily backed */
 	} type;
 	union {
 		struct vm_obj_generic {
@@ -65,13 +68,19 @@ typedef struct vm_object {
 /*
  * Physical page description - all pages of the physical address space available
  * representing useful RAM are described by one.
+ *
+ * These are each linked into a queue: either the free queue, the vm internal
+ * queue, or the queue of the vm_object_t to which it belongs.
  */
 typedef struct vm_page {
 	enum vm_page_type {
 		kPageFree,
-		kPageVMInternal /* internally managed by the VM system */
+		kPageVMInternal, /* internally managed by the VM system */
+		kPageObject,	 /* belongs to (exactly one) vm_object_t */
 	} type;
-	uint8_t refcnt;
+
+	vm_object_t *obj;
+	TAILQ_ENTRY(vm_page) entries; /* link for queue */
 } vm_page_t;
 
 /*
@@ -99,12 +108,15 @@ void vm_init(paddr_t kphys);
  * Map a VM object into an address space either at a given virtual address, or
  * (if \p vaddr is NULL) pick a suitable place to put it.
  *
- * @arg size is the size of area to be mapped in bytes - it must be a multiple
+ * @param size is the size of area to be mapped in bytes - it must be a multiple
  * of the PAGESIZE.
+ * @param[in,out] vaddrp points to a vaddr_t describing the preferred address.
+ * If VADDR_MAX, then anywhere is fine. The result is written to its referent.
  */
-int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, size_t size);
+int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp,
+    size_t size);
 
-extern vm_map_t * kmap; /* global kernel map */
+extern vm_map_t *kmap; /* global kernel map */
 
 /*
  * @section pmap

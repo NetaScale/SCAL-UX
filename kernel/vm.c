@@ -10,6 +10,7 @@ void
 vm_init(paddr_t kphys)
 {
 	vm_object_t *objs[3];
+	vaddr_t vaddr;
 
 	kprintf("vm_init\n");
 
@@ -21,19 +22,23 @@ vm_init(paddr_t kphys)
 	/* kernel virtual mapping */
 	objs[0]->gen.phys = kphys;
 	objs[0]->gen.length = 0x80000000;
-	vm_map_object(kmap, objs[0], (void *)0xffffffff80000000, 0x80000000);
+	vaddr = (vaddr_t)0xffffffff80000000;
+	vm_map_object(kmap, objs[0], &vaddr, 0x80000000);
 
 	/* hhdm */
 	objs[1]->gen.phys = 0x0;
 	objs[1]->gen.length = 0x100000000;
-	vm_map_object(kmap, objs[1], (void *)0xffff800000000000, 0x100000000);
+	vaddr = (vaddr_t)0xffff800000000000;
+	vm_map_object(kmap, objs[1], &vaddr, 0x100000000);
 
 	/* identity map from 0x1000 to 0x100000000 - for limine terminal */
 	objs[2]->gen.phys = (paddr_t)0x1000;
 	objs[2]->gen.length = 0xfffff000;
-	vm_map_object(kmap, objs[2], (paddr_t)0x1000, 0xfffff000);
+	vaddr = (vaddr_t)0x1000;
+	vm_map_object(kmap, objs[2], &vaddr, 0xfffff000);
 
-	vm_map_object(kmap, objs[2], 0x0, 0x8000);
+	vaddr = VADDR_MAX;
+	vm_map_object(kmap, objs[2], &vaddr, 0x8000);
 
 	kprintf("vm_init done\n");
 }
@@ -49,18 +54,46 @@ vm_map_new()
 	return map;
 }
 
+/*
+ * Allocate anonymous memory. All other parameters akin to vm_map_object.
+ *
+ * @param[in] out resultant VM object, set if not NULL.
+ */
 int
-vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, size_t size)
+vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
+    bool immediate)
+{
+	vm_object_t *obj = kcalloc(sizeof *obj, 1);
+	int r;
+
+	obj->type = kVMAnonymous;
+	r = vm_map_object(map, obj, vaddrp, size);
+	if (r < 0) {
+		kprintf("failed\n");
+		kfree(obj);
+		return r;
+	}
+
+	if (immediate) {
+		/* fill it up with pages */
+	}
+
+	return 0;
+}
+
+int
+vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size)
 {
 	vm_map_entry_t *entry = kcalloc(sizeof *entry, 1);
 	vm_map_entry_t *entry_before; /* entry to insert after */
+	vaddr_t vaddr = *vaddrp;
 
 	entry_before = TAILQ_FIRST(&map->entries);
 
 	kprintf("vm_map_object virt: 0x%p size: 0x%lx\n", vaddr, size);
 
 	/* didn't bother testing this placement code, hope it works */
-	if (vaddr == NULL) {
+	if (vaddr == VADDR_MAX) {
 		/* find a suitable place */
 		/* PORT: don't encode memory map of an arch here */
 		vaddr_t min = (vaddr_t)(map->type == kVMMapKernel ?
@@ -123,6 +156,8 @@ next:
 		pmap_map(map->pmap, obj->gen.phys, vaddr, size);
 	else
 		fatal("unhandled obj type %d\n", obj->type);
+
+	*vaddrp = vaddr;
 
 	return 0;
 }
