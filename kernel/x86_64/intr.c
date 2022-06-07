@@ -85,7 +85,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		    :
 		    : "%rax");
 
-		kprintf("cr2 was %p\n", cr2);
+		kprintf("cr2 was %p\n", (void*)read_cr2());
 
 		for (;;)
 			asm("hlt");

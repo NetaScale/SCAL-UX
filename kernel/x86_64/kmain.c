@@ -68,6 +68,10 @@ done(void)
 	}
 }
 
+static inline void outb(uint16_t port, uint8_t data) {
+    __asm__ volatile("out %0, %1" :: "a"(data), "Nd"(port));
+}
+
 void
 limterm_putc(int ch, void *ctx)
 {
@@ -168,6 +172,10 @@ _start(void)
 
 	vm_init((paddr_t)kernel_address_request.response->physical_base);
 	idt_init();
+	kprintf("activating pmap\n");
+	pmap_activate(kmap->pmap);
+	kprintf("activated pmap\n");
+	done();
 
 	struct limine_smp_response *smpr = smp_request.response;
 	cpu_t *cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
@@ -209,14 +217,11 @@ _start(void)
 	kmod_load(mod->address);
 
 
-#if 0 
 	kprintf("test int\n");
 	asm volatile("int $80");
 	kprintf("test pgfault\n");
 	uint64_t *ill = (uint64_t *)0x0000000200000000ull;
 	*ill = 42;
-	kprintf("int successfully tested\n");
-#endif
 
 	// We're done, just hang...
 	done();

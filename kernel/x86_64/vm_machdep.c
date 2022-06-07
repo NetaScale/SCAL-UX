@@ -1,9 +1,10 @@
 #include <stdint.h>
 
 #include <sys/amd64_misc.h>
-#include "liballoc.h"
 #include <sys/vm.h>
 #include <sys/vxkern.h>
+
+#include "liballoc.h"
 
 enum {
 	kMMUPresent = 0x1,
@@ -52,6 +53,12 @@ pmap_new()
 	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
 	pmap->pml4 = pmap_alloc_page(1);
 	return pmap;
+}
+
+void pmap_activate(pmap_t *pmap)
+{
+	uint64_t val = (uint64_t)pmap->pml4;
+	write_cr3(val);
 }
 
 paddr_t

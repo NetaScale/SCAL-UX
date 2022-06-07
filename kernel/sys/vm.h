@@ -34,6 +34,11 @@ typedef struct pmap pmap_t;
 /* Map of a virtual address space */
 typedef struct vm_map {
 	TAILQ_HEAD(entries, vm_map_entry) entries;
+	enum vm_map_type {
+		kVMMapKernel = 0,
+		kVMMapUser,
+	} type;
+
 	pmap_t *pmap;
 } vm_map_t;
 
@@ -92,12 +97,14 @@ void vm_init(paddr_t kphys);
 
 /*
  * Map a VM object into an address space either at a given virtual address, or
- * (if \p anywhere is true) pick a suitable place to put it.
+ * (if \p vaddr is NULL) pick a suitable place to put it.
  *
  * @arg size is the size of area to be mapped in bytes - it must be a multiple
  * of the PAGESIZE.
  */
-int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddr, size_t size);
+int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, size_t size);
+
+extern vm_map_t * kmap; /* global kernel map */
 
 /*
  * @section pmap
