@@ -30,6 +30,8 @@
 typedef void *paddr_t;
 /* virtual address */
 typedef void *vaddr_t;
+/* virtual offset */
+typedef uintptr_t voff_t;
 
 typedef struct pmap pmap_t;
 

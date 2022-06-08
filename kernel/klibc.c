@@ -37,11 +37,27 @@ memset(void *b, int c, size_t len)
 int
 strcmp(const char *s1, const char *s2)
 {
-
 	while (*s1 == *s2++)
 		if (*s1++ == 0)
 			return (0);
 	return (*(const unsigned char *)s1 - *(const unsigned char *)--s2);
+}
+
+char *
+strdup(const char *src)
+{
+	size_t size = strlen(src) + 1;
+	char *str = malloc(size);
+	memcpy(str, src, size);
+	return str;
+}
+
+char *
+strcpy(char *restrict dst, const char *restrict src)
+{
+	while ((*dst++ = *src++))
+		;
+	return dst;
 }
 
 size_t

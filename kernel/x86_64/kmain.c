@@ -1,13 +1,14 @@
 #include <sys/amd64_misc.h>
 #include <sys/limine.h>
+#include <sys/vm.h>
 #include <sys/vxkern.h>
 
+#include <fs/vfs.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "intr.h"
 #include "liballoc.h"
-#include <sys/vm.h>
 
 #define NANOPRINTF_IMPLEMENTATION
 #include "sys/nanoprintf.h"
@@ -174,14 +175,18 @@ _start(void)
 		}
 	}
 
-	done();
-
 	vm_init((paddr_t)kernel_address_request.response->physical_base);
 	idt_init();
 	kprintf("activating pmap\n");
 	pmap_activate(kmap->pmap);
 	kprintf("activated pmap\n");
 	//done();
+
+	tmpfs_mountroot();
+	vnode_t * tvn = NULL;
+	root_vnode->ops->create(root_vnode, &tvn, "tester");
+	kprintf("got vnode %p\n", tvn);
+	done();
 
 	struct limine_smp_response *smpr = smp_request.response;
 	cpu_t *cpus = kmalloc(sizeof *cpus * smpr->cpu_count);

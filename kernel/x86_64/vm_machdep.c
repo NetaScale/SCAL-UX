@@ -61,6 +61,10 @@ void pmap_activate(pmap_t *pmap)
 	write_cr3(val);
 }
 
+/*
+ * Allocate contiguous pages. This is strictly for use only during early init;
+ * in normal operation the freelists may get disordered.
+ */
 paddr_t
 pmap_alloc_page(size_t n)
 {
