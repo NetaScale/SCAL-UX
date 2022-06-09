@@ -54,16 +54,39 @@ typedef struct vm_map_entry {
 	size_t size; /* length in bytes */
 } vm_map_entry_t;
 
+/* Entry in an amap. */
+typedef struct vm_anon {
+	TAILQ_ENTRY(vm_anon) entries;
+	int refcnt;
+	int offs; /* offset within the vm_amap */
+	union {
+		struct vm_page *physpg;
+		/* swap descriptor of some sort goes here... */
+	};
+} vm_anon_t;
+
+/* Describes the layout of an anonymous or vnode object. */
+typedef struct vm_amap {
+	int refcnt;
+	/* an ordered queue of entries */
+	TAILQ_HEAD(, vm_anon) pages;
+} vm_amap_t;
+
 typedef struct vm_object {
 	enum {
 		kVMGeneric,   /* contiguous region of memory, kernel-internal */
 		kVMAnonymous, /* anonymous memory, lazily backed */
+		kVMVNode
 	} type;
 	union {
-		struct vm_obj_generic {
+		struct {
 			paddr_t phys;  /* physical address of 1st page */
 			size_t length; /* length in bytes */
-		} gen;
+		} gen; /* for kVMGeneric */
+		struct {
+			voff_t off; /* (page-multiple) offset into amap */
+			vm_amap_t *amap;
+		} anon; /* for kVMAnonymous and kVMVNode */
 	};
 } vm_object_t;
 
@@ -82,6 +105,7 @@ typedef struct vm_page {
 	} type;
 
 	vm_object_t *obj;
+	paddr_t paddr;
 	TAILQ_ENTRY(vm_page) entries; /* link for queue */
 } vm_page_t;
 
@@ -100,8 +124,22 @@ extern vm_pregion_t *g_1st_mem;
 /* last of the linked list of usable memory region bitmaps */
 extern vm_pregion_t *g_last_mem;
 
+/* allocate a physical page */
+vm_page_t *vm_alloc_page();
+
 /* allocate a new vm_map */
 vm_map_t *vm_map_new();
+
+/*
+ * Allocate anonymous memory. All other parameters akin to vm_map_object.
+ *
+ * @param[in] out resultant VM object, set if not NULL.
+ */
+int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
+    bool immediate);
+
+/* handle a page fault */
+void vm_fault(vm_map_t *map, vaddr_t vaddr, bool write);
 
 /* setup vmm */
 void vm_init(paddr_t kphys);
@@ -132,5 +170,8 @@ pmap_t *pmap_new();
 
 /* map a contiguous region of \p size bytes */
 void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size);
+
+/* invalidate tlb entry for address */
+void pmap_invlpg(vaddr_t addr);
 
 #endif /* VM_H_ */

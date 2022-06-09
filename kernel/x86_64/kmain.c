@@ -186,6 +186,17 @@ _start(void)
 	vnode_t * tvn = NULL;
 	root_vnode->ops->create(root_vnode, &tvn, "tester");
 	kprintf("got vnode %p\n", tvn);
+	pmap_stats();
+
+	vaddr_t vout = VADDR_MAX;
+	assert (vm_allocate(kmap, NULL, &vout, 0x8000, false) == 0);
+	kprintf("allocated....\n");
+
+	idt_load();
+	
+	kprintf("test pgfault\n");
+	*(int64_t*)(vout + 0x1000ul) = 45;
+	//vm_fault(kmap, vout + 0x1000ul, false);
 	done();
 
 	struct limine_smp_response *smpr = smp_request.response;

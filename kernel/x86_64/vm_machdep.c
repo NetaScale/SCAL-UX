@@ -1,8 +1,8 @@
-#include <stdint.h>
-
 #include <sys/amd64_misc.h>
 #include <sys/vm.h>
 #include <sys/vxkern.h>
+
+#include <stdint.h>
 
 #include "liballoc.h"
 
@@ -55,10 +55,28 @@ pmap_new()
 	return pmap;
 }
 
-void pmap_activate(pmap_t *pmap)
+void
+pmap_activate(pmap_t *pmap)
 {
 	uint64_t val = (uint64_t)pmap->pml4;
 	write_cr3(val);
+}
+
+/*
+ * TODO: probably belongs in vm.c not machdep
+ * TODO: evict unneeded pages if exhausted
+ */
+vm_page_t *
+vm_alloc_page()
+{
+	for (int i = 0; i < g_1st_mem->npages; i++) {
+		if (g_1st_mem->pages[i].type == kPageFree) {
+			g_1st_mem->pages[i].paddr = g_1st_mem->paddr +
+			    PGSIZE * i;
+			g_1st_mem->pages[i].type = kPageObject;
+			return &g_1st_mem->pages[i];
+		}
+	}
 }
 
 /*
@@ -194,8 +212,8 @@ void
 pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size)
 {
 	size_t npages = size / PGSIZE;
-	kprintf("pmap_map: mapping phys %p at virt %p (size %lx)\n", phys, virt,
-	    size);
+	kprintf("pmap_map: mapping phys %p at virt %p (size 0x%lx)\n", phys,
+	    virt, size, npages);
 	for (int i = 0; i < npages; i++, virt += PGSIZE, phys += PGSIZE) {
 		pmap_enter(pmap->pml4, phys, virt);
 	}
@@ -205,4 +223,10 @@ void
 pmap_stats()
 {
 	kprintf("%lu pages alloced\n", pages_alloced);
+}
+
+void
+pmap_invlpg(vaddr_t addr)
+{
+	asm volatile("invlpg %0" ::"m"(addr) : "memory");
 }

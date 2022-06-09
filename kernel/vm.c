@@ -54,11 +54,6 @@ vm_map_new()
 	return map;
 }
 
-/*
- * Allocate anonymous memory. All other parameters akin to vm_map_object.
- *
- * @param[in] out resultant VM object, set if not NULL.
- */
 int
 vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
     bool immediate)
@@ -67,6 +62,11 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	int r;
 
 	obj->type = kVMAnonymous;
+	obj->anon.amap = kmalloc(sizeof(*obj->anon.amap));
+	// obj->anon.size = size;
+	obj->anon.off = 0x0;
+	TAILQ_INIT(&obj->anon.amap->pages);
+	obj->anon.amap->refcnt = 1;
 	r = vm_map_object(map, obj, vaddrp, size);
 	if (r < 0) {
 		kprintf("failed\n");
@@ -90,7 +90,7 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size)
 
 	entry_before = TAILQ_FIRST(&map->entries);
 
-	kprintf("vm_map_object virt: 0x%p size: 0x%lx\n", vaddr, size);
+	kprintf("vm_map_object virt: %p size: 0x%lx\n", vaddr, size);
 
 	/* didn't bother testing this placement code, hope it works */
 	if (vaddr == VADDR_MAX) {
@@ -154,10 +154,93 @@ next:
 
 	if (obj->type == kVMGeneric)
 		pmap_map(map->pmap, obj->gen.phys, vaddr, size);
+		/* FIXME i don't think we need to pmap at all for others. do it
+		 * lazily */
+#if 0 
 	else
 		fatal("unhandled obj type %d\n", obj->type);
+#endif
 
 	*vaddrp = vaddr;
 
 	return 0;
+}
+
+static vm_map_entry_t *
+find_entry_for_addr(vm_map_t *map, vaddr_t vaddr)
+{
+	vm_map_entry_t *entry;
+	TAILQ_FOREACH(entry, &map->entries, entries)
+	{
+		if (vaddr >= entry->vaddr &&
+		    vaddr <= entry->vaddr + entry->size)
+			return entry;
+	}
+	return NULL;
+}
+
+/* todo order anons, write out prev? do we need it? */
+static vm_anon_t *
+find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off)
+{
+	vm_anon_t *prev = NULL;
+	vm_anon_t *anon;
+	TAILQ_FOREACH(anon, &amap->pages, entries)
+	{
+		if (anon->offs == off)
+			return anon;
+	}
+	return NULL;
+}
+
+/* handle a page fault */
+void
+vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
+{
+	vm_map_entry_t *entry = find_entry_for_addr(map, vaddr);
+	vm_object_t *obj;
+	size_t poff;
+
+	kprintf("\nvm_fault vaddr: %p write: %d\n", vaddr, write);
+
+	if (!entry)
+		fatal("no entry for vaddr %p\n", vaddr);
+
+	obj = entry->obj;
+
+	if (obj->type == kVMGeneric)
+		fatal("unhandeld fault generic");
+
+	kprintf("entry vaddr: %p\n", entry->vaddr);
+	// kprintf("offs: %ld\n", vaddr - entry->vaddr);
+	poff = (vaddr - entry->vaddr) / PGSIZE;
+
+	kprintf("page %ld\n", poff);
+
+	/*
+	 * mapping type needs to store whether COW? where though? in object? in
+	 * mapentry? if in object - what if we multiply map the same object? i
+	 * am therefore sure it must be in the mapentry. thus we can map a
+	 * single vnode multiply.
+	 */
+
+	//if (!write) {
+		voff_t off = poff + obj->anon.off / PGSIZE;
+		vm_anon_t *prev;
+		vm_anon_t *anon = find_anon(obj->anon.amap, &prev, off);
+		if (anon) {
+			kprintf("map in an existing anon");
+		} else {
+			kprintf("make a new anon for pg  %ld in amap\n", poff);
+			anon = kmalloc(sizeof *anon);
+			anon->physpg = vm_alloc_page();
+			anon->refcnt = 1;
+			TAILQ_INSERT_TAIL(&obj->anon.amap->pages, anon,
+			    entries);
+			pmap_map(map->pmap, anon->physpg->paddr, vaddr, PGSIZE);
+			pmap_invlpg(vaddr);
+		}
+	//}
+
+	kprintf("\n");
 }

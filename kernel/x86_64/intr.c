@@ -72,6 +72,12 @@ idt_load()
 	asm("sti");
 }
 
+enum {
+	kX86MMUPFPresent = 0x1,
+	kX86MMUPFWrite = 0x2,
+	kX86MMUPFUser = 0x4,
+};
+
 void
 handle_int(intr_frame_t *frame, uintptr_t num)
 {
@@ -85,10 +91,10 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		    :
 		    : "%rax");
 
-		kprintf("cr2 was %p\n", (void*)read_cr2());
+		kprintf("cr2 was %p\n", (void *)read_cr2());
 
-		for (;;)
-			asm("hlt");
+		vm_fault(kmap, (vaddr_t)read_cr2(),
+		    frame->code & kX86MMUPFWrite);
 	}
 }
 
