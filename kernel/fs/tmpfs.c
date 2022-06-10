@@ -4,6 +4,7 @@
 #include <sys/vxkern.h>
 
 #include "liballoc.h"
+#include "sys/vm.h"
 #include "tmpfs.h"
 
 extern struct vnops tmpfs_vnops;
@@ -22,9 +23,13 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		return 0;
 	} else {
 		vnode_t *vn = kmalloc(sizeof *vn);
+		vn->refcnt = 1;
 		vn->type = node->type;
 		vn->ops = &tmpfs_vnops;
-		vn->vmobj = node->type == VREG ? node->reg.vmobj : NULL;
+		if (node->type == VREG) {
+			vn->vmobj = node->reg.vmobj;
+			node->reg.vmobj->anon.vnode = vn;
+		}
 		vn->data = node;
 		*vout = vn;
 		return 0;
@@ -69,10 +74,14 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name)
 
 	td->name = strdup(name);
 	td->node = n;
+	n->type = type;
+	kprintf("type %d\n");
 
 	switch (type) {
 	case VREG:
-		n->reg.vmobj = 0x12345678;
+		/* vnode object is associated as soon as needed */
+		vm_object_new_anon(&n->reg.vmobj, INT32_MAX, &vm_vnode_pagerops,
+		    NULL);
 		break;
 
 	case VDIR:
@@ -126,13 +135,14 @@ tmp_lookup(vnode_t *vn, vnode_t **out, const char *pathname)
 }
 
 int
-tmp_getpage(vnode_t *vn, voff_t a_off, vm_page_t **out)
+tmp_getpage(vnode_t *vn, voff_t a_off, vm_anon_t **out, bool needcopy)
 {
-	kprintf("tmp getpage at offset %lu\n", a_off);
+	return vm_anon_pagerops.get(vn->vmobj, a_off, out, needcopy);
 	return 0;
 }
 
 struct vnops tmpfs_vnops = {
 	.create = tmp_create,
 	.lookup = tmp_lookup,
+	.getpage = tmp_getpage,
 };

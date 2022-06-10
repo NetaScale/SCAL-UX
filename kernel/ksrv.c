@@ -4,6 +4,7 @@
 
 #include "sys/klibc.h"
 #include "ksrv.h"
+#include "sys/vm.h"
 
 #define MAX2(x, y) ((x > y) ? x : y)
 
@@ -219,7 +220,10 @@ kmod_load(void *addr)
 		    kmod.mem_size);
 	}
 
-	kmod.base = kmalloc(kmod.mem_size);
+	kmod.base = VADDR_MAX;
+	pmap_stats();
+	vm_allocate(kmap, NULL, &kmod.base, kmod.mem_size, false);
+	pmap_stats();
 
 	for (int i = 0; i < ehdr.e_phnum; i++) {
 		Elf64_Phdr phdr;

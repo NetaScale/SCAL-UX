@@ -28,6 +28,8 @@ struct pmap {
 	pml4e_t *pml4;
 };
 
+spinlock_t g_1st_mem_lock;
+
 static size_t pages_alloced = 0;
 
 /* get the physical address to which a pte points */
@@ -69,19 +71,32 @@ pmap_activate(pmap_t *pmap)
 vm_page_t *
 vm_alloc_page()
 {
-	for (int i = 0; i < g_1st_mem->npages; i++) {
+	vm_page_t * page = NULL;
+	int i = 0;
+
+	lock(&g_1st_mem_lock);
+	for (i = 0; i < g_1st_mem->npages; i++) {
 		if (g_1st_mem->pages[i].type == kPageFree) {
 			g_1st_mem->pages[i].paddr = g_1st_mem->paddr +
 			    PGSIZE * i;
 			g_1st_mem->pages[i].type = kPageObject;
-			return &g_1st_mem->pages[i];
+			page =  &g_1st_mem->pages[i];
+			pages_alloced += 1;
+			break;
 		}
 	}
+	unlock(&g_1st_mem_lock);
+
+	if (!page)
+		fatal("pages exhausted");
+
+	return page;
 }
 
 /*
  * Allocate contiguous pages. This is strictly for use only during early init;
- * in normal operation the freelists may get disordered.
+ * in normal operation the freelists may get disordered, and it carries out no
+ * locking.
  */
 paddr_t
 pmap_alloc_page(size_t n)

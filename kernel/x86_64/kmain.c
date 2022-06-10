@@ -13,6 +13,7 @@
 #define NANOPRINTF_IMPLEMENTATION
 #include "sys/nanoprintf.h"
 
+bool vm_up = false;
 struct limine_terminal *terminal;
 vm_pregion_t *g_1st_mem = NULL;
 vm_pregion_t *g_last_mem = NULL;
@@ -90,6 +91,7 @@ common_init(struct limine_smp_info *smpi)
 	wrmsr(kAMD64MSRKernelGSBase, smpi->extra_argument);
 	cpu->num = smpi->processor_id;
 	cpu->lapic_id = smpi->lapic_id;
+	cpu->thread = smpi->processor_id; /* TODO: thread structure */
 
 	idt_load();
 	lapic_enable(0xff);
@@ -180,24 +182,7 @@ _start(void)
 	kprintf("activating pmap\n");
 	pmap_activate(kmap->pmap);
 	kprintf("activated pmap\n");
-	//done();
-
-	tmpfs_mountroot();
-	vnode_t * tvn = NULL;
-	root_vnode->ops->create(root_vnode, &tvn, "tester");
-	kprintf("got vnode %p\n", tvn);
-	pmap_stats();
-
-	vaddr_t vout = VADDR_MAX;
-	assert (vm_allocate(kmap, NULL, &vout, 0x8000, false) == 0);
-	kprintf("allocated....\n");
-
-	idt_load();
-	
-	kprintf("test pgfault\n");
-	*(int64_t*)(vout + 0x1000ul) = 45;
-	//vm_fault(kmap, vout + 0x1000ul, false);
-	done();
+	vm_up = true;
 
 	struct limine_smp_response *smpr = smp_request.response;
 	cpu_t *cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
@@ -222,6 +207,22 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
+	tmpfs_mountroot();
+	vnode_t * tvn = NULL;
+	root_vnode->ops->create(root_vnode, &tvn, "tester");
+	kprintf("got vnode %p\n", tvn);
+	pmap_stats();
+
+	kprintf("map vnode object\n");
+	vaddr_t faddr = VADDR_MAX;
+	vm_map_object(kmap, tvn->vmobj, &faddr, 8192, 0);
+	kprintf("test writing to vnode object:\n");
+	*((char*)faddr + 0x1000) = 'h';
+
+	pmap_stats();
+
+	//done();
+
 	int doathing();
 	doathing();
 
@@ -230,14 +231,19 @@ _start(void)
 		done();
 	}
 
+	pmap_stats();
+
 	kmod_parsekern(kernel_file_request.response->kernel_file->address);
 
 	struct limine_file * mod = module_request.response->modules[0];
 
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 
+	pmap_stats();
 	kmod_load(mod->address);
 
+	pmap_stats();
+	kmalloc(PGSIZE * 32);
 
 	kprintf("test int\n");
 	asm volatile("int $80");

@@ -1,16 +1,21 @@
-#include "liballoc.h"
 #include <sys/vm.h>
 #include <sys/vxkern.h>
+
+#include "liballoc.h"
+
+static spinlock_t alloclock;
 
 int
 liballoc_lock()
 {
+	lock(&alloclock);
 	return 0;
 }
 
 int
 liballoc_unlock()
 {
+	unlock(&alloclock);
 	return 0;
 }
 

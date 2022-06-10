@@ -2,6 +2,7 @@
 #define VM_H_
 
 #include <sys/queue.h>
+#include <sys/vxkern.h>
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -37,18 +38,25 @@ typedef struct pmap pmap_t;
 
 /* Map of a virtual address space */
 typedef struct vm_map {
-	TAILQ_HEAD(entries, vm_map_entry) entries;
+	spinlock_t lock;
+
 	enum vm_map_type {
 		kVMMapKernel = 0,
 		kVMMapUser,
 	} type;
 
+	TAILQ_HEAD(entries, vm_map_entry) entries;
 	pmap_t *pmap;
 } vm_map_t;
+
+enum vm_map_entry_flags {
+	kVMMapEntryCopyOnWrite = 0x1,
+};
 
 /* Entry describing some region within a map */
 typedef struct vm_map_entry {
 	TAILQ_ENTRY(vm_map_entry) entries;
+	enum vm_map_entry_flags flags;
 	struct vm_object *obj;
 	vaddr_t vaddr;
 	size_t size; /* length in bytes */
@@ -56,7 +64,7 @@ typedef struct vm_map_entry {
 
 /* Entry in an amap. */
 typedef struct vm_anon {
-	TAILQ_ENTRY(vm_anon) entries;
+	spinlock_t lock;
 	int refcnt;
 	int offs; /* offset within the vm_amap */
 	union {
@@ -65,27 +73,37 @@ typedef struct vm_anon {
 	};
 } vm_anon_t;
 
+/* Entry in a vm_amap_t. Locked by the vm_amap's lock */
+typedef struct vm_amap_entry {
+	vm_anon_t *anon;
+	TAILQ_ENTRY(vm_amap_entry) entries;
+} vm_amap_entry_t;
+
 /* Describes the layout of an anonymous or vnode object. */
 typedef struct vm_amap {
+	spinlock_t lock;
 	int refcnt;
 	/* an ordered queue of entries */
-	TAILQ_HEAD(, vm_anon) pages;
+	TAILQ_HEAD(, vm_amap_entry) pages;
 } vm_amap_t;
 
 typedef struct vm_object {
 	enum {
 		kVMGeneric,   /* contiguous region of memory, kernel-internal */
-		kVMAnonymous, /* anonymous memory, lazily backed */
-		kVMVNode
+		kVMAnonymous, /* anonymous/vnode memory, lazily backed */
 	} type;
+	spinlock_t lock;
+	size_t size; /* length in bytes */
 	union {
 		struct {
-			paddr_t phys;  /* physical address of 1st page */
-			size_t length; /* length in bytes */
-		} gen; /* for kVMGeneric */
+			paddr_t phys; /* physical address of 1st page */
+		} gen;		      /* for kVMGeneric */
 		struct {
-			voff_t off; /* (page-multiple) offset into amap */
 			vm_amap_t *amap;
+			struct vm_pagerops *pagerops;
+			/* if this is a mapping of a vnode, its associated vnode
+			 */
+			struct vnode *vnode;
 		} anon; /* for kVMAnonymous and kVMVNode */
 	};
 } vm_object_t;
@@ -119,10 +137,14 @@ typedef struct vm_pregion {
 	vm_page_t pages[0];
 } vm_pregion_t;
 
-/* first of the linked list of usable memory region bitmaps */
-extern vm_pregion_t *g_1st_mem;
-/* last of the linked list of usable memory region bitmaps */
-extern vm_pregion_t *g_last_mem;
+typedef struct vm_pagerops {
+	/*
+	 * Get a page from backing store.
+	 * @param 4 Whether the page is needed to fill a write request for a
+	 * COW object.
+	 */
+	int (*get)(vm_object_t *, voff_t, vm_anon_t **, bool /* needcopy? */);
+} vm_pagerops_t;
 
 /* allocate a physical page */
 vm_page_t *vm_alloc_page();
@@ -131,9 +153,13 @@ vm_page_t *vm_alloc_page();
 vm_map_t *vm_map_new();
 
 /*
- * Allocate anonymous memory. All other parameters akin to vm_map_object.
+ * Allocate anonymous memory and map it into the given map. All other
+ * parameters akin to vm_map_object.
  *
- * @param[in] out resultant VM object, set if not NULL.
+ * @param[in,out,nullable] vaddrp pointer to a vaddr specifying where to map the
+ * memory at. If the pointed-to value is VADDR_MAX, then the fit is chosen. The
+ * resultant address is written out if vaddpr is not NULL.
+ * @param[out] out resultant VM object, set if not NULL.
  */
 int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
     bool immediate);
@@ -152,15 +178,17 @@ void vm_init(paddr_t kphys);
  * of the PAGESIZE.
  * @param[in,out] vaddrp points to a vaddr_t describing the preferred address.
  * If VADDR_MAX, then anywhere is fine. The result is written to its referent.
+ * @param copy whether to make this a copy-on-write mapping (irrelevant for
+ * kVMGeneric objects).
  */
-int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp,
-    size_t size);
-
-extern vm_map_t *kmap; /* global kernel map */
+int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
+    bool copy);
 
 /*
- * @section pmap
+ * Allocate a new anonymous/vnode object.
  */
+int vm_object_new_anon(vm_object_t **out, size_t size, vm_pagerops_t *pagerops,
+    struct vnode *vn);
 
 /* get n contiguous pages. returns physical address of first. */
 paddr_t pmap_alloc_page(size_t n);
@@ -173,5 +201,14 @@ void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size);
 
 /* invalidate tlb entry for address */
 void pmap_invlpg(vaddr_t addr);
+
+/* set to 1 when the VM system is up and running */
+extern bool vm_up;
+
+extern vm_pregion_t *g_1st_mem;
+extern vm_pregion_t *g_last_mem;
+extern vm_pagerops_t vm_anon_pagerops;
+extern vm_pagerops_t vm_vnode_pagerops;
+extern vm_map_t *kmap; /* global kernel map */
 
 #endif /* VM_H_ */

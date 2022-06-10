@@ -27,3 +27,7 @@ what to still think about:
  or refer to where a page has been swapped out to. do we want pagers to operate
  at the anon level? logically then vnodes are implemented in terms of a vnode-pager
  for anons.)
+
+notes:
+ - pmap needs to be able to invalidate all PTEs across all maps mapping a
+   particular physical address before we can implement putpage

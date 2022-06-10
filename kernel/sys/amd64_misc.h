@@ -26,6 +26,7 @@ enum {
 typedef struct cpu {
 	uint64_t num;
 	uint64_t lapic_id;
+	struct thread *thread;
 } cpu_t;
 
 static inline void

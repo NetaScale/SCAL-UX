@@ -3,13 +3,14 @@
 
 #include <sys/elf64.h>
 #include <sys/queue.h>
+#include <sys/vm.h>
 
 #include <stddef.h>
 
 typedef struct kmod {
 	TAILQ_ENTRY(kmod) entries;
 
-	char *base;
+	vaddr_t base;
 	size_t mem_size; /* total size of virt address space */
 
 	Elf64_Dyn *dyn;

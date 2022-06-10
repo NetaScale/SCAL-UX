@@ -40,3 +40,11 @@ implementing [Jeff Bonwick](https://www.usenix.org/conference/2001-usenix-annual
 updated slab allocator some day.
 - nanoprintf: used for kernel `printf`.
 - ObjFW: provides an Objective-C runtime.
+
+To-dos
+------
+
+- better kernel heap
+  - new kind of `vm_object_t` kVMKernel to link `vm_page_t`s into directly
+  - expandable mappings (kVMKernel must expand without needing new allocations)
+  - slab allocator to closely integrate with this
