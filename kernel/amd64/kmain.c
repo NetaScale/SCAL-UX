@@ -1,14 +1,14 @@
-#include <sys/amd64_misc.h>
+#include <amd64.h>
 #include <sys/limine.h>
-#include <sys/vm.h>
+#include "kern/vm.h"
 #include <sys/vxkern.h>
 
-#include <fs/vfs.h>
+#include "posix/vfs.h"
 #include <stddef.h>
 #include <stdint.h>
 
 #include "intr.h"
-#include "liballoc.h"
+#include "kern/liballoc.h"
 
 #define NANOPRINTF_IMPLEMENTATION
 #include "sys/nanoprintf.h"

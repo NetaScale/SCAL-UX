@@ -1,10 +1,10 @@
-#include <sys/amd64_misc.h>
-#include <sys/vm.h>
+#include <amd64.h>
+#include "kern/vm.h"
 #include <sys/vxkern.h>
 
 #include <stdint.h>
 
-#include "liballoc.h"
+#include "kern/liballoc.h"
 
 enum {
 	kMMUPresent = 0x1,

@@ -1,7 +1,7 @@
-#include <sys/vm.h>
+#include "kern/vm.h"
 #include <sys/vxkern.h>
 
-#include "liballoc.h"
+#include "kern/liballoc.h"
 
 static spinlock_t alloclock;
 

@@ -1,7 +1,7 @@
 #ifndef KLIBC_H_
 #define KLIBC_H_
 
-#include "liballoc.h"
+#include "kern/liballoc.h"
 #include <sys/vxkern.h>
 
 #include "klib.h"

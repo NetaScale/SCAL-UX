@@ -3,8 +3,8 @@
 #include <sys/klib.h>
 #include <sys/vxkern.h>
 
-#include "liballoc.h"
-#include "sys/vm.h"
+#include "kern/liballoc.h"
+#include "kern/vm.h"
 #include "tmpfs.h"
 
 extern struct vnops tmpfs_vnops;

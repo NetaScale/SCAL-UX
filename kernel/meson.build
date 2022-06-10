@@ -1,3 +1,4 @@
-kern_srcs = files('klibc.c', 'ksrv.c', 'liballoc_sysdep.c', 'liballoc.c',
-  'test.m', 'fs/vfs.c', 'fs/tmpfs.c', 'vm/vm.c')
+kern_srcs = files('kern/klibc.c', 'kern/ksrv.c', 'kern/liballoc_sysdep.c',
+  'kern/liballoc.c', 'kern/test.m', 'posix/vfs.c', 'posix/tmpfs.c',
+  'kern/vm.c')
 subdir(arch)

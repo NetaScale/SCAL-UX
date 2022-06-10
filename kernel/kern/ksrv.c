@@ -4,7 +4,7 @@
 
 #include "sys/klibc.h"
 #include "ksrv.h"
-#include "sys/vm.h"
+#include "kern/vm.h"
 
 #define MAX2(x, y) ((x > y) ? x : y)
 

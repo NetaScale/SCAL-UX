@@ -3,8 +3,6 @@
 
 #include "vfs.h"
 
-typedef uintptr_t ino_t;
-
 typedef struct tmpdirent {
 	TAILQ_ENTRY(tmpdirent) entries;
 

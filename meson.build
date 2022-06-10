@@ -2,7 +2,7 @@ project('Valutron', ['c', 'cpp', 'objc'])
 
 cc = 'clang'
 objc = 'clang'
-arch = 'x86_64'
+arch = 'amd64'
 
 kern_c_args = [ '-I.', '-ffreestanding', '-fno-stack-protector', '-nostdlib',
 	    '-fno-stack-check', '-fno-pic', '-fno-pie', '-mabi=sysv', '-mno-80387',
@@ -16,15 +16,14 @@ mod_c_args = [ '-ffreestanding', '-fno-stack-protector', '-nostdlib',
 
 objc_args_common = [ '-Xclang', '-fobjc-runtime=objfw', '-Xclang', '-fblocks' ]
 
-objc_args = [ objc_args_common, '-fexceptions', '-fobjc-exceptions',
+kern_objc_args = [ kern_c_args, '-fexceptions', '-fobjc-exceptions',
     '-funwind-tables', '-fconstant-string-class=OFConstantString', '-std=gnu11',
-	'-fno-common', '-Xclang', '-fno-constant-cfstrings' ]
+	'-fno-common', '-Xclang', '-fno-constant-cfstrings', '-nostdinc' ]
 
-libc_incs = include_directories('Libc/include')
 vxkern_incs = include_directories('kernel')
 
-subdir('Libc')
+mlibc = subproject('mlibc', default_options: ['headers_only=true'])
+libc_incs = mlibc.get_variable('libc_include_dirs')
 subdir('vendor/objfw/src')
 subdir('kernel')
-#subdir('kernel')
 subdir('TestDriver')

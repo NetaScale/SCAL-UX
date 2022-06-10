@@ -3,7 +3,7 @@
 
 #include <sys/elf64.h>
 #include <sys/queue.h>
-#include <sys/vm.h>
+#include "kern/vm.h"
 
 #include <stddef.h>
 

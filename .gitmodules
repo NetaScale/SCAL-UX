@@ -1,3 +1,7 @@
 [submodule "vendor/objfw"]
 	path = vendor/objfw
 	url = git@github.com:NetaScale/ObjFW.git
+[submodule "subprojects/mlibc"]
+	path = subprojects/mlibc
+	url = ../mlibc
+	branch = release-2.2

@@ -1,11 +1,11 @@
 #include <sys/klib.h>
 #include <sys/queue.h>
-#include <sys/vm.h>
+#include "kern/vm.h"
 #include <sys/vxkern.h>
 
-#include <fs/vfs.h>
+#include "posix/vfs.h"
 
-#include "liballoc.h"
+#include "kern/liballoc.h"
 
 vm_map_t *kmap;
 

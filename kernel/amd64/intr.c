@@ -1,8 +1,8 @@
-#include <sys/amd64_misc.h>
-#include <sys/vm.h>
+#include <amd64.h>
 #include <sys/vxkern.h>
 
 #include "intr.h"
+#include "kern/vm.h"
 
 typedef struct {
 	uint16_t isr_low;
