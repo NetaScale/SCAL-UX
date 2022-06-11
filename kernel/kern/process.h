@@ -10,7 +10,8 @@ typedef struct cpu {
 	/* TODO: portability */
 	uint64_t lapic_id;
 	uint64_t lapic_tps; /* lapic ticks per second for divider 16 */
-	tss_t tss;
+	tss_t *tss; /* points into a static structure right now - TODO allow
+			allocations contained within a single page */
 	/* end todos */
 	struct thread *curthread;
 	TAILQ_HEAD(, thread) runqueue;

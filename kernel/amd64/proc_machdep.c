@@ -44,6 +44,12 @@ static struct gdt {
 };
 
 static spinlock_t gdt_lock;
+/*
+ * TODO: "Avoid placing a page boundary in the part of the TSS that the
+ * processor reads during a task switch (the first 104 bytes)" saith the
+ * Intel x86 and 64 Manual. So for now it's a statically-allocated thing.
+ */
+static tss_t tss[64] __attribute__((aligned(4096)));
 
 void
 load_gdt()
@@ -61,26 +67,21 @@ setup_cpu_gdt(cpu_t *cpu)
 {
 	lock(&gdt_lock);
 
-	/*
-	 * TODO: "Avoid placing a page boundary in the part of the TSS that the
-	 * processor reads during a task switch (the first 104 bytes)" saith the
-	 * Intel x86 and 64 Manual.
-	 */
-	kprintf("Adr 1 %lu, Addr 2 %lu\n", (uintptr_t)&cpu->tss / PGSIZE,
-	    ((uintptr_t)&cpu->tss + PGSIZE) / PGSIZE);
-	assert((uintptr_t)&cpu->tss / PGSIZE ==
-	    ((uintptr_t)&cpu->tss + PGSIZE) / PGSIZE);
-	memset(&cpu->tss, 0x0, sizeof(cpu->tss));
+	cpu->tss = &tss[cpu->num];
+
+	/* for when we do dynamic allocation of tss' again, sanity check: */
+	/* assert((uintptr_t)cpu->tss / PGSIZE ==
+	    ((uintptr_t)cpu->tss + 104) / PGSIZE); */
 
 	gdt.tss.length = 0x68;
-	gdt.tss.base_low = (uintptr_t)&cpu->tss;
-	gdt.tss.base_mid = (uintptr_t)&cpu->tss >> 16;
+	gdt.tss.base_low = (uintptr_t)cpu->tss;
+	gdt.tss.base_mid = (uintptr_t)cpu->tss >> 16;
 	gdt.tss.access = 0x89;
 	gdt.tss.flags = 0x0;
-	gdt.tss.base_high = (uintptr_t)&cpu->tss >> 24;
-	gdt.tss.base_upper = (uintptr_t)&cpu->tss >> 32;
+	gdt.tss.base_high = (uintptr_t)cpu->tss >> 24;
+	gdt.tss.base_upper = (uintptr_t)cpu->tss >> 32;
 	gdt.tss.reserved = 0x0;
-
+	load_gdt();
 	asm volatile("ltr %0" ::"rm"((uint16_t)offsetof(struct gdt, tss)));
 	unlock(&gdt_lock);
 }
