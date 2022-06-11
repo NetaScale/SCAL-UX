@@ -1,11 +1,11 @@
 #ifndef KSRV_H_
 #define KSRV_H_
 
-#include <sys/elf64.h>
-#include <sys/queue.h>
-#include "kern/vm.h"
-
+#include <elf.h>
 #include <stddef.h>
+
+#include "kern/queue.h"
+#include "kern/vm.h"
 
 typedef struct kmod {
 	TAILQ_ENTRY(kmod) entries;

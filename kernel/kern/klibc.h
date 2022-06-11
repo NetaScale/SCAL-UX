@@ -1,10 +1,10 @@
 #ifndef KLIBC_H_
 #define KLIBC_H_
 
-#include "kern/liballoc.h"
-#include <sys/vxkern.h>
+#include <string.h>
 
-#include "klib.h"
+#include "kern/kern.h"
+#include "kern/liballoc.h"
 
 #define fflush(...)
 #define printf(...) kprintf(__VA_ARGS__)
@@ -17,6 +17,5 @@
 #define calloc kcalloc
 #define free kfree
 #define realloc krealloc
-
 
 #endif /* KLIBC_H_ */

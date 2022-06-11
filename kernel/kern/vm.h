@@ -1,12 +1,12 @@
 #ifndef VM_H_
 #define VM_H_
 
-#include <sys/queue.h>
-#include <sys/vxkern.h>
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include "kern/kern.h"
+#include "kern/queue.h"
 
 #define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
 #define ROUNDDOWN(addr) (((addr)) & ~(align - 1))

@@ -1,8 +1,8 @@
 
-#include <sys/errno.h>
-#include <sys/klib.h>
-#include <sys/vxkern.h>
+#include <errno.h>
+#include <string.h>
 
+#include "kern/kern.h"
 #include "kern/liballoc.h"
 #include "kern/vm.h"
 #include "tmpfs.h"
@@ -75,7 +75,6 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name)
 	td->name = strdup(name);
 	td->node = n;
 	n->type = type;
-	kprintf("type %d\n");
 
 	switch (type) {
 	case VREG:

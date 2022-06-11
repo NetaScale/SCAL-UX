@@ -1,4 +1,4 @@
-project('Valutron', ['c', 'cpp', 'objc'])
+project('SCAL/UX', ['c', 'cpp', 'objc'])
 
 cc = 'clang'
 objc = 'clang'

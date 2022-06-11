@@ -1,11 +1,10 @@
-#include <sys/klib.h>
-#include <sys/queue.h>
-#include "kern/vm.h"
-#include <sys/vxkern.h>
+#include <string.h>
 
-#include "posix/vfs.h"
-
+#include "kern/kern.h"
 #include "kern/liballoc.h"
+#include "kern/queue.h"
+#include "kern/vm.h"
+#include "posix/vfs.h"
 
 vm_map_t *kmap;
 
@@ -61,7 +60,8 @@ int
 vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
     bool immediate)
 {
-	/* TODO: !!! there is a cyclic dependency between vm_allocate and kmalloc*/
+	/* TODO: !!! there is a cyclic dependency between vm_allocate and
+	 * kmalloc*/
 	vm_object_t *obj = kcalloc(sizeof *obj, 1);
 	int r;
 
@@ -190,7 +190,6 @@ next:
 		pmap_map(map->pmap, obj->gen.phys, vaddr, size);
 
 	unlock(&map->lock);
-
 
 	*vaddrp = vaddr;
 

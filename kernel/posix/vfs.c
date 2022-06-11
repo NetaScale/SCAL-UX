@@ -1,4 +1,4 @@
-#include <sys/klib.h>
+#include <string.h>
 
 #include "vfs.h"
 

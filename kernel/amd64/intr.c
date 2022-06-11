@@ -1,7 +1,6 @@
-#include <amd64.h>
-#include <sys/vxkern.h>
-
+#include "amd64.h"
 #include "intr.h"
+#include "kern/kern.h"
 #include "kern/vm.h"
 
 typedef struct {

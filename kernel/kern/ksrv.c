@@ -2,10 +2,11 @@
  * support for loadable kernel servers
  */
 
-#include "sys/klibc.h"
-#include "ksrv.h"
+#include "kern/klibc.h"
 #include "kern/vm.h"
+#include "ksrv.h"
 
+#define ELFMAG "\177ELF"
 #define MAX2(x, y) ((x > y) ? x : y)
 
 struct kmod_head kmods;
@@ -170,7 +171,7 @@ do_reloc(kmod_t *kmod, const Elf64_Rela *reloc)
 		break;
 
 	case R_X86_64_GLOB_DAT:
-	case R_X86_64_JMP_SLOT:
+	case R_X86_64_JUMP_SLOT:
 		*dest = (uint64_t)symv;
 		break;
 

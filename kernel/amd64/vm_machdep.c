@@ -1,10 +1,9 @@
-#include <amd64.h>
-#include "kern/vm.h"
-#include <sys/vxkern.h>
-
 #include <stdint.h>
 
+#include "amd64.h"
+#include "kern/kern.h"
 #include "kern/liballoc.h"
+#include "kern/vm.h"
 
 enum {
 	kMMUPresent = 0x1,
@@ -71,7 +70,7 @@ pmap_activate(pmap_t *pmap)
 vm_page_t *
 vm_alloc_page()
 {
-	vm_page_t * page = NULL;
+	vm_page_t *page = NULL;
 	int i = 0;
 
 	lock(&g_1st_mem_lock);
@@ -80,7 +79,7 @@ vm_alloc_page()
 			g_1st_mem->pages[i].paddr = g_1st_mem->paddr +
 			    PGSIZE * i;
 			g_1st_mem->pages[i].type = kPageObject;
-			page =  &g_1st_mem->pages[i];
+			page = &g_1st_mem->pages[i];
 			pages_alloced += 1;
 			break;
 		}

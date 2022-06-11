@@ -1,17 +1,13 @@
-#include <amd64.h>
-#include <sys/limine.h>
-#include "kern/vm.h"
-#include <sys/vxkern.h>
-
-#include "posix/vfs.h"
 #include <stddef.h>
 #include <stdint.h>
 
+#include "amd64.h"
 #include "intr.h"
+#include "kern/kern.h"
 #include "kern/liballoc.h"
-
-#define NANOPRINTF_IMPLEMENTATION
-#include "sys/nanoprintf.h"
+#include "kern/vm.h"
+#include "limine.h"
+#include "posix/vfs.h"
 
 bool vm_up = false;
 struct limine_terminal *terminal;
@@ -117,7 +113,7 @@ _start(void)
 		done();
 	}
 
-	kprintf("Valutron Executive for 64-bit PCs\n");
+	kprintf("SCAL/UX\n\n");
 
 	if (hhdm_request.response->offset != 0xffff800000000000) {
 		/* we expect HHDM begins there for now for simplicity */

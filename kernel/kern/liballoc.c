@@ -56,7 +56,7 @@
 
 //#define FLUSH()		fflush( stdout )
 
-#include <sys/vxkern.h>
+#include "kern/kern.h"
 #define printf kprintf
 #define atexit(...)
 #define FLUSH(...)

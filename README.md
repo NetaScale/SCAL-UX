@@ -9,10 +9,11 @@ designed with the goal of eventually accommodating the Valutron virtual machine
 Two major components of its kernel can currently be conceptualised:
 
 - The executive: a lightweight system providing primitives like (preemptively-multitasked)
-  processes, threads, virtual memory management, IPC, interrupt handling, etc;
+  processes, threads, virtual memory management, IPC, interrupt handling, etc.
 - The Posix personality: provides interfaces similar to those of BSD Unix. This
   is currently part of the kernel together with the executive, and closely bound
-  with it. It could eventually move into a userland server.
+  with it. It could eventually move into a userland server, parts of it might be
+  suitable for implementing in Valutron code as well.
 
 Future directions include a driver framework inspired by that of NeXTStep's
 DriverKit. Support for loading Objective-C kernel modules is already present in
@@ -34,11 +35,13 @@ The (very tentative as yet) VFS is similar to the design of the SunOS VFS.
 Third-party components
 ----------------------
 
-A few third-party components are used at the moment. These are some of them:
+A few third-party components are used. These are some of them:
 - liballoc: currently used for kernel `kmalloc`. I will get around to
 implementing [Jeff Bonwick](https://www.usenix.org/conference/2001-usenix-annual-technical-conference/magazines-and-vmem-extending-slab-allocator-many)'s
 updated slab allocator some day.
+- mlibc: Provides a libc.
 - nanoprintf: used for kernel `printf`.
+- NetBSD: `sys/queue.h` used as `kern/queue.h`.
 - ObjFW: provides an Objective-C runtime.
 
 To-dos

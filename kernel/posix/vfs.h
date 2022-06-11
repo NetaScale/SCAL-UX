@@ -1,6 +1,8 @@
 #ifndef VNODE_H_
 #define VNODE_H_
 
+#include <sys/types.h>
+
 #include "kern/vm.h"
 
 typedef struct vnode vnode_t;

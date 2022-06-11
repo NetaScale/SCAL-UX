@@ -1,4 +1,4 @@
-#include <sys/vxkern.h>
+#include "kern/kern.h"
 
 __attribute__((__objc_root_class__)) @interface OFObject {
 	Class _isa;

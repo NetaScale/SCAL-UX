@@ -1,5 +1,5 @@
 #include "kern/vm.h"
-#include <sys/vxkern.h>
+#include "kern/kern.h"
 
 #include "kern/liballoc.h"
 
