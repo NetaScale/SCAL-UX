@@ -6,6 +6,7 @@
 #include "kern/kern.h"
 #include "kern/liballoc.h"
 #include "kern/process.h"
+#include "kern/queue.h"
 #include "kern/vm.h"
 #include "limine.h"
 #include "posix/vfs.h"
@@ -58,6 +59,9 @@ static uint64_t bsp_lapic_id;
 static int cpus_up = 0;
 spinlock_t lock_msgbuf;
 
+void
+setup_cpu_gdt(cpu_t *cpu);
+
 static void
 done(void)
 {
@@ -84,6 +88,7 @@ common_init(struct limine_smp_info *smpi)
 	wrmsr(kAMD64MSRKernelGSBase, smpi->extra_argument);
 	cpu->num = smpi->processor_id;
 	cpu->lapic_id = smpi->lapic_id;
+	TAILQ_INIT(&cpu->runqueue);
 
 	idt_load();
 	lapic_enable(0xff);
@@ -93,6 +98,8 @@ common_init(struct limine_smp_info *smpi)
 		cpu->lapic_tps += lapic_timer_calibrate();
 	cpu->lapic_tps /= 3;
 
+	setup_cpu_gdt(cpu);
+
 	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
 }
 
@@ -100,8 +107,17 @@ void
 ap_init(struct limine_smp_info *smpi)
 {
 	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
+	thread_t *thread = kmalloc(sizeof *thread);
 
 	common_init(smpi);
+	thread->kernel = true;
+	thread->proc = &proc0;
+	lock(&process_lock);
+	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
+	unlock(&process_lock);
+	TAILQ_INSERT_HEAD(&cpu->runqueue, thread, runqueue);
+
+	timeslicing_start();
 
 	done();
 }

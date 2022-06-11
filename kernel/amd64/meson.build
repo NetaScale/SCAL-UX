@@ -1,7 +1,7 @@
 ldscript = meson.current_source_dir()/'linker.ld'
 
 vxkern = executable('vxkern', 'intr.c', 'kmain.c',
-	  'misc.S', 'vm_machdep.c',
+	  'misc.S', 'proc_machdep.c', 'vm_machdep.c',
 	kern_srcs,
     c_args : [ kern_c_args ],
 	objc_args: [ kern_objc_args ],

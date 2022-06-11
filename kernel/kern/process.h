@@ -10,6 +10,7 @@ typedef struct cpu {
 	/* TODO: portability */
 	uint64_t lapic_id;
 	uint64_t lapic_tps; /* lapic ticks per second for divider 16 */
+	tss_t tss;
 	/* end todos */
 	struct thread *curthread;
 	TAILQ_HEAD(, thread) runqueue;

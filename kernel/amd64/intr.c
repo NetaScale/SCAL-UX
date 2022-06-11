@@ -2,6 +2,7 @@
 #include "intr.h"
 #include "kern/kern.h"
 #include "kern/vm.h"
+#include "kern/process.h"
 
 typedef struct {
 	uint16_t isr_low;
@@ -112,6 +113,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		    frame->code & kX86MMUPFWrite);
 	} else if (num == 81) {
 		lapic_eoi();
+		kprintf("cpu %lu\n", curcpu()->num);
 	}
 }
 
@@ -199,4 +201,10 @@ lapic_timer_calibrate()
 	unlock(&calib);
 
 	return (initial - apic_after) * hz;
+}
+
+void timeslicing_start()
+{
+	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | 81);
+	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 2);
 }
