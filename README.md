@@ -8,10 +8,10 @@ designed with the goal of eventually accommodating the Valutron virtual machine
 
 Two major components of its kernel can currently be conceptualised:
 
-- The executive: a lightweight system providing primitives like (preemptively-multitasked)
+- VXK: a lightweight system providing primitives like (preemptively-multitasked)
   processes, threads, virtual memory management, IPC, interrupt handling, etc.
 - The Posix personality: provides interfaces similar to those of BSD Unix. This
-  is currently part of the kernel together with the executive, and closely bound
+  is currently part of the kernel together with VXK, and closely bound
   with it. It could eventually move into a userland server, parts of it might be
   suitable for implementing in Valutron code as well.
 

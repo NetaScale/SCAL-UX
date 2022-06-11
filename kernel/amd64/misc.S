@@ -67,3 +67,4 @@ isr_thunk_\number:
 
 MAKE_ISR_THUNK ._intWithCode, 14
 MAKE_ISR_THUNK ._intNoCode, 80
+MAKE_ISR_THUNK ._intNoCode, 81

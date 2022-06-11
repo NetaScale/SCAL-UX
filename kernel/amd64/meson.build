@@ -1,5 +1,4 @@
 ldscript = meson.current_source_dir()/'linker.ld'
-amd64_srcs = [  'x']
 
 vxkern = executable('vxkern', 'intr.c', 'kmain.c',
 	  'misc.S', 'vm_machdep.c',
@@ -10,5 +9,5 @@ vxkern = executable('vxkern', 'intr.c', 'kmain.c',
 	  '-Wl,-z,max-page-size=0x1000', '-Wl,--build-id=none',
 	  '-Wl,-T' + ldscript ],
 	dependencies: [ libkobjc_dep ],
-	include_directories: [ libc_incs, vxkern_incs ] 
+	include_directories: [ libc_incs, vxkern_incs, '.' ] 
 )

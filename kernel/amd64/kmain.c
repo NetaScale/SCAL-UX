@@ -5,6 +5,7 @@
 #include "intr.h"
 #include "kern/kern.h"
 #include "kern/liballoc.h"
+#include "kern/process.h"
 #include "kern/vm.h"
 #include "limine.h"
 #include "posix/vfs.h"
@@ -66,15 +67,11 @@ done(void)
 	}
 }
 
-static inline void outb(uint16_t port, uint8_t data) {
-    __asm__ volatile("out %0, %1" :: "a"(data), "Nd"(port));
-}
-
 void
 limterm_putc(int ch, void *ctx)
 {
 	terminal_request.response->write(
-		terminal_request.response->terminals[0], (const char *)&ch, 1);
+	    terminal_request.response->terminals[0], (const char *)&ch, 1);
 }
 
 void
@@ -87,10 +84,14 @@ common_init(struct limine_smp_info *smpi)
 	wrmsr(kAMD64MSRKernelGSBase, smpi->extra_argument);
 	cpu->num = smpi->processor_id;
 	cpu->lapic_id = smpi->lapic_id;
-	cpu->thread = smpi->processor_id; /* TODO: thread structure */
 
 	idt_load();
 	lapic_enable(0xff);
+
+	/* measure thrice and average it */
+	for (int i = 0; i < 3; i++)
+		cpu->lapic_tps += lapic_timer_calibrate();
+	cpu->lapic_tps /= 3;
 
 	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
 }
@@ -98,6 +99,8 @@ common_init(struct limine_smp_info *smpi)
 void
 ap_init(struct limine_smp_info *smpi)
 {
+	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
+
 	common_init(smpi);
 
 	done();
@@ -118,7 +121,8 @@ _start(void)
 	if (hhdm_request.response->offset != 0xffff800000000000) {
 		/* we expect HHDM begins there for now for simplicity */
 		kprintf("Unexpected HHDM offset (assumes 0xffff800000000000, "
-			"actual %lx", hhdm_request.response->offset);
+			"actual %lx",
+		    hhdm_request.response->offset);
 		done();
 	}
 
@@ -152,7 +156,7 @@ _start(void)
 			kprintf("used %lu KiB for page map\n", used / 1024);
 
 			kprintf("Usable memory area: 0x%lx "
-			    "(%lu mb long, %lu pages)\n",
+				"(%lu mb long, %lu pages)\n",
 			    entries[i]->base,
 			    entries[i]->length / (1024 * 1024),
 			    entries[i]->length / PGSIZE);
@@ -203,6 +207,7 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
+#if 0
 	tmpfs_mountroot();
 	vnode_t * tvn = NULL;
 	root_vnode->ops->create(root_vnode, &tvn, "tester");
@@ -240,12 +245,15 @@ _start(void)
 
 	pmap_stats();
 	kmalloc(PGSIZE * 32);
+#endif
 
+#if 0
 	kprintf("test int\n");
 	asm volatile("int $80");
 	kprintf("test pgfault\n");
 	uint64_t *ill = (uint64_t *)0x0000000200000000ull;
 	*ill = 42;
+#endif
 
 	// We're done, just hang...
 	done();

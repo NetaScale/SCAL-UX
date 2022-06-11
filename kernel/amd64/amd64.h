@@ -19,15 +19,24 @@ typedef uint64_t pml4e_t, pdpte_t, pde_t, pte_t;
 
 enum {
 	kAMD64MSRAPICBase = 0x1b,
+	kAMD64MSRTSCDeadline = 0x6e0,
 	kAMD64MSRGSBase = 0xc0000101,
 	kAMD64MSRKernelGSBase = 0xc0000102,
 };
 
-typedef struct cpu {
-	uint64_t num;
-	uint64_t lapic_id;
-	struct thread *thread;
-} cpu_t;
+static inline void
+outb(uint16_t port, uint8_t data)
+{
+	asm volatile("outb %0, %1" ::"a"(data), "Nd"(port));
+}
+
+static inline uint8_t
+inb(uint16_t port)
+{
+	uint8_t data;
+	asm volatile("inb %1, %0" : "=a"(data) : "Nd"(port));
+	return data;
+}
 
 static inline void
 wrmsr(uint32_t msr, uint64_t value)
@@ -53,10 +62,10 @@ REG_FUNCS(uint64_t, cr3);
 REG_FUNCS(uint64_t, cr4)
 #pragma GCC diagnostic pop
 
-static inline cpu_t *
+static inline struct cpu *
 curcpu()
 {
-	return (cpu_t *)rdmsr(kAMD64MSRKernelGSBase);
+	return (struct cpu *)rdmsr(kAMD64MSRKernelGSBase);
 }
 
 #endif /* AMD64_H_ */
