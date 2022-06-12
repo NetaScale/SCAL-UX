@@ -63,10 +63,20 @@ REG_FUNCS(uint64_t, cr3);
 REG_FUNCS(uint64_t, cr4)
 #pragma GCC diagnostic pop
 
+#if 0 /* slow */
 static inline struct cpu *
 curcpu()
 {
 	return (struct cpu *)rdmsr(kAMD64MSRKernelGSBase);
+}
+#endif
+
+static inline struct cpu *
+curcpu()
+{
+	struct cpu *val;
+	asm volatile("mov %%gs:0, %0" : "=r"(val));
+	return val;
 }
 
 #endif /* AMD64_H_ */

@@ -81,10 +81,12 @@ void
 common_init(struct limine_smp_info *smpi)
 {
 	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
+	thread_t *thread = kmalloc(sizeof *thread);
 
 	kprintf("setup cpu %d\n", smpi->processor_id);
 
-	wrmsr(kAMD64MSRKernelGSBase, smpi->extra_argument);
+	wrmsr(kAMD64MSRGSBase, (uint64_t)&smpi->extra_argument);
+
 	cpu->num = smpi->processor_id;
 	cpu->lapic_id = smpi->lapic_id;
 	TAILQ_INIT(&cpu->runqueue);
@@ -99,28 +101,6 @@ common_init(struct limine_smp_info *smpi)
 
 	setup_cpu_gdt(cpu);
 
-	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
-}
-
-static void
-testfunc(void *arg)
-{
-	while (1) {
-		asm("pause");
-		splhigh();
-		kprintf("%s", arg);
-		spl0();
-		asm("pause");
-	}
-}
-
-void
-ap_init(struct limine_smp_info *smpi)
-{
-	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
-	thread_t *thread = kmalloc(sizeof *thread);
-
-	common_init(smpi);
 	thread->kernel = true;
 	thread->kstack = 0x0;
 	thread->proc = &proc0;
@@ -130,10 +110,17 @@ ap_init(struct limine_smp_info *smpi)
 	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
 	unlock(&process_lock);
 
-	timeslicing_start();
-	testfunc("a");
+	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
+}
 
-	done();
+void
+ap_init(struct limine_smp_info *smpi)
+{
+	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
+
+	common_init(smpi);
+	timeslicing_start();
+	done(); /* idle */
 }
 
 // The following will be our kernel's entry point.
@@ -238,7 +225,9 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
-	thread_new_kernel(testfunc, "b");
+	//thread_new_kernel(testfunc, "b");
+
+	posix_main();
 
 #if 1
 	tmpfs_mountroot();

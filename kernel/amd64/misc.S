@@ -21,6 +21,7 @@ isr_thunk_\number:
 	# need to fill in the space in the interrupt frame struct
 	push $0
 .endif
+
 	SWAPGS_IF_NEEDED
 
 	push %rbp

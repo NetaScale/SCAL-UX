@@ -78,18 +78,15 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->rip,
 	    frame->code);
 #endif
-	if (num == 14) {
-		uint64_t cr2;
-		asm("mov %%cr2, %%rax\n"
-		    "mov %%rax, %0"
-		    : "=m"(cr2)
-		    :
-		    : "%rax");
-		vm_fault(kmap, (vaddr_t)read_cr2(),
+	switch (num) {
+	case 14: /* pagefault */
+		return vm_fault(kmap, (vaddr_t)read_cr2(),
 		    frame->code & kX86MMUPFWrite);
-	} else if (num == 81) {
+
+	case 81:
 		return schedule(frame);
-	} else {
+
+	default:
 		kprintf("unhandled int %lu rip %p\n", num, (void *)frame->rip);
 		for (;;) {
 			__asm__("hlt");
@@ -110,7 +107,7 @@ idt_init()
 {
 #define IDT_SET(VAL) idt_set(VAL, (vaddr_t)&isr_thunk_##VAL, 0x8F, 0);
 	INTS(IDT_SET);
-	idt_set(80, (vaddr_t)&isr_thunk_80, 0x8E, 0);
+	idt_set(80, (vaddr_t)&isr_thunk_80, 0x8e, 0);
 	idt_set(81, (vaddr_t)&isr_thunk_81, 0x8e, 0);
 }
 
@@ -192,5 +189,5 @@ void
 timeslicing_start()
 {
 	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | 81);
-	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 10);
+	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 1);
 }

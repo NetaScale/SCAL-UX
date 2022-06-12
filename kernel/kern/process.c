@@ -1,3 +1,4 @@
+#include "spl.h"
 #include "process.h"
 #include "liballoc.h"
 
@@ -15,6 +16,57 @@ void setup_proc0()
 {
 	proc0.map = kmap;
 	TAILQ_INSERT_HEAD(&allprocs, &proc0, allprocs);
+}
+
+process_t *process_new(process_t *parent)
+{
+	process_t * proc = kmalloc(sizeof *proc);
+	spl_t spl;
+
+	proc->map = parent->map;
+	LIST_INIT(&proc->threads);
+
+	spl = splhigh();
+	lock(&process_lock);
+	TAILQ_INSERT_HEAD(&allprocs, proc, allprocs);
+	unlock(&process_lock);
+	splx(spl);
+
+	return proc;
+}
+
+thread_t *thread_new(process_t *proc, bool iskernel)
+{
+	thread_t *thread = kmalloc(sizeof *thread);
+	spl_t spl;
+
+	thread->proc = proc;
+	if (iskernel) {
+		thread->kernel = true;
+		thread->pcb.frame.cs = 0x28;
+		thread->pcb.frame.ss = 0x38;
+	} else {
+		thread->kernel = false;
+		thread->kstack = kmalloc(8192) + 8192;
+		thread->pcb.frame.cs = 0x38 | 0x3;
+		thread->pcb.frame.ss = 0x40 | 0x3;
+		thread->pcb.frame.rflags = 0x202;
+	}
+
+	spl = splhigh();
+	lock(&process_lock);
+	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
+	unlock(&process_lock);
+	splx(spl);
+
+	return thread;
+}
+
+void thread_run(thread_t *thread)
+{
+	lock(&cpus[0].lock);
+	TAILQ_INSERT_TAIL(&cpus[0].runqueue, thread, runqueue);
+	unlock(&cpus[0].lock);
 }
 
 void thread_new_kernel(void*entry, void*arg)
