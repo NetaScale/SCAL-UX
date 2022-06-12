@@ -1,8 +1,8 @@
 #include "amd64.h"
 #include "intr.h"
 #include "kern/kern.h"
-#include "kern/vm.h"
 #include "kern/process.h"
+#include "kern/vm.h"
 
 typedef struct {
 	uint16_t isr_low;
@@ -13,31 +13,6 @@ typedef struct {
 	uint32_t isr_high;
 	uint32_t zero;
 } __attribute__((packed)) idt_entry_t;
-
-typedef struct intr_frame {
-	uint64_t rax;
-	uint64_t rbx;
-	uint64_t rcx;
-	uint64_t rdx;
-	uint64_t rdi;
-	uint64_t rsi;
-	uint64_t r8;
-	uint64_t r9;
-	uint64_t r10;
-	uint64_t r11;
-	uint64_t r12;
-	uint64_t r13;
-	uint64_t r14;
-	uint64_t r15;
-	uint64_t rbp;
-	uint64_t code;
-
-	uintptr_t rip;
-	uint64_t cs;
-	uint64_t rflags;
-	uintptr_t rsp;
-	uint64_t ss;
-} __attribute__((packed)) intr_frame_t;
 
 enum {
 	kX86MMUPFPresent = 0x1,
@@ -94,11 +69,15 @@ idt_load()
 	asm("sti");
 }
 
+void schedule(intr_frame_t *frame);
+
 void
 handle_int(intr_frame_t *frame, uintptr_t num)
 {
+#ifdef DEBUG_INT
 	kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->rip,
 	    frame->code);
+#endif
 	if (num == 14) {
 		uint64_t cr2;
 		asm("mov %%cr2, %%rax\n"
@@ -106,25 +85,31 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		    : "=m"(cr2)
 		    :
 		    : "%rax");
-
-		kprintf("cr2 was %p\n", (void *)read_cr2());
-
 		vm_fault(kmap, (vaddr_t)read_cr2(),
 		    frame->code & kX86MMUPFWrite);
 	} else if (num == 81) {
-		lapic_eoi();
-		kprintf("cpu %lu\n", curcpu()->num);
+		return schedule(frame);
+	} else {
+		kprintf("unhandled int %lu rip %p\n", num, (void *)frame->rip);
+		for (;;) {
+			__asm__("hlt");
+		}
 	}
 }
 
-extern void *isr_thunk_14;
-extern void *isr_thunk_80;
-extern void *isr_thunk_81;
+#define INTS(X) X(4) X(6) X(8) X(10) X(11) X(12) X(13) X(14)
+
+#define EXTERN_ISR_THUNK(VAL) extern void *isr_thunk_##VAL;
+
+INTS(EXTERN_ISR_THUNK)
+EXTERN_ISR_THUNK(80);
+EXTERN_ISR_THUNK(81);
 
 void
 idt_init()
 {
-	idt_set(0xE, (vaddr_t)&isr_thunk_14, 0x8E, 0);
+#define IDT_SET(VAL) idt_set(VAL, (vaddr_t)&isr_thunk_##VAL, 0x8F, 0);
+	INTS(IDT_SET);
 	idt_set(80, (vaddr_t)&isr_thunk_80, 0x8E, 0);
 	idt_set(81, (vaddr_t)&isr_thunk_81, 0x8e, 0);
 }
@@ -203,8 +188,9 @@ lapic_timer_calibrate()
 	return (initial - apic_after) * hz;
 }
 
-void timeslicing_start()
+void
+timeslicing_start()
 {
 	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | 81);
-	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 2);
+	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 10);
 }

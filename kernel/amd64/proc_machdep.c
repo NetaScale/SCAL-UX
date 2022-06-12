@@ -3,10 +3,13 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "amd64.h"
+#include "intr.h"
 #include "kern/klock.h"
 #include "kern/liballoc.h"
 #include "kern/process.h"
 #include "kern/vm.h"
+#include "spl.h"
 
 typedef struct {
 	uint16_t length;
@@ -84,4 +87,32 @@ setup_cpu_gdt(cpu_t *cpu)
 	load_gdt();
 	asm volatile("ltr %0" ::"rm"((uint16_t)offsetof(struct gdt, tss)));
 	unlock(&gdt_lock);
+}
+
+/* TODO-LOW: factor into platform-specific/platform-independent */
+void
+schedule(intr_frame_t *frame)
+{
+	cpu_t *cpu;
+	thread_t *nextthread;
+
+	lapic_eoi();
+
+	cpu = curcpu();
+
+	/* save old frame */
+	cpu->curthread->pcb.frame = *frame;
+
+	TAILQ_INSERT_TAIL(&cpu->runqueue, cpu->curthread, runqueue);
+	nextthread = cpu->curthread = TAILQ_FIRST(&cpu->runqueue);
+	TAILQ_REMOVE(&cpu->runqueue, nextthread, runqueue);
+
+	if (!nextthread->kernel) {
+		cpu->tss->rsp0 = (uint64_t)cpu->curthread->kstack;
+		wrmsr(kAMD64MSRFSBase, nextthread->pcb.fs);
+	}
+
+	*frame = cpu->curthread->pcb.frame;
+
+	/* the updated frame will be restored by iret */
 }

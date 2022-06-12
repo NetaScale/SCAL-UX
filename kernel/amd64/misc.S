@@ -61,9 +61,18 @@ isr_thunk_\number:
 
 	SWAPGS_IF_NEEDED
 
+	# drop the error code
 	add $8, %rsp
 	iretq
 .endm
+
+MAKE_ISR_THUNK ._intNoCode, 4
+MAKE_ISR_THUNK ._intNoCode, 6
+MAKE_ISR_THUNK ._intNoCode, 8
+MAKE_ISR_THUNK ._intWithCode, 10
+MAKE_ISR_THUNK ._intWithCode, 11
+MAKE_ISR_THUNK ._intWithCode, 12
+MAKE_ISR_THUNK ._intWithCode, 13
 
 MAKE_ISR_THUNK ._intWithCode, 14
 MAKE_ISR_THUNK ._intNoCode, 80

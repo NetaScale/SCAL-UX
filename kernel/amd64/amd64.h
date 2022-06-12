@@ -22,6 +22,7 @@ enum {
 	kAMD64MSRTSCDeadline = 0x6e0,
 	kAMD64MSRGSBase = 0xc0000101,
 	kAMD64MSRKernelGSBase = 0xc0000102,
+	kAMD64MSRFSBase = 0xc0000100
 };
 
 static inline void

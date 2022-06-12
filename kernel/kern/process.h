@@ -8,6 +8,7 @@
 typedef struct cpu {
 	uint64_t num;
 	/* TODO: portability */
+	spinlock_t lock;
 	uint64_t lapic_id;
 	uint64_t lapic_tps; /* lapic ticks per second for divider 16 */
 	tss_t *tss; /* points into a static structure right now - TODO allow
@@ -27,6 +28,7 @@ typedef struct thread {
 	pcb_t pcb;
 	/* kernel thread or user? */
 	bool kernel;
+	vaddr_t kstack;
 	/* process to which it belongs */
 	struct process *proc;
 } thread_t;
@@ -46,8 +48,12 @@ typedef struct process {
 	LIST_HEAD(, thread) threads;
 } process_t;
 
+void thread_new_kernel(void *entry, void *arg);
+
 extern TAILQ_HEAD(allprocs, process) allprocs;
 extern spinlock_t process_lock;
 extern process_t proc0;
+extern cpu_t *cpus;
+extern size_t ncpus;
 
 #endif /* PROCESS_H_ */

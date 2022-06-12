@@ -10,6 +10,7 @@
 #include "kern/vm.h"
 #include "limine.h"
 #include "posix/vfs.h"
+#include "spl.h"
 
 bool vm_up = false;
 struct limine_terminal *terminal;
@@ -58,9 +59,7 @@ static volatile struct limine_terminal_request terminal_request = {
 static uint64_t bsp_lapic_id;
 static int cpus_up = 0;
 spinlock_t lock_msgbuf;
-
-void
-setup_cpu_gdt(cpu_t *cpu);
+void setup_cpu_gdt(cpu_t *cpu);
 
 static void
 done(void)
@@ -103,6 +102,18 @@ common_init(struct limine_smp_info *smpi)
 	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
 }
 
+static void
+testfunc(void *arg)
+{
+	while (1) {
+		asm("pause");
+		splhigh();
+		kprintf("%s", arg);
+		spl0();
+		asm("pause");
+	}
+}
+
 void
 ap_init(struct limine_smp_info *smpi)
 {
@@ -111,13 +122,16 @@ ap_init(struct limine_smp_info *smpi)
 
 	common_init(smpi);
 	thread->kernel = true;
+	thread->kstack = 0x0;
 	thread->proc = &proc0;
+	cpu->curthread = thread;
+	TAILQ_INIT(&cpu->runqueue);
 	lock(&process_lock);
 	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
 	unlock(&process_lock);
-	TAILQ_INSERT_HEAD(&cpu->runqueue, thread, runqueue);
 
 	timeslicing_start();
+	testfunc("a");
 
 	done();
 }
@@ -201,7 +215,8 @@ _start(void)
 	vm_up = true;
 
 	struct limine_smp_response *smpr = smp_request.response;
-	cpu_t *cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
+	cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
+	ncpus = smpr->cpu_count;
 
 	kprintf("%lu cpus\n", smpr->cpu_count);
 
@@ -223,7 +238,9 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
-#if 0
+	thread_new_kernel(testfunc, "b");
+
+#if 1
 	tmpfs_mountroot();
 	vnode_t * tvn = NULL;
 	root_vnode->ops->create(root_vnode, &tvn, "tester");
