@@ -6,8 +6,8 @@
 
 #include <stdint.h>
 
-#include "kern/kern.h"
 #include "intr.h"
+#include "kern/kern.h"
 
 /*
  * The principle: interrupts from 32 to 48 for soft. from 48 to 80 for hard.
@@ -26,7 +26,7 @@ typedef enum {
 	kSPLHigh = 0xff, /* all interrupts blocked */
 	kSPLHard = 0x3,	 /* hard interrupts blocked */
 	kSPLSoft = 0x2,	 /* soft interrupts blocked */
-	kSPL0 = 0x0, /* blocks none */
+	kSPL0 = 0x0,	 /* blocks none */
 	_kSPLForceLong = INT64_MAX,
 } spl_t;
 

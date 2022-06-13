@@ -5,6 +5,32 @@
 #include "kern/vm.h"
 #include "pcb.h"
 
+/*
+ * Deferred Procedure Calls, inspired by those of Windows NT and playing a
+ * similar role to NetBSD's softints. They are run when SPL drops to soft or
+ * lower. They are
+ */
+typedef struct dpc {
+	/* for cpu_t::dpcqueue */
+	TAILQ_ENTRY(dpc) dpcqueue;
+
+	void (*fun)(void *arg);
+	void *arg;
+	/* whether it's on a cpu_t's queue. TODO: check TAILQ_ENTRY instead? */
+	bool bound;
+} dpc_t;
+
+/**
+ * A callout is the most fundamental sort of timer available. They are processed
+ * by a DPC.
+ */
+typedef struct callout {
+	/** for cpu_t::pendingcallouts or cpu_t::elapsedcallouts */
+	TAILQ_ENTRY(callout) queue;
+	void (*fun)(void *arg);
+	void *arg;
+} callout_t;
+
 typedef struct cpu {
 	uint64_t num; /* unique CPU id */
 	/* TODO: portability */
@@ -17,8 +43,33 @@ typedef struct cpu {
 	/* end todos */
 	/** currently-running thread */
 	struct thread *curthread;
-	/** queue of runnable threads */
+
+	/**
+	 * Queue of runnable threads. Needs SPL soft and process_lock.
+	 */
 	TAILQ_HEAD(, thread) runqueue;
+
+	/**
+	 * Queue of pending DPCs. Needs SPL high.
+	 */
+	TAILQ_HEAD(, dpc) dpcqueue;
+
+	/*
+	 * The callout expiry handler DPC. Responsible for calling the handlers
+	 * of callouts.
+	 */
+	dpc_t calloutdpc;
+
+	/**
+	 * Queue of pending callouts. Needs SPL high. Emptied by the clock ISR.
+	 */
+	TAILQ_HEAD(, callout) pendingcallouts;
+
+	/**
+	 * Queue of elapsed callouts. Needs SPL high. Filled by the clock ISR,
+	 * emptied by the calloutdpc DPC.
+	 */
+	TAILQ_HEAD(, callout) elapsedcallouts;
 } cpu_t;
 
 typedef struct thread {
@@ -77,6 +128,14 @@ void thread_run(thread_t *thread);
  * The thread is immediately placed on a CPU's runqueue.
  */
 void thread_new_kernel(void *entry, void *arg);
+
+/**
+ * @section internal
+ */
+/* run pending callouts; called only as part of the calloutdpc */
+void callouts_run(void *arg);
+/* run pending DPCs; called only by the scheduler */
+void dpcs_run();
 
 extern TAILQ_HEAD(allprocs, process) allprocs;
 extern spinlock_t process_lock;

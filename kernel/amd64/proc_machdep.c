@@ -97,6 +97,11 @@ schedule(intr_frame_t *frame)
 	thread_t *nextthread;
 	spl_t spl = splsoft();
 
+	dpcs_run();
+
+	if (spl >= kSPLSoft /* && !want_reschedule_for_some_reason??? */)
+		goto finish; /* need spl0 for regular scheduling */
+
 	cpu = curcpu();
 
 	/* save old frame */
@@ -113,6 +118,7 @@ schedule(intr_frame_t *frame)
 
 	*frame = cpu->curthread->pcb.frame;
 
+finish:
 	splx(spl);
 
 	/* the updated frame will be restored by iret */

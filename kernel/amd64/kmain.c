@@ -90,6 +90,11 @@ common_init(struct limine_smp_info *smpi)
 	cpu->num = smpi->processor_id;
 	cpu->lapic_id = smpi->lapic_id;
 	TAILQ_INIT(&cpu->runqueue);
+	TAILQ_INIT(&cpu->dpcqueue);
+	TAILQ_INIT(&cpu->pendingcallouts);
+	TAILQ_INIT(&cpu->elapsedcallouts);
+	cpu->calloutdpc.bound = false;
+	cpu->calloutdpc.fun = callouts_run;
 
 	idt_load();
 	lapic_enable(0xff);
