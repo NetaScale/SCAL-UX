@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+enum {
+	kIntNumLAPICTimer = 48,
+};
+
 void idt_init();
 void idt_load();
 

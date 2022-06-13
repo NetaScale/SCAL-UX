@@ -13,6 +13,7 @@ typedef struct cpu {
 	uint64_t lapic_tps; /* lapic ticks per second for divider 16 */
 	tss_t *tss; /* points into a static structure right now - TODO allow
 			allocations contained within a single page */
+	uint64_t counter; /* per-cpu counter */
 	/* end todos */
 	/** currently-running thread */
 	struct thread *curthread;

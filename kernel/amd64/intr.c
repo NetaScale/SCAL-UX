@@ -3,6 +3,7 @@
 #include "kern/kern.h"
 #include "kern/process.h"
 #include "kern/vm.h"
+#include "spl.h"
 
 typedef struct {
 	uint16_t isr_low;
@@ -80,11 +81,15 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 #endif
 	switch (num) {
 	case 14: /* pagefault */
-		return vm_fault(kmap, (vaddr_t)read_cr2(),
+		vm_fault(kmap, (vaddr_t)read_cr2(),
 		    frame->code & kX86MMUPFWrite);
+		break;
 
-	case 81:
-		return schedule(frame);
+	case kIntNumLAPICTimer:
+		(void)__atomic_add_fetch(&curcpu()->counter, 1,
+		    __ATOMIC_RELAXED);
+		lapic_eoi();
+		break;
 
 	default:
 		kprintf("unhandled int %lu rip %p\n", num, (void *)frame->rip);
@@ -92,23 +97,34 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 			__asm__("hlt");
 		}
 	}
+
+	if (splget() < kSPLSoft)
+		return schedule(frame);
 }
 
-#define INTS(X) X(4) X(6) X(8) X(10) X(11) X(12) X(13) X(14)
+#define INT 0x8e
+#define TRAP 0x8f
+#define INTS(X)     \
+	X(4, TRAP)  \
+	X(6, TRAP)  \
+	X(8, TRAP)  \
+	X(10, TRAP) \
+	X(11, TRAP) \
+	X(12, TRAP) \
+	X(13, TRAP) \
+	X(14, TRAP) \
+	X(48, INT)  \
+	X(80, INT)
 
-#define EXTERN_ISR_THUNK(VAL) extern void *isr_thunk_##VAL;
+#define EXTERN_ISR_THUNK(VAL, GATE) extern void *isr_thunk_##VAL;
 
 INTS(EXTERN_ISR_THUNK)
-EXTERN_ISR_THUNK(80);
-EXTERN_ISR_THUNK(81);
 
 void
 idt_init()
 {
-#define IDT_SET(VAL) idt_set(VAL, (vaddr_t)&isr_thunk_##VAL, 0x8F, 0);
+#define IDT_SET(VAL, GATE) idt_set(VAL, (vaddr_t)&isr_thunk_##VAL, GATE, 0);
 	INTS(IDT_SET);
-	idt_set(80, (vaddr_t)&isr_thunk_80, 0x8e, 0);
-	idt_set(81, (vaddr_t)&isr_thunk_81, 0x8e, 0);
 }
 
 static uint32_t
@@ -171,7 +187,7 @@ lapic_timer_calibrate()
 	lock(&calib);
 
 	lapic_write(kLAPICRegTimerDivider, 0x3); /* divider 16 */
-	lapic_write(kLAPICRegTimer, 81);
+	lapic_write(kLAPICRegTimer, kIntNumLAPICTimer);
 
 	pit_init_oneshot(hz);
 	lapic_write(kLAPICRegTimerInitial, initial);
@@ -188,6 +204,6 @@ lapic_timer_calibrate()
 void
 timeslicing_start()
 {
-	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | 81);
-	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 1);
+	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | kIntNumLAPICTimer);
+	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 100);
 }

@@ -76,5 +76,6 @@ MAKE_ISR_THUNK ._intWithCode, 12
 MAKE_ISR_THUNK ._intWithCode, 13
 
 MAKE_ISR_THUNK ._intWithCode, 14
+MAKE_ISR_THUNK ._intNoCode, 48 # lapic timer
 MAKE_ISR_THUNK ._intNoCode, 80
 MAKE_ISR_THUNK ._intNoCode, 81

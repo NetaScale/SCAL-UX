@@ -95,8 +95,7 @@ schedule(intr_frame_t *frame)
 {
 	cpu_t *cpu;
 	thread_t *nextthread;
-
-	lapic_eoi();
+	spl_t spl = splsoft();
 
 	cpu = curcpu();
 
@@ -113,6 +112,8 @@ schedule(intr_frame_t *frame)
 	}
 
 	*frame = cpu->curthread->pcb.frame;
+
+	splx(spl);
 
 	/* the updated frame will be restored by iret */
 }
