@@ -232,7 +232,7 @@ _start(void)
 
 	setup_mmap();
 	idt_init();
-	pmap_activate(kmap->pmap);
+	vm_activate(kmap->pmap);
 	vm_up = true;
 
 	setup_cpus();
@@ -252,6 +252,8 @@ _start(void)
 
 	void posix_main();
 	posix_main();
+
+	*(char*)0x01  = 45;
 
 	// We're done, just hang...
 	done();

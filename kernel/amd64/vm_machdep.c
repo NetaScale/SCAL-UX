@@ -57,7 +57,7 @@ pmap_new()
 }
 
 void
-pmap_activate(pmap_t *pmap)
+vm_activate(pmap_t *pmap)
 {
 	uint64_t val = (uint64_t)pmap->pml4;
 	write_cr3(val);

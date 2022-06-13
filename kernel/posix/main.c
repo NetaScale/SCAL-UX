@@ -46,6 +46,6 @@ posix_main()
 	pmap_stats();
 	kmalloc(PGSIZE * 32);
 
-	for (;;)
-		asm volatile("pause");
+	//for (;;)
+	//	asm volatile("pause");
 }

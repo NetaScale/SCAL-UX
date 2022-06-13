@@ -100,13 +100,16 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 			uint64_t rip;
 		} *aframe = (struct frame *)frame->rbp;
 
-		kprintf("unhandled int %lu\n", num, (void *)frame->rip);
+		kprintf("unhandled int %lu\n", num);
 
-		do {
+		kprintf(" - RIP %p\n", (void *)frame->rip);
+		do
 			kprintf(" - RIP %p\n", (void *)aframe->rip);
-			aframe = aframe->rbp;
-		} while ((aframe = aframe->rbp));
+		while ((aframe = aframe->rbp) && aframe->rip != 0x0);
 
+		kprintf("halting\n\n");
+
+		asm volatile("cli");
 		for (;;) {
 			__asm__("hlt");
 		}
