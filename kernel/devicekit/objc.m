@@ -43,17 +43,11 @@ __attribute__((__objc_root_class__)) @interface OFObject {
 extern void (*init_array_start)(void);
 extern void (*init_array_end)(void);
 
-int
-doathing()
+void
+setup_objc()
 {
-	kprintf("trying to do with OFObject");
-
+	kprintf("calling Objective-C module initialisers\n");
 	for (void (**func)(void) = &init_array_start; func != &init_array_end;
-	     func++) {
-		kprintf("calling init function %p\n", *func);
+	     func++)
 		(*func)();
-	}
-
-	[OFObject do];
-	return 0;
 }

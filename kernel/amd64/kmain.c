@@ -120,25 +120,14 @@ common_init(struct limine_smp_info *smpi)
 void
 ap_init(struct limine_smp_info *smpi)
 {
-	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
-
 	common_init(smpi);
 	timeslicing_start();
 	done(); /* idle */
 }
 
-// The following will be our kernel's entry point.
-void
-_start(void)
+static void
+setup_mmap()
 {
-	// Ensure we got a terminal
-	if (terminal_request.response == NULL ||
-	    terminal_request.response->terminal_count < 1) {
-		done();
-	}
-
-	kprintf("SCAL/UX\n\n");
-
 	if (hhdm_request.response->offset != 0xffff800000000000) {
 		/* we expect HHDM begins there for now for simplicity */
 		kprintf("Unexpected HHDM offset (assumes 0xffff800000000000, "
@@ -199,28 +188,27 @@ _start(void)
 	}
 
 	vm_init((paddr_t)kernel_address_request.response->physical_base);
-	idt_init();
-	kprintf("activating pmap\n");
-	pmap_activate(kmap->pmap);
-	kprintf("activated pmap\n");
-	vm_up = true;
+}
 
+static void
+setup_cpus()
+{
 	struct limine_smp_response *smpr = smp_request.response;
+
 	cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
 	ncpus = smpr->cpu_count;
 
-	kprintf("%lu cpus\n", smpr->cpu_count);
+	kprintf("%lu cpus present\n", smpr->cpu_count);
 
 	bsp_lapic_id = smpr->bsp_lapic_id;
 
 	for (size_t i = 0; i < smpr->cpu_count; i++) {
 		struct limine_smp_info *smpi = smpr->cpus[i];
 		smpi->extra_argument = (uint64_t)&cpus[i];
-		if (smpi->lapic_id == bsp_lapic_id) {
+		if (smpi->lapic_id == bsp_lapic_id)
 			common_init(smpi);
-		} else {
+		else
 			smpi->goto_address = ap_init;
-		}
 	}
 
 	kprintf("waiting for all CPUs to come up\n");
@@ -228,24 +216,42 @@ _start(void)
 		__asm__("pause");
 
 	kprintf("all CPUs up\n");
+}
 
+// The following will be our kernel's entry point.
+void
+_start(void)
+{
+	// Ensure we got a terminal
+	if (terminal_request.response == NULL ||
+	    terminal_request.response->terminal_count < 1) {
+		done();
+	}
 
+	kprintf("SCAL/UX\n\n");
+
+	setup_mmap();
+	idt_init();
+	pmap_activate(kmap->pmap);
+	vm_up = true;
+
+	setup_cpus();
 
 	if (module_request.response->module_count != 1) {
 		kprintf("expected a module\n");
 		done();
 	}
 
-
-	int doathing();
-	doathing();
+	void setup_objc();
+	setup_objc();
 
 	kmod_parsekern(kernel_file_request.response->kernel_file->address);
-	struct limine_file * mod = module_request.response->modules[0];
+	struct limine_file *mod = module_request.response->modules[0];
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
 
-	//posix_main();
+	void posix_main();
+	posix_main();
 
 	// We're done, just hang...
 	done();
