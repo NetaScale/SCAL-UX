@@ -165,7 +165,7 @@ int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
     bool immediate);
 
 /* handle a page fault */
-void vm_fault(vm_map_t *map, vaddr_t vaddr, bool write);
+int vm_fault(vm_map_t *map, vaddr_t vaddr, bool write);
 
 /* setup vmm */
 void vm_init(paddr_t kphys);

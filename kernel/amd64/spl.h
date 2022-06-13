@@ -13,8 +13,8 @@
  * The principle: interrupts from 32 to 48 for soft. from 48 to 80 for hard.
  * - interrupts from 0 are blockable only with kSPLHigh (except NMIs)
  * - interrupts < 32 blocked with kSPLSoft. This is just a logical level at the
- * moment. It's checked for to decide whether to invoke scheduling after
- * completion of an interrupt handler.
+ *   moment. It's checked for to decide whether to invoke scheduling after
+ *   completion of an interrupt handler.
  * - interrupts < 48  blocked with kSPLHard
  * - no interrupts blocked with kSPL0
  *
@@ -84,6 +84,14 @@ static inline spl_t
 spl0()
 {
 	return splx(kSPL0);
+}
+
+/* assert SPL less than or equal to \p spl */
+static inline void
+splassert(spl_t spl)
+{
+	if (splget() > spl)
+		fatal("SPL_NOT_LESS_OR_EQUAL %lx\n", spl);
 }
 
 #endif /* SPL_H_ */

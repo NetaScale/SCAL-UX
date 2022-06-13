@@ -9,7 +9,6 @@
 #include "kern/queue.h"
 #include "kern/vm.h"
 #include "limine.h"
-#include "posix/vfs.h"
 #include "spl.h"
 
 bool vm_up = false;
@@ -230,57 +229,23 @@ _start(void)
 
 	kprintf("all CPUs up\n");
 
-	//thread_new_kernel(testfunc, "b");
 
-	posix_main();
-
-#if 1
-	tmpfs_mountroot();
-	vnode_t * tvn = NULL;
-	root_vnode->ops->create(root_vnode, &tvn, "tester");
-	kprintf("got vnode %p\n", tvn);
-	pmap_stats();
-
-	kprintf("map vnode object\n");
-	vaddr_t faddr = VADDR_MAX;
-	vm_map_object(kmap, tvn->vmobj, &faddr, 8192, 0);
-	kprintf("test writing to vnode object:\n");
-	*((char*)faddr + 0x1000) = 'h';
-
-	pmap_stats();
-
-	//done();
-
-	int doathing();
-	doathing();
 
 	if (module_request.response->module_count != 1) {
 		kprintf("expected a module\n");
 		done();
 	}
 
-	pmap_stats();
+
+	int doathing();
+	doathing();
 
 	kmod_parsekern(kernel_file_request.response->kernel_file->address);
-
 	struct limine_file * mod = module_request.response->modules[0];
-
 	kprintf("mod %s: %p\n", mod->path, mod->address);
-
-	pmap_stats();
 	kmod_load(mod->address);
 
-	pmap_stats();
-	kmalloc(PGSIZE * 32);
-#endif
-
-#if 0
-	kprintf("test int\n");
-	asm volatile("int $80");
-	kprintf("test pgfault\n");
-	uint64_t *ill = (uint64_t *)0x0000000200000000ull;
-	*ill = 42;
-#endif
+	//posix_main();
 
 	// We're done, just hang...
 	done();

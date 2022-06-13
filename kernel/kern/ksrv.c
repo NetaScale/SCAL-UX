@@ -2,6 +2,7 @@
  * support for loadable kernel servers
  */
 
+#include "elf.h"
 #include "kern/klibc.h"
 #include "kern/vm.h"
 #include "ksrv.h"
@@ -222,8 +223,9 @@ kmod_load(void *addr)
 	}
 
 	kmod.base = VADDR_MAX;
-	pmap_stats();
-	vm_allocate(kmap, NULL, &kmod.base, kmod.mem_size, false);
+	vm_object_t *obj;
+	vm_allocate(kmap, &obj, &kmod.base, kmod.mem_size, false);
+	kprintf("\n\nKMOD VMOBJECT: %p BASE: %p\n", obj, kmod.base);
 	pmap_stats();
 
 	for (int i = 0; i < ehdr.e_phnum; i++) {
@@ -310,7 +312,7 @@ kmod_load(void *addr)
 		kprintf("calling initfn %d\n", i);
 		initfns[i]();
 	}
-	kprintf("calling modinit\n");
+	kprintf("calling modinit (%p)\n\n", mod_init);
 	mod_init();
 	kprintf("modinit done\n");
 }

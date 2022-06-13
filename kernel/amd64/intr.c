@@ -81,9 +81,11 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 #endif
 	switch (num) {
 	case 14: /* pagefault */
-		vm_fault(kmap, (vaddr_t)read_cr2(),
-		    frame->code & kX86MMUPFWrite);
-		break;
+		if (vm_fault(kmap, (vaddr_t)read_cr2(),
+			frame->code & kX86MMUPFWrite) < 0)
+			goto unhandled;
+		else
+			break;
 
 	case kIntNumLAPICTimer:
 		(void)__atomic_add_fetch(&curcpu()->counter, 1,
@@ -91,11 +93,24 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		lapic_eoi();
 		break;
 
-	default:
-		kprintf("unhandled int %lu rip %p\n", num, (void *)frame->rip);
+	unhandled:
+	default: {
+		struct frame {
+			struct frame *rbp;
+			uint64_t rip;
+		} *aframe = (struct frame *)frame->rbp;
+
+		kprintf("unhandled int %lu\n", num, (void *)frame->rip);
+
+		do {
+			kprintf(" - RIP %p\n", (void *)aframe->rip);
+			aframe = aframe->rbp;
+		} while ((aframe = aframe->rbp));
+
 		for (;;) {
 			__asm__("hlt");
 		}
+	}
 	}
 
 	if (splget() < kSPLSoft)

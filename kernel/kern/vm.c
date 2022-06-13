@@ -52,8 +52,22 @@ vm_map_new()
 
 	TAILQ_INIT(&map->entries);
 	map->pmap = pmap_new();
+	map->lock = 0;
 
 	return map;
+}
+
+void
+vm_map_print(vm_map_t *map)
+{
+	vm_map_entry_t *entry;
+	lock(&map->lock);
+	TAILQ_FOREACH (entry, &map->entries, entries) {
+		kprintf("%p-%p obj %p (type %d size %p)\n", entry->vaddr,
+		    entry->vaddr + (entry->size - 1), entry->obj,
+		    entry->obj->type, entry->obj->size);
+	}
+	unlock(&map->lock);
 }
 
 int
@@ -74,7 +88,7 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	obj->anon.amap->refcnt = 1;
 	r = vm_map_object(map, obj, vaddrp, size, false);
 	if (r < 0) {
-		kprintf("failed\n");
+		kprintf("vm_allocate failed\n");
 		kfree(obj);
 		return r;
 	}
@@ -82,6 +96,11 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	if (immediate) {
 		/* fill it up with pages */
 	}
+
+	if (out)
+		*out = obj;
+
+	kprintf("allocated object %p size %p at vaddr %p", obj, size, *vaddrp);
 
 	return 0;
 }
@@ -170,7 +189,7 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 		} else
 			goto loop;
 	} else {
-		while (entry_before && entry_before->vaddr + size <= vaddr)
+		while (entry_before && entry_before->vaddr + (size) <= vaddr)
 			entry_before = TAILQ_NEXT(entry_before, entries);
 	}
 
@@ -205,10 +224,8 @@ static vm_map_entry_t *
 find_entry_for_addr(vm_map_t *map, vaddr_t vaddr)
 {
 	vm_map_entry_t *entry;
-	TAILQ_FOREACH(entry, &map->entries, entries)
-	{
-		if (vaddr >= entry->vaddr &&
-		    vaddr <= entry->vaddr + entry->size)
+	TAILQ_FOREACH (entry, &map->entries, entries) {
+		if (vaddr >= entry->vaddr && vaddr < entry->vaddr + entry->size)
 			return entry;
 	}
 	return NULL;
@@ -223,8 +240,7 @@ find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off)
 {
 	vm_amap_entry_t *prev = NULL;
 	vm_amap_entry_t *anon;
-	TAILQ_FOREACH(anon, &amap->pages, entries)
-	{
+	TAILQ_FOREACH (anon, &amap->pages, entries) {
 		if (anon->anon->offs == off)
 			return anon;
 	}
@@ -255,7 +271,7 @@ vm_fault_handle_anon(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, voff_t off,
 }
 
 /* handle a page fault */
-void
+int
 vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
 {
 	vm_map_entry_t *entry;
@@ -271,16 +287,25 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
 		lock(&entry->obj->lock);
 	unlock(&map->lock);
 
-	if (!entry)
-		fatal("no entry for vaddr %p\n", vaddr);
+	if (!entry) {
+		kprintf("no entry for vaddr %p\n", vaddr);
+		vm_map_print(map);
+		return -1;
+	}
 
 	obj = entry->obj;
-	assert(obj->type != kVMGeneric);
+	if (obj->type == kVMGeneric) {
+		kprintf("unexpected object type for obj %p\n", obj);
+		vm_map_print(map);
+		return -1;
+	}
 	off = vaddr - entry->vaddr;
 	needcopy = (entry->flags & kVMMapEntryCopyOnWrite) && write;
 	vm_fault_handle_anon(map, obj, vaddr, off, needcopy);
 
 	unlock(&obj->lock);
+
+	return 0;
 }
 
 static void
