@@ -86,6 +86,7 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	obj->anon.pagerops = &vm_anon_pagerops;
 	TAILQ_INIT(&obj->anon.amap->pages);
 	obj->anon.amap->refcnt = 1;
+	obj->size = size;
 	r = vm_map_object(map, obj, vaddrp, size, false);
 	if (r < 0) {
 		kprintf("vm_allocate failed\n");
@@ -189,8 +190,17 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 		} else
 			goto loop;
 	} else {
-		while (entry_before && entry_before->vaddr + (size) <= vaddr)
+		vm_map_entry_t *prev = NULL;
+
+		if (!entry_before)
+			goto next;
+
+		while (entry_before && entry_before->vaddr < vaddr) {
+			prev = entry_before;
 			entry_before = TAILQ_NEXT(entry_before, entries);
+		}
+
+		entry_before = prev;
 	}
 
 next:
@@ -203,7 +213,7 @@ next:
 	if (entry_before)
 		TAILQ_INSERT_AFTER(&map->entries, entry_before, entry, entries);
 	else
-		TAILQ_INSERT_TAIL(&map->entries, entry, entries);
+		TAILQ_INSERT_HEAD(&map->entries, entry, entries);
 
 	if (obj->type == kVMGeneric)
 		pmap_map(map->pmap, obj->gen.phys, vaddr, size);
