@@ -2,37 +2,54 @@
  * Entry point of the POSIX subsystem.
  */
 
+#include <string.h>
+
 #include "kern/liballoc.h"
 #include "kern/process.h"
 #include "spl.h"
 #include "vfs.h"
 
 static void
-usermode(uint64_t val)
+start_init(void *bin)
 {
-	for (;;)
-		;
+	/*
+	 * .globl start
+	 * start:
+	 *   movq $2, %rax ; PXSYS_exec
+	 *   movq $init, %rdi
+	 *   int $0x80
+	 * init:
+	 *   .string "/init\0"
+	 */
+	static uint16_t initcode[] = { 0xc748, 0x02c0, 0x0000, 0x4800, 0xc7c7,
+		0x0010, 0x0000, 0x80cd, 0x692f, 0x696e, 0x0074, 0x0000 };
+	process_t *proc1 = process_new(&proc0);
+	thread_t *thr1 = thread_new(proc1, false);
+	vaddr_t vaddr = 0x0;
+
+	assert(vm_allocate(kmap, NULL, &vaddr, 4096, 1) == 0);
+	memcpy(0x0, initcode, sizeof(initcode));
+
+	thr1->pcb.frame.rsp = kmalloc(4096) + 4096;
+	thr1->pcb.frame.rip = 0x0;
+	thr1->pcb.frame.rdi = 0x0;
+	thr1->pcb.frame.rbp = 0x0;
+
+	thread_run(thr1);
 }
 
 void
-posix_main()
+posix_main(void *initbin)
 {
-	process_t *proc1 = process_new(&proc0);
-	thread_t *thr1 = thread_new(proc1, false);
-
-	thr1->pcb.frame.rsp = kmalloc(8192) + 8192;
-	thr1->pcb.frame.rip = usermode;
-	thr1->pcb.frame.rdi = 43;
-
-	thread_run(thr1);
-
 	timeslicing_start();
 
 	/* reset system priority level, everything should now be ready to go */
 	spl0();
 
+	start_init(initbin);
+
 	tmpfs_mountroot();
-	vnode_t * tvn = NULL;
+	vnode_t *tvn = NULL;
 	root_vnode->ops->create(root_vnode, &tvn, "tester");
 	kprintf("got vnode %p\n", tvn);
 	pmap_stats();
@@ -41,11 +58,11 @@ posix_main()
 	vaddr_t faddr = VADDR_MAX;
 	vm_map_object(kmap, tvn->vmobj, &faddr, 8192, 0);
 	kprintf("test writing to vnode object:\n");
-	*((char*)faddr + 0x1000) = 'h';
+	*((char *)faddr + 0x1000) = 'h';
 
 	pmap_stats();
 	kmalloc(PGSIZE * 32);
 
-	//for (;;)
+	// for (;;)
 	//	asm volatile("pause");
 }

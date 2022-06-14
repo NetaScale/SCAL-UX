@@ -64,6 +64,7 @@ isr_thunk_\number:
 
 	# drop the error code
 	add $8, %rsp
+
 	iretq
 .endm
 
@@ -77,5 +78,4 @@ MAKE_ISR_THUNK ._intWithCode, 13
 
 MAKE_ISR_THUNK ._intWithCode, 14
 MAKE_ISR_THUNK ._intNoCode, 48 # lapic timer
-MAKE_ISR_THUNK ._intNoCode, 80
-MAKE_ISR_THUNK ._intNoCode, 81
+MAKE_ISR_THUNK ._intNoCode, 128 # posix syscalls

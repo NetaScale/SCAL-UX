@@ -22,7 +22,10 @@ kern_objc_args = [ kern_c_args, '-fexceptions', '-fobjc-exceptions',
 
 vxkern_incs = include_directories('kernel')
 
-mlibc = subproject('mlibc', default_options: ['headers_only=true'])
+mlibc = subproject('mlibc', default_options: [
+	'static=true',
+	#'headers_only=true'
+])
 libc_incs = mlibc.get_variable('libc_include_dirs')
 subdir('vendor/objfw/src')
 subdir('kernel')

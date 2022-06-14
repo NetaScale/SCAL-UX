@@ -237,8 +237,8 @@ _start(void)
 
 	setup_cpus();
 
-	if (module_request.response->module_count != 1) {
-		kprintf("expected a module\n");
+	if (module_request.response->module_count != 2) {
+		kprintf("expected two modules\n");
 		done();
 	}
 
@@ -250,8 +250,8 @@ _start(void)
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
 
-	void posix_main();
-	posix_main();
+	void posix_main(void *initbin);
+	posix_main(module_request.response->modules[1]->address);
 
 	*(char*)0x01  = 45;
 

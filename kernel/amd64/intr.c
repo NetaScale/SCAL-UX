@@ -35,6 +35,7 @@ enum {
 };
 
 static idt_entry_t idt[256] = { 0 };
+int posix_syscall(intr_frame_t *); /* posix/sys.c */
 
 static inline uint64_t
 rdtsc()
@@ -84,13 +85,17 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		if (vm_fault(kmap, (vaddr_t)read_cr2(),
 			frame->code & kX86MMUPFWrite) < 0)
 			goto unhandled;
-		else
-			break;
+		break;
 
 	case kIntNumLAPICTimer:
 		(void)__atomic_add_fetch(&curcpu()->counter, 1,
 		    __ATOMIC_RELAXED);
 		lapic_eoi();
+		break;
+
+	case kIntNumPOSIX:
+		if (posix_syscall(frame) < 0)
+			goto unhandled;
 		break;
 
 	unhandled:
@@ -100,12 +105,13 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 			uint64_t rip;
 		} *aframe = (struct frame *)frame->rbp;
 
-		kprintf("unhandled int %lu\n", num);
+		kprintf("unhandled int %lu/code %lx\n", num, frame->code);
 
 		kprintf(" - RIP %p\n", (void *)frame->rip);
-		do
-			kprintf(" - RIP %p\n", (void *)aframe->rip);
-		while ((aframe = aframe->rbp) && aframe->rip != 0x0);
+		if (aframe != NULL)
+			do
+				kprintf(" - RIP %p\n", (void *)aframe->rip);
+			while ((aframe = aframe->rbp) && aframe->rip != 0x0);
 
 		kprintf("halting\n\n");
 
@@ -122,6 +128,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 
 #define INT 0x8e
 #define TRAP 0x8f
+#define TRAP_USER 0xef
 #define INTS(X)     \
 	X(4, TRAP)  \
 	X(6, TRAP)  \
@@ -132,7 +139,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	X(13, TRAP) \
 	X(14, TRAP) \
 	X(48, INT)  \
-	X(80, INT)
+	X(128, TRAP_USER)
 
 #define EXTERN_ISR_THUNK(VAL, GATE) extern void *isr_thunk_##VAL;
 

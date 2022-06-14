@@ -1,4 +1,4 @@
-build/
+build
 .vscode/
 vendor/limine/limine-deploy
 barebones.iso

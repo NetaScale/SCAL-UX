@@ -5,6 +5,7 @@
 
 enum {
 	kIntNumLAPICTimer = 48,
+	kIntNumPOSIX = 128,
 };
 
 void idt_init();
