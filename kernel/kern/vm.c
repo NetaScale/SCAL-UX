@@ -101,7 +101,7 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	if (out)
 		*out = obj;
 
-	kprintf("allocated object %p size %p at vaddr %p", obj, size, *vaddrp);
+	kprintf("allocated object %p size %p at vaddr %p\n", obj, size, *vaddrp);
 
 	return 0;
 }

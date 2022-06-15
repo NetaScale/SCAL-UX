@@ -33,15 +33,21 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	int r;
 
 	r = vfs_lookup(root_vnode, &vn, path);
-	if (r < 0)
-		return r;
+	if (r < 0) {
+		kprintf("exec: failed to lookup %s (errno %d)\n", path, -r);
+			return r;
+	}
 
 	r = vfs_read(vn, &ehdr, sizeof ehdr, 0);
-	if (r < 0)
-		return r;
+	if (r < 0){
+		kprintf("exec: failed to read %s (errno %d)\n", path, -r);
+			return r;
+	}
 
-	if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0)
+	if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0){
+		kprintf("exec: bad e_ident in %s\n", path);
 		return -ENOEXEC;
+	}
 
 	phdrs = kmalloc(ehdr.e_phnum * ehdr.e_phentsize);
 	if (!phdrs)
@@ -61,6 +67,8 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 		size_t size;
 		vaddr_t segbase;
 
+		kprintf("phdr type %u vaddr %lu memsz %lx\n", phdr->p_type, phdr->p_vaddr, phdr->p_memsz);
+
 		if (phdr->p_type == PT_PHDR) {
 			pkg->phaddr = base + phdr->p_vaddr;
 			continue;
@@ -74,11 +82,13 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 
 		vm_allocate(kmap, NULL, &segbase, size, false);
 
-		r = vfs_read(vn, segbase + pageoff, phdr->p_filesz,
+		/*r = vfs_read(vn, segbase + pageoff, phdr->p_filesz,
 		    phdr->p_offset);
 		if (r < 0)
 			return r; /* TODO: this won't work anymore */
 	}
+
+	kprintf("loaded up %s\n\n", path);
 
 	return 0;
 }
@@ -135,6 +145,8 @@ copyargs(exec_package_t *pkg, const char *argp[], const char *envp[])
 	*--stackpu64 = narg;
 
 	pkg->sp = stackpu64;
+
+	return 0;
 }
 
 /* todo: don't wipe the map, it makes it impossible to recover */
@@ -144,7 +156,8 @@ exec(const char *path, const char *argp[], const char *envp[])
 	int r;
 	exec_package_t pkg, rtldpkg;
 
-	r = loadelf(path, 0x0, &pkg);
+	/* assume PIE */
+	r = loadelf(path, (vaddr_t)0x200000, &pkg);
 	if (r < 0)
 		return r;
 
@@ -155,4 +168,6 @@ exec(const char *path, const char *argp[], const char *envp[])
 	pkg.stack = VADDR_MAX;
 	assert(vm_allocate(kmap, NULL, &pkg.stack, 4096 * 8, false) == 0);
 	assert(copyargs(&pkg, argp, envp) == 0);
+
+	return 0;
 }

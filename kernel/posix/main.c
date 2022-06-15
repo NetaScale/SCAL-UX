@@ -39,26 +39,22 @@ start_init(void *bin)
 }
 
 void
-posix_main(void *initbin)
+posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize)
 {
 	timeslicing_start();
 
 	/* reset system priority level, everything should now be ready to go */
 	spl0();
 
-	start_init(initbin);
-
 	tmpfs_mountroot();
 	vnode_t *tvn = NULL;
-	root_vnode->ops->create(root_vnode, &tvn, "tester");
-	kprintf("got vnode %p\n", tvn);
-	pmap_stats();
+	root_vnode->ops->create(root_vnode, &tvn, "init");
+	assert(vfs_write(tvn, initbin, size, 0x0) == 0);
 
-	kprintf("map vnode object\n");
-	vaddr_t faddr = VADDR_MAX;
-	vm_map_object(kmap, tvn->vmobj, &faddr, 8192, 0);
-	kprintf("test writing to vnode object:\n");
-	*((char *)faddr + 0x1000) = 'h';
+	root_vnode->ops->create(root_vnode, &tvn, "ld.so");
+	assert(vfs_write(tvn, ldbin, ldsize, 0x0) == 0);
+
+	start_init(initbin);
 
 	pmap_stats();
 	kmalloc(PGSIZE * 32);

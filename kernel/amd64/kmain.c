@@ -237,8 +237,8 @@ _start(void)
 
 	setup_cpus();
 
-	if (module_request.response->module_count != 2) {
-		kprintf("expected two modules\n");
+	if (module_request.response->module_count != 3) {
+		kprintf("expected 3 modules\n");
 		done();
 	}
 
@@ -250,10 +250,13 @@ _start(void)
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
 
-	void posix_main(void *initbin);
-	posix_main(module_request.response->modules[1]->address);
+	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize);
+	posix_main(module_request.response->modules[1]->address,
+	    module_request.response->modules[1]->size,
+	    module_request.response->modules[2]->address,
+	    module_request.response->modules[2]->size);
 
-	*(char*)0x01  = 45;
+	*(char *)0x01 = 45;
 
 	// We're done, just hang...
 	done();

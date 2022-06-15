@@ -5,7 +5,7 @@
 vnode_t *root_vnode = NULL;
 
 #define VOP_READ(vnode, buf, nbyte, off) vnode->ops->read(vnode, buf, nbyte, off)
-#define VOP_WRITE(vnode, buf, nbyte, off) vnode->ops->read(vnode, buf, nbyte, off)
+#define VOP_WRITE(vnode, buf, nbyte, off) vnode->ops->write(vnode, buf, nbyte, off)
 #define VOP_LOOKUP(vnode, out, path) vnode->ops->lookup(vnode, out, path)
 
 /**
@@ -25,8 +25,9 @@ int
 vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname)
 {
 	vnode_t *vn;
-	char path[255], *sub;
+	char path[255], *sub, *next;
 	size_t sublen;
+	bool last =false;
 	int r;
 
 	if (pathname[0] == '/' || cwd == NULL) {
@@ -42,18 +43,18 @@ vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname)
 
 loop:
 	sublen = 0;
+	next = sub;
 
-	while (*sub != '\0' && *sub != '/') {
-		sub++;
+	while (*next != '\0' && *next != '/') {
+		next++;
 		sublen++;
 	}
 
-	if (*sub == '\0') {
+	if (*next == '\0') {
 		/* end of path */
-		*out = vn;
-		return 0;
+		last = true;
 	} else
-		*sub = '\0';
+		*next = '\0';
 
 	if (strcmp(sub, ".") == 0)
 		; /* do nothing */
@@ -62,6 +63,11 @@ loop:
 		if (r < 0) {
 			return r;
 		}
+	}
+
+	if (last) {
+		*out = vn;
+		return 0;
 	}
 
 	sub += sublen + 1;

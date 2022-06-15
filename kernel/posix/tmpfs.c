@@ -25,6 +25,7 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		return 0;
 	} else {
 		vnode_t *vn = kmalloc(sizeof *vn);
+		node->vn = vn;
 		vn->refcnt = 1;
 		vn->type = node->type;
 		vn->ops = &tmpfs_vnops;
@@ -164,7 +165,7 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	/* todo move to vfs_read, this is generic pagecache manipulation */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
-	size_t npages = (pageoff + nbyte) / PGSIZE;
+	size_t npages = (pageoff + nbyte) / PGSIZE + 1;
 
 	assert(off + nbyte <= vn->attr.size);
 
@@ -182,7 +183,8 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		if (r < 0)
 			return r;
 
-		memcpy(buf + page * PGSIZE, P2V(anon->physpg->paddr), tocopy);
+		memcpy(buf + page * PGSIZE,
+		    P2V(anon->physpg->paddr) + pageoff, tocopy);
 
 		nbyte -= tocopy;
 		pageoff = 0;
@@ -197,9 +199,10 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	/* todo move to vfs_write, this is generic pagecache manipulation */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
-	size_t npages = (pageoff + nbyte) / PGSIZE;
+	size_t npages = (pageoff + nbyte) / PGSIZE + 1;
 
-	assert(off + nbyte <= vn->attr.size);
+	if (off + nbyte > vn->attr.size)
+		vn->attr.size = off + nbyte;
 
 	for (size_t page = base / PGSIZE; page < npages; page++) {
 		vm_anon_t *anon;
@@ -215,7 +218,8 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		if (r < 0)
 			return r;
 
-		memcpy(P2V(anon->physpg->paddr), buf + page * PGSIZE, tocopy);
+		memcpy(P2V(anon->physpg->paddr) + pageoff,
+		    buf + page * PGSIZE, tocopy);
 
 		nbyte -= tocopy;
 		pageoff = 0;

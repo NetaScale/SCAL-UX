@@ -1,9 +1,8 @@
 rm vendor/limine/limine-deploy
 make -C vendor/limine
-
 	rm -rf iso_root
 	mkdir -p iso_root
-	cp build/kernel/amd64/vxkern build/TestDriver/libTestDriver.so \
+	cp build/kernel/amd64/vxkern build/TestDriver/libTestDriver.so build/subprojects/mlibc/ld.so build/subprojects/mlibc/libc.so \
 		limine.cfg vendor/limine/limine.sys vendor/limine/limine-cd.bin \
 		vendor/limine/limine-cd-efi.bin init iso_root/
 	xorriso -as mkisofs -b limine-cd.bin \

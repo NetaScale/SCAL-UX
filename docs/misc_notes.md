@@ -17,3 +17,8 @@ start:
 init:
 	.string "/init\0"
 ```
+
+
+```
+x86_64-scalux-gcc -fPIC -shared test.c -I/tmp/scalux/usr/include -L build/subprojects/mlibc/
+```
