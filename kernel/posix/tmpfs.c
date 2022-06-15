@@ -165,11 +165,12 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	/* todo move to vfs_read, this is generic pagecache manipulation */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
-	size_t npages = (pageoff + nbyte) / PGSIZE + 1;
+	size_t firstpage = base / PGSIZE;
+	size_t lastpage = firstpage + (pageoff + nbyte) / PGSIZE + 1;
 
 	assert(off + nbyte <= vn->attr.size);
 
-	for (size_t page = base / PGSIZE; page < npages; page++) {
+	for (size_t page = firstpage; page < lastpage; page++) {
 		vm_anon_t *anon;
 		int r;
 		size_t tocopy;
@@ -183,7 +184,7 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		if (r < 0)
 			return r;
 
-		memcpy(buf + page * PGSIZE,
+		memcpy(buf + (page - firstpage) * PGSIZE,
 		    P2V(anon->physpg->paddr) + pageoff, tocopy);
 
 		nbyte -= tocopy;
@@ -197,6 +198,7 @@ int
 tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
 	/* todo move to vfs_write, this is generic pagecache manipulation */
+	/* FIXME: fix offset writes after the example of tmp_read */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
 	size_t npages = (pageoff + nbyte) / PGSIZE + 1;

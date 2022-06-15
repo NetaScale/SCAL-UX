@@ -69,11 +69,28 @@ done(void)
 	}
 }
 
+enum { kPortCOM1 = 0x3f8 };
+
+static void
+serial_init()
+{
+	outb(kPortCOM1 + 1, 0x00);
+	outb(kPortCOM1 + 3, 0x80);
+	outb(kPortCOM1 + 0, 0x03);
+	outb(kPortCOM1 + 1, 0x00);
+	outb(kPortCOM1 + 3, 0x03);
+	outb(kPortCOM1 + 2, 0xC7);
+	outb(kPortCOM1 + 4, 0x0B);
+}
+
 void
 limterm_putc(int ch, void *ctx)
 {
-	terminal_request.response->write(
-	    terminal_request.response->terminals[0], (const char *)&ch, 1);
+	while (!(inb(kPortCOM1 + 5) & 0x20))
+		;
+	outb(kPortCOM1, ch);
+	// terminal_request.response->write(
+	//    terminal_request.response->terminals[0], (const char *)&ch, 1);
 }
 
 void
@@ -228,6 +245,8 @@ _start(void)
 		done();
 	}
 
+	serial_init();
+
 	kprintf("SCAL/UX\n\n");
 
 	setup_mmap();
@@ -255,8 +274,6 @@ _start(void)
 	    module_request.response->modules[1]->size,
 	    module_request.response->modules[2]->address,
 	    module_request.response->modules[2]->size);
-
-	*(char *)0x01 = 45;
 
 	// We're done, just hang...
 	done();

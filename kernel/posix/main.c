@@ -54,6 +54,7 @@ posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize)
 	root_vnode->ops->create(root_vnode, &tvn, "ld.so");
 	assert(vfs_write(tvn, ldbin, ldsize, 0x0) == 0);
 
+	kprintf("starting init process...\n");
 	start_init(initbin);
 
 	pmap_stats();

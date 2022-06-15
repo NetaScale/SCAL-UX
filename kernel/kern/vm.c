@@ -33,14 +33,13 @@ vm_init(paddr_t kphys)
 	vaddr = (vaddr_t)0xffff800000000000;
 	vm_map_object(kmap, objs[1], &vaddr, 0x100000000, false);
 
+#if 0
 	/* identity map from 0x1000 to 0x100000000 - for limine terminal */
 	objs[2]->gen.phys = (paddr_t)0x1000;
 	objs[2]->size = 0xfffff000;
 	vaddr = (vaddr_t)0x1000;
 	vm_map_object(kmap, objs[2], &vaddr, 0xfffff000, false);
-
-	vaddr = VADDR_MAX;
-	vm_map_object(kmap, objs[2], &vaddr, 0x8000, false);
+#endif
 
 	kprintf("vm_init done\n");
 }
@@ -101,7 +100,8 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	if (out)
 		*out = obj;
 
-	kprintf("allocated object %p size %p at vaddr %p\n", obj, size, *vaddrp);
+	kprintf("allocated object %p size %p at vaddr %p\n", obj, size,
+	    *vaddrp);
 
 	return 0;
 }
@@ -285,7 +285,7 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
 	voff_t off;
 	bool needcopy;
 
-	kprintf("\nvm_fault vaddr: %p write: %d\n", vaddr, write);
+	kprintf("vm_fault vaddr: %p write: %d\n", vaddr, write);
 
 	lock(&map->lock);
 	entry = find_entry_for_addr(map, vaddr);
@@ -328,7 +328,7 @@ anon_get(vm_object_t *obj, voff_t off, vm_anon_t **out, bool needcopy)
 	vm_anon_t *anon = aent ? aent->anon : NULL;
 
 	if (anon) {
-		kprintf("map in an existing anon");
+		kprintf("map in an existing anon\n");
 		if (needcopy) {
 			vm_anon_t *newanon = kmalloc(sizeof *anon);
 			newanon->offs = anon->offs;

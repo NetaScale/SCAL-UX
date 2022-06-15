@@ -124,7 +124,7 @@ retry:
 			addr = g_1st_mem->paddr + PGSIZE * i;
 			/* zero it out here for now */
 			for (int i2 = 0; i2 < PGSIZE * n; i2++)
-				((char *)addr)[i2] = 0x0;
+				((char *)P2V(addr))[i2] = 0x0;
 
 			return addr;
 		}
