@@ -270,12 +270,8 @@ vm_fault_handle_anon(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, voff_t off,
     bool needcopy)
 {
 	vm_anon_t *anon;
-	vm_amap_entry_t *aent;
 
 	obj->anon.pagerops->get(obj, off, &anon, needcopy);
-	aent = kmalloc(sizeof *aent);
-	aent->anon = anon;
-	TAILQ_INSERT_TAIL(&obj->anon.amap->pages, aent, entries);
 	pmap_map(map->pmap, anon->physpg->paddr, vaddr, PGSIZE);
 	pmap_invlpg(vaddr);
 }
@@ -346,13 +342,17 @@ anon_get(vm_object_t *obj, voff_t off, vm_anon_t **out, bool needcopy)
 	} else {
 		/*
 		 * needcopy irrelevant; we're getting a brand new page for it
-		 * regardless
+		 * regardless  -- FIXME: but we're linking it into our amap so
+		 * this comment is now incorrect. Only link it in if we must.
 		 */
 		kprintf("make a new anon for pg  %ld in amap\n", off);
 		anon = kmalloc(sizeof *anon);
 		anon->physpg = vm_alloc_page();
 		anon->refcnt = 1;
 		anon->offs = off;
+		aent = kmalloc(sizeof *aent);
+		aent->anon = anon;
+		TAILQ_INSERT_TAIL(&obj->anon.amap->pages, aent, entries);
 	}
 
 	*out = anon;

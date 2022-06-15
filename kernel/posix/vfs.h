@@ -5,9 +5,9 @@
 
 #include "kern/vm.h"
 
-typedef struct vnode vnode_t;
-
 typedef enum vtype { VNON, VREG, VDIR } vtype_t;
+typedef struct vnode vnode_t;
+typedef struct file file_t;
 
 struct vnops {
 	/**
@@ -18,6 +18,16 @@ struct vnops {
 	 * @param name new file name
 	 */
 	int (*create)(vnode_t *dvn, vnode_t **out, const char *name);
+
+	/**
+	 * Allocate backing store.
+	 *
+	 * @param dvn LOCKED regular file vnode
+	 * @param off offset at which to allocate
+	 * @param len length in bytes to allocate
+	 */
+	int (*fallocate)(vnode_t *vn, off_t off, size_t len);
+
 	/**
 	 * Lookup the vnode corresponding to the given file name in the given
 	 * direct vnode.
@@ -27,6 +37,7 @@ struct vnops {
 	 * @param 3 filename
 	 */
 	int (*lookup)(vnode_t *dvn, vnode_t **out, const char *name);
+
 	/**
 	 * Get a page from a VREG vnode's backing store or cache.
 	 *
@@ -38,8 +49,17 @@ struct vnops {
 	 * the anon should not be from or entered into the cache as it'll be
 	 * written to forthwith).
 	 */
-	int (*getpage)(vnode_t *dvn, voff_t off, vm_anon_t**out, bool needcopy);
+	int (
+	    *getpage)(vnode_t *dvn, voff_t off, vm_anon_t **out, bool needcopy);
+
+	int (*read)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
+
+	int (*write)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 };
+
+typedef struct vattr {
+	size_t size;
+} vattr_t;
 
 typedef struct vnode {
 	size_t refcnt;
@@ -47,6 +67,7 @@ typedef struct vnode {
 	vm_object_t *vmobj;
 	void *data; /* fs-private data */
 	struct vnops *ops;
+	vattr_t attr;
 	spinlock_t interlock;
 } vnode_t;
 
@@ -57,8 +78,43 @@ typedef struct vfs {
 	void *data; /* fs-private data */
 } vfs_t;
 
-extern vnode_t *root_vnode;
+typedef struct fileops {
+	/** Read \p nbyte at offset \p off into buffer \p buf */
+	int (*read)(file_t *file, void *buf, size_t nbyte, off_t off);
+	/** Write \p nbyte at offset \p off into buffer \p buf */
+	int (*write)(file_t *file, void *buf, size_t nbyte, off_t off);
+	/** Yield a (refcount-incremented) VM object which can map this file. */
+	int (*mmap)(file_t *file, off_t off, size_t len, bool copy,
+	    vm_object_t **out);
+} fileops_t;
+
+/*
+ * Kernel file descriptor, called on Linux a 'file description'.
+ */
+typedef struct file {
+	size_t refcnt;
+	fileops_t *fops;
+} file_t;
 
 void tmpfs_mountroot();
+
+
+/**
+ * Lookup path \p path relative to @locked \p cwd and store the result in
+ * \p out.
+ */
+int vfs_lookup(vnode_t *cwd, vnode_t **out, const char *path);
+
+/**
+ * Read from @locked \p vn \p nbyte bytes at offset \p off into buffer \p buf.
+ */
+int vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off);
+
+/**
+ * Read into @locked \p vn \p nbyte bytes at offset \p off from buffer \p buf.
+ */
+int vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off);
+
+extern vnode_t *root_vnode;
 
 #endif /* VNODE_H_ */

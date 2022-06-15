@@ -11,9 +11,14 @@ typedef struct tmpdirent {
 } tmpdirent_t;
 
 typedef struct tmpnode {
+	/** Type of node. */
 	vtype_t type;
-	/* associated vnode; may be null. shares \l obj with this */
+
+	/** Associated vnode; may be null. It shares its vmobj with this. */
 	vnode_t *vn;
+
+	/* size */
+	size_t size;
 
 	union {
 		/* VDIR case */

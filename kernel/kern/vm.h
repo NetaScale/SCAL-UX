@@ -9,7 +9,7 @@
 #include "kern/queue.h"
 
 #define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
-#define ROUNDDOWN(addr) (((addr)) & ~(align - 1))
+#define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
 
 #define PTRROUNDUP(addr) ROUNDUP(addr, (sizeof(uintptr_t)))
 /** Round a value up to pointer alignment. */
