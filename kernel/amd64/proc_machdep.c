@@ -102,7 +102,7 @@ schedule(intr_frame_t *frame)
 	if (spl >= kSPLSoft /* && !want_reschedule_for_some_reason??? */)
 		goto finish; /* need spl0 for regular scheduling */
 
-	cpu = curcpu();
+	cpu = CURCPU();
 
 	/* save old frame */
 	cpu->curthread->pcb.frame = *frame;

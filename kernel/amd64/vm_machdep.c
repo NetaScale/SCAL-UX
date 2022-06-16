@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <string.h>
 
 #include "amd64.h"
 #include "kern/kern.h"
@@ -85,6 +86,8 @@ vm_alloc_page()
 		}
 	}
 	unlock(&g_1st_mem_lock);
+
+	memset(P2V(page->paddr), 0, PGSIZE);
 
 	if (!page)
 		fatal("pages exhausted");
@@ -227,7 +230,7 @@ pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size)
 {
 	size_t npages = size / PGSIZE;
 	kprintf("pmap_map: mapping phys %p at virt %p (size 0x%lx)\n", phys,
-	    virt, size, npages);
+	    virt, size);
 	for (int i = 0; i < npages; i++, virt += PGSIZE, phys += PGSIZE) {
 		pmap_enter(pmap->pml4, phys, virt);
 	}

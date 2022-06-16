@@ -1,5 +1,8 @@
 
+#include <sys/mman.h>
+
 #include "kern/kern.h"
+#include "vm_posix.h"
 #include "pcb.h"
 #include "sys.h"
 
@@ -9,13 +12,23 @@ exec(const char *path, const char *argp[], const char *envp[], intr_frame_t *fra
 int
 posix_syscall(intr_frame_t *frame)
 {
+	#define ARG1 frame->rdi
+	#define ARG2 frame->rsi
+	#define ARG3 frame->rdx
+	#define ARG4 frame->r10
+	#define ARG5 frame->r8
+	#define ARG6 frame->r9
+
+	#define RET frame->rax
+	#define ERR frame->rdi
+
 	switch (frame->rax) {
-	case PXSYS_dbg: {
+	case kPXSysDebug: {
 		kprintf("PXSYS_dbg: %s\n", frame->rdi);
 		break;
 	}
 
-	case PXSYS_exec: {
+	case kPXSysExec: {
 		kprintf("PXSYS_exec: %s\n", frame->rdi);
 		const char *args[] = { "init", "no", NULL};
 		const char *envs[] = { "VAR=42", NULL };
@@ -23,8 +36,13 @@ posix_syscall(intr_frame_t *frame)
 		break;
 	}
 
-	case PXSYS_mmap:
-		kprintf("PXSYS_mmap");
-		for (;;) asm ("hlt");
+	case kPXSysMmap: {
+		void * addr = (void*)ARG1;
+		ERR = -vm_mmap(&addr, ARG2, ARG3, ARG4, ARG5, ARG6);
+		RET = (uintptr_t)addr;
+		break;
 	}
+	}
+
+	return 0;
 }

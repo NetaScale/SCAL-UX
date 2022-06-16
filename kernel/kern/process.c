@@ -102,12 +102,12 @@ dpcs_run()
 		dpc_t *first;
 
 		spl = splhigh();
-		first = TAILQ_FIRST(&curcpu()->dpcqueue);
+		first = TAILQ_FIRST(&CURCPU()->dpcqueue);
 		if (first) {
 			first->bound = false;
 			fun = first->fun;
 			arg = first->arg;
-			TAILQ_REMOVE(&curcpu()->dpcqueue, first, dpcqueue);
+			TAILQ_REMOVE(&CURCPU()->dpcqueue, first, dpcqueue);
 		}
 		splx(spl);
 
@@ -128,11 +128,11 @@ callouts_run(void *arg)
 		callout_t *first;
 
 		spl = splhigh();
-		first = TAILQ_FIRST(&curcpu()->elapsedcallouts);
+		first = TAILQ_FIRST(&CURCPU()->elapsedcallouts);
 		if (first) {
 			fun = first->fun;
 			arg = first->arg;
-			TAILQ_REMOVE(&curcpu()->elapsedcallouts, first, queue);
+			TAILQ_REMOVE(&CURCPU()->elapsedcallouts, first, queue);
 		}
 		splx(spl);
 

@@ -165,8 +165,8 @@ exec(const char *path, const char *argp[], const char *envp[], intr_frame_t *fra
 
 	frame->rip = (uint64_t)rtldpkg.entry;
 	frame->rsp = (uint64_t)pkg.sp;
-	curcpu()->curthread->pcb.frame.rip = (uint64_t)rtldpkg.entry;
-	curcpu()->curthread->pcb.frame.rsp = (uint64_t)pkg.sp;
+	CURCPU()->curthread->pcb.frame.rip = (uint64_t)rtldpkg.entry;
+	CURCPU()->curthread->pcb.frame.rsp = (uint64_t)pkg.sp;
 
 	return 0;
 }

@@ -1,6 +1,7 @@
 #ifndef PROCESS_H_
 #define PROCESS_H_
 
+#include "amd64.h" /* for curcpu */
 #include "kern/queue.h"
 #include "kern/vm.h"
 #include "pcb.h"
@@ -99,7 +100,7 @@ typedef struct process {
 	char name[31];
 
 	/* Posix subsystem process, may be NULL if process not Posixy */
-	struct posix_proc *pproc;
+	struct posix_proc *pxproc;
 
 	/* Threads belonging to this process. */
 	LIST_HEAD(, thread) threads;

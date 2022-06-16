@@ -88,7 +88,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		break;
 
 	case kIntNumLAPICTimer:
-		(void)__atomic_add_fetch(&curcpu()->counter, 1,
+		(void)__atomic_add_fetch(&CURCPU()->counter, 1,
 		    __ATOMIC_RELAXED);
 		lapic_eoi();
 		break;
@@ -230,5 +230,5 @@ void
 timeslicing_start()
 {
 	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | kIntNumLAPICTimer);
-	lapic_write(kLAPICRegTimerInitial, curcpu()->lapic_tps / 100);
+	lapic_write(kLAPICRegTimerInitial, CURCPU()->lapic_tps / 100);
 }

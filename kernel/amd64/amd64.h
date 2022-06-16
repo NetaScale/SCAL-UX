@@ -65,14 +65,14 @@ REG_FUNCS(uint64_t, cr4)
 
 #if 0 /* slow */
 static inline struct cpu *
-curcpu()
+CURCPU()
 {
 	return (struct cpu *)rdmsr(kAMD64MSRKernelGSBase);
 }
 #endif
 
 static inline struct cpu *
-curcpu()
+CURCPU()
 {
 	struct cpu *val;
 	asm volatile("mov %%gs:0, %0" : "=r"(val));
