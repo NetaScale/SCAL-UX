@@ -23,10 +23,10 @@
  */
 
 typedef enum {
-	kSPLHigh = 0xff, /* all interrupts blocked */
-	kSPLHard = 0x3,	 /* hard interrupts blocked */
-	kSPLSoft = 0x2,	 /* soft interrupts blocked */
-	kSPL0 = 0x0,	 /* blocks none */
+	kSPLHigh = 15, /* all interrupts blocked */
+	kSPLHard = 3,  /* hard interrupts blocked */
+	kSPLSoft = 2,  /* soft interrupts blocked */
+	kSPL0 = 0,     /* blocks none */
 	_kSPLForceLong = INT64_MAX,
 } spl_t;
 
