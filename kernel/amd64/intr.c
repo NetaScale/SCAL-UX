@@ -77,8 +77,9 @@ void
 handle_int(intr_frame_t *frame, uintptr_t num)
 {
 #ifdef DEBUG_INT
-	kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->rip,
-	    frame->code);
+	if (num != 48)
+		kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->rip,
+		    frame->code);
 #endif
 	switch (num) {
 	case 14: /* pagefault */

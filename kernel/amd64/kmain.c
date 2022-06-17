@@ -235,6 +235,8 @@ setup_cpus()
 	kprintf("all CPUs up\n");
 }
 
+void setup_proc0();
+
 // The following will be our kernel's entry point.
 void
 _start(void)
@@ -254,6 +256,7 @@ _start(void)
 	vm_activate(kmap->pmap);
 	vm_up = true;
 
+	setup_proc0();
 	setup_cpus();
 
 	if (module_request.response->module_count != 3) {

@@ -6,6 +6,7 @@
 
 #include "kern/liballoc.h"
 #include "kern/process.h"
+#include "posix_proc.h"
 #include "spl.h"
 #include "vfs.h"
 
@@ -24,6 +25,9 @@ start_init(void *bin)
 	static uint16_t initcode[] = { 0xc748, 0x02c0, 0x0000, 0x4800, 0xc7c7,
 		0x0010, 0x0000, 0x80cd, 0x692f, 0x696e, 0x0074, 0x0000 };
 	process_t *proc1 = process_new(&proc0);
+	proc1->pxproc = kmalloc(sizeof(posix_proc_t));
+	proc1->pxproc->proc = proc1;
+	memset(proc1->pxproc->files, 0x0, sizeof proc1->pxproc->files);
 	thread_t *thr1 = thread_new(proc1, false);
 	vaddr_t vaddr = 0x0;
 

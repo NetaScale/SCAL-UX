@@ -96,8 +96,8 @@ typedef struct file {
 	fileops_t *fops;
 } file_t;
 
-void tmpfs_mountroot();
 
+void tmpfs_mountroot();
 
 /**
  * Lookup path \p path relative to @locked \p cwd and store the result in
