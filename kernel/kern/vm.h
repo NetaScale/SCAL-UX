@@ -167,6 +167,8 @@ vm_page_t *vm_alloc_page();
 vm_map_t *vm_map_new();
 
 vm_amap_entry_t *amap_find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off);
+/** copy an anon (does not decrement \p anon's refcnt) */
+vm_anon_t *anon_copy(vm_anon_t *anon);
 
 /*
  * Allocate anonymous memory and map it into the given map. All other
@@ -225,6 +227,7 @@ void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size,
 
 /* invalidate tlb entry for address */
 void pmap_invlpg(vaddr_t addr);
+void pmap_stats();
 
 /* set to 1 when the VM system is up and running */
 extern bool vm_up;

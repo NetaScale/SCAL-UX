@@ -5,6 +5,7 @@
 
 #include "kern/vm.h"
 
+struct posix_proc;
 typedef enum vtype { VNON, VREG, VDIR } vtype_t;
 typedef struct vnode vnode_t;
 typedef struct file file_t;
@@ -94,6 +95,8 @@ typedef struct fileops {
 typedef struct file {
 	size_t refcnt;
 	fileops_t *fops;
+	vnode_t *vn;
+	size_t pos;
 } file_t;
 
 
@@ -101,7 +104,7 @@ void tmpfs_mountroot();
 
 /**
  * Lookup path \p path relative to @locked \p cwd and store the result in
- * \p out.
+ * \p out. Refcount of the vnode is incremented.
  */
 int vfs_lookup(vnode_t *cwd, vnode_t **out, const char *path);
 
@@ -114,6 +117,10 @@ int vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off);
  * Read into @locked \p vn \p nbyte bytes at offset \p off from buffer \p buf.
  */
 int vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off);
+
+int sys_open(struct posix_proc *proc, const char * path, int mode);
+int sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
+int sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence);
 
 extern vnode_t *root_vnode;
 

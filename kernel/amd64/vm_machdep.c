@@ -262,8 +262,10 @@ void
 pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size, vm_prot_t prot)
 {
 	size_t npages = size / PGSIZE;
+#ifdef DEBUG_VM
 	kprintf("pmap_map: mapping phys %p at virt %p (size 0x%lx)\n", phys,
 	    virt, size);
+#endif
 	for (int i = 0; i < npages; i++, virt += PGSIZE, phys += PGSIZE) {
 		pmap_enter(pmap->pml4, phys, virt, prot);
 	}

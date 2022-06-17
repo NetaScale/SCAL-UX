@@ -21,6 +21,7 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 	tmpnode_t *node = (tmpnode_t *)ino;
 
 	if (node->vn != NULL) {
+		node->vn->refcnt++;
 		*vout = node->vn;
 		return 0;
 	} else {

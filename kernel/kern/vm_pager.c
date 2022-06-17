@@ -12,7 +12,9 @@ anon_get(vm_object_t *obj, voff_t off, vm_anon_t **out, bool write)
 	int r = 0;
 
 	if (!anon) {
+#ifdef DEBUG_VM
 		kprintf("make a new anon for pg  %ld in amap\n", off);
+#endif
 		anon = kmalloc(sizeof *anon);
 		anon->physpg = vm_alloc_page();
 		anon->refcnt = 1;

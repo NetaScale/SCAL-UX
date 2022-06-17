@@ -12,8 +12,8 @@
 #include "kern/liballoc.h"
 #include "kern/process.h"
 #include "kern/vm.h"
-#include "vfs.h"
 #include "pcb.h"
+#include "vfs.h"
 
 #define ELFMAG "\177ELF"
 
@@ -37,16 +37,16 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	r = vfs_lookup(root_vnode, &vn, path);
 	if (r < 0) {
 		kprintf("exec: failed to lookup %s (errno %d)\n", path, -r);
-			return r;
+		return r;
 	}
 
 	r = vfs_read(vn, &ehdr, sizeof ehdr, 0);
-	if (r < 0){
+	if (r < 0) {
 		kprintf("exec: failed to read %s (errno %d)\n", path, -r);
-			return r;
+		return r;
 	}
 
-	if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0){
+	if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0) {
 		kprintf("exec: bad e_ident in %s\n", path);
 		return -ENOEXEC;
 	}
@@ -62,7 +62,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	pkg->entry = base + ehdr.e_entry;
 	pkg->phentsize = ehdr.e_phentsize;
 	pkg->phnum = ehdr.e_phnum;
-	pkg->phaddr =0x0;
+	pkg->phaddr = 0x0;
 
 	for (int i = 0; i < ehdr.e_phnum; i++) {
 		Elf64_Phdr *phdr = &phdrs[i];
@@ -102,7 +102,6 @@ copyargs(exec_package_t *pkg, const char *argp[], const char *envp[])
 	for (const char **env = envp; *env; env++, nenv++) {
 		stackp -= (strlen(*env) + 1);
 		strcpy(stackp, *env);
-		nenv++;
 	}
 
 	for (const char **arg = argp; *arg; arg++, narg++) {
@@ -110,32 +109,39 @@ copyargs(exec_package_t *pkg, const char *argp[], const char *envp[])
 		strcpy(stackp, *arg);
 	}
 
-	/* more convenient to work with this, and keep stackp for use later */
-	stackpu64 = (uint64_t *)stackp;
+	/* align to 16 bytes */
+	stackpu64 = (size_t *)(stackp - ((uintptr_t)stackp & 0xf));
+	/* account for args/env */
+	if ((narg + nenv + 3) % 2)
+		--stackpu64;
 
-	/* populate the auxv */
-	#define AUXV(TAG, VALUE) *--stackpu64 = (uint64_t)VALUE; *--stackpu64 = TAG
+/* populate the auxv */
+#define AUXV(TAG, VALUE)                \
+	*--stackpu64 = (uint64_t)VALUE; \
+	*--stackpu64 = TAG
 	AUXV(0x0, 0x0);
 	AUXV(AT_ENTRY, pkg->entry);
 	AUXV(AT_PHDR, pkg->phaddr);
 	AUXV(AT_PHENT, pkg->phentsize);
 	AUXV(AT_PHNUM, pkg->phnum);
 
-        *(--stackpu64) = 0;
-        stackpu64 -= nenv;
-        for (int i = 0; i < nenv; i++) {
-            stackp -= strlen(envp[i]) + 1;
-            stackpu64[i] = (uint64_t)stackp;
-        }
+	*(--stackpu64) = 0;
+	stackpu64 -= nenv;
+	stackp = pkg->stack;
 
-        *(--stackpu64) = 0;
-        stackpu64 -= narg;
-        for (int i = 0; i < narg; i++) {
-            stackp -= strlen(argp[i]) + 1;
-            stackpu64[i] = (uint64_t)stackp;
-        }
+	for (int i = 0; i < nenv; i++) {
+		stackp -= strlen(envp[i]) + 1;
+		stackpu64[i] = (uint64_t)stackp;
+	}
 
-        *(--stackpu64) = narg;
+	*(--stackpu64) = 0;
+	stackpu64 -= narg;
+	for (int i = 0; i < narg; i++) {
+		stackp -= strlen(argp[i]) + 1;
+		stackpu64[i] = (uint64_t)stackp;
+	}
+
+	*(--stackpu64) = narg;
 
 	pkg->sp = stackpu64;
 
@@ -144,7 +150,8 @@ copyargs(exec_package_t *pkg, const char *argp[], const char *envp[])
 
 /* todo: don't wipe the map, it makes it impossible to recover */
 int
-exec(const char *path, const char *argp[], const char *envp[], intr_frame_t *frame)
+exec(const char *path, const char *argp[], const char *envp[],
+    intr_frame_t *frame)
 {
 	int r;
 	exec_package_t pkg, rtldpkg;

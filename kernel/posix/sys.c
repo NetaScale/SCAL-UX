@@ -1,6 +1,7 @@
 
 #include <sys/mman.h>
 
+#include "amd64.h"
 #include "kern/kern.h"
 #include "kern/vm.h"
 #include "pcb.h"
@@ -30,7 +31,7 @@ posix_syscall(intr_frame_t *frame)
 
 	switch (frame->rax) {
 	case kPXSysDebug: {
-		kprintf("PXSYS_dbg: %s\n", (char *)frame->rdi);
+		kprintf("PXSYS_dbg: %s\n", (char *)ARG1);
 		break;
 	}
 
@@ -48,7 +49,54 @@ posix_syscall(intr_frame_t *frame)
 		RET = (uintptr_t)addr;
 		break;
 	}
+
+	case kPXSysOpen: {
+		int r = sys_open(proc, (const char *)ARG1, ARG2);
+		if (r < 0) {
+			RET = -1;
+			ERR = -r;
+		} else {
+			RET = r;
+			ERR = 0;
+		}
+		break;
 	}
+
+	case kPXSysRead: {
+		int r = sys_read(proc, ARG1, ARG2, ARG3);
+		if (r < 0) {
+			RET = -1;
+			ERR = -r;
+		} else {
+			RET = r;
+			ERR = 0;
+		}
+		break;
+	}
+
+	case kPXSysSeek: {
+		int r = sys_seek(proc, ARG1, ARG2, ARG3);
+		if (r < 0) {
+			RET = -1;
+			ERR = -r;
+		} else {
+			RET = r;
+			ERR = 0;
+		}
+		break;
+	}
+
+	case kPXSysSetFSBase: {
+		CURCPU()->curthread->pcb.fs = ARG1;
+		wrmsr(kAMD64MSRFSBase, ARG1);
+		RET = 0;
+		break;
+	}
+
+	}
+
+	CURCPU()->curthread->pcb.frame.rax = RET;
+	CURCPU()->curthread->pcb.frame.rdi = ERR;
 
 	return 0;
 }

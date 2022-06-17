@@ -65,15 +65,19 @@ vm_fault_handle_anon(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, voff_t off,
 				aent->anon = newanon;
 			}
 		} else {
-			/* retrieve page from parent, copy unconditionally */
+			/*
+			 * retrieve page from parent. we don't pass write as the
+			 * parent is probably a vnode cache so we will simply
+			 * copy the thing. we don't ref it either as we are
+			 * copying it unconditionally for now.
+			 */
 			r = obj->anon.parent->anon.pagerops->get(
 			    obj->anon.parent, off, &anon, false);
 			if (r < 0)
 				fatal("vm_fault_handle_anon error 3");
 
 			vm_anon_t *newanon = anon_copy(anon);
-			// anon->refcnt--;  // commented, get() doesn't inc
-			// refcnt
+
 			anon = newanon;
 			aent = kmalloc(sizeof *aent);
 			aent->anon = newanon;
@@ -100,7 +104,9 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
 	voff_t off;
 	bool needcopy;
 
+#ifdef DEBUG_VM
 	kprintf("vm_fault vaddr: %p write: %d\n", vaddr, write);
+#endif
 
 	lock(&map->lock);
 	entry = find_entry_for_addr(map, vaddr);

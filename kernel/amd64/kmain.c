@@ -101,6 +101,8 @@ common_init(struct limine_smp_info *smpi)
 
 	kprintf("setup cpu %d\n", smpi->processor_id);
 
+	write_cr4(read_cr4() | (1 << 9));
+
 	wrmsr(kAMD64MSRGSBase, (uint64_t)&smpi->extra_argument);
 
 	cpu->num = smpi->processor_id;
@@ -259,7 +261,7 @@ _start(void)
 	setup_proc0();
 	setup_cpus();
 
-	if (module_request.response->module_count != 3) {
+	if (module_request.response->module_count != 4) {
 		kprintf("expected 3 modules\n");
 		done();
 	}
@@ -272,11 +274,14 @@ _start(void)
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
 
-	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize);
+	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize,
+	    void *libc, size_t libcsize);
 	posix_main(module_request.response->modules[1]->address,
 	    module_request.response->modules[1]->size,
 	    module_request.response->modules[2]->address,
-	    module_request.response->modules[2]->size);
+	    module_request.response->modules[2]->size,
+	    module_request.response->modules[3]->address,
+	    module_request.response->modules[3]->size);
 
 	// We're done, just hang...
 	done();
