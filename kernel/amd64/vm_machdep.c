@@ -14,6 +14,9 @@ enum {
 	kMMUCacheDisable = 0x10,
 	kMMUAccessed = 0x40,
 	kPageGlobal = 0x100,
+
+	kMMUDefaultProt = kMMUPresent | kMMUWrite | kMMUUser,
+
 	kMMUFrame = 0x000FFFFFFFFFF000
 };
 
@@ -31,6 +34,13 @@ struct pmap {
 spinlock_t g_1st_mem_lock;
 
 static size_t pages_alloced = 0;
+
+/* get the flags of a pte */
+uint64_t *
+pte_get_flags(uint64_t pte)
+{
+	return (uint64_t *)(pte & ~kMMUFrame);
+}
 
 /* get the physical address to which a pte points */
 uint64_t *
@@ -50,10 +60,25 @@ pte_set(uint64_t *pte, paddr_t addr, uint64_t flags)
 }
 
 pmap_t *
+pmap_makekpmap()
+{
+	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
+	pmap->pml4 = pmap_alloc_page(1);
+	for (int i = 255; i < 511; i++) {
+		pte_set(&pmap->pml4[i], pmap_alloc_page(1), kMMUDefaultProt);
+	}
+	return pmap;
+}
+
+pmap_t *
 pmap_new()
 {
 	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
 	pmap->pml4 = pmap_alloc_page(1);
+	for (int i = 255; i < 511; i++) {
+		pte_set(&pmap->pml4[i], (paddr_t)kmap->pmap->pml4[i],
+		    kMMUDefaultProt);
+	}
 	return pmap;
 }
 
@@ -62,6 +87,13 @@ vm_activate(pmap_t *pmap)
 {
 	uint64_t val = (uint64_t)pmap->pml4;
 	write_cr3(val);
+}
+
+static uint64_t
+vm_prot_to_i386(vm_prot_t prot)
+{
+	return (prot & kVMRead ? kMMUPresent : 0) |
+	    (prot & kVMWrite ? kMMUWrite : 0) | kMMUUser;
 }
 
 /*
@@ -142,7 +174,7 @@ retry:
  * to the physical location of the table.
  */
 uint64_t *
-pmap_descend(uint64_t *table, size_t index, bool alloc)
+pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 {
 	uint64_t *entry = P2V((&table[index]));
 	uint64_t *addr = NULL;
@@ -153,7 +185,7 @@ pmap_descend(uint64_t *table, size_t index, bool alloc)
 		addr = (uint64_t *)pmap_alloc_page(1);
 		if (!addr)
 			fatal("out of pages");
-		pte_set(entry, addr, kMMUPresent | kMMUWrite | kMMUUser);
+		pte_set(entry, addr, mmuprot);
 	}
 
 	return addr;
@@ -175,19 +207,19 @@ pmap_trans(pml4e_t *pml4, vaddr_t virt)
 
 	kprintf("%d %d %d %d\n", pml4i, pdpti, pdi, pti);
 
-	pdpte = pmap_descend(pml4, pml4i, false);
+	pdpte = pmap_descend(pml4, pml4i, false, 0);
 	if (!pdpte) {
 		kprintf("no pml4 entry");
 		return;
 	}
 
-	pde = pmap_descend(pdpte, pdpti, false);
+	pde = pmap_descend(pdpte, pdpti, false, 0);
 	if (!pde) {
 		kprintf("no pdpt entry");
 		return;
 	}
 
-	pte = pmap_descend(pde, pdi, false);
+	pte = pmap_descend(pde, pdi, false, 0);
 	if (!pte) {
 		kprintf("no pte entry");
 		return;
@@ -202,23 +234,24 @@ pmap_trans(pml4e_t *pml4, vaddr_t virt)
 
 /* map a single given page at a virtual address. pml4 should be a phys addr */
 void
-pmap_enter(pml4e_t *pml4, paddr_t phys, vaddr_t virt)
+pmap_enter(pml4e_t *pml4, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 {
 	uintptr_t virta = (uintptr_t)virt;
 	int pml4i = ((virta >> 39) & 0x1FF);
 	int pdpti = ((virta >> 30) & 0x1FF);
 	int pdi = ((virta >> 21) & 0x1FF);
 	int pti = ((virta >> 12) & 0x1FF);
+	uint64_t mmuprot = vm_prot_to_i386(prot);
 	pdpte_t *pdpte;
 	pde_t *pde;
 	pte_t *pte;
 
 	// kprintf("pmap_enter: phys 0x%lx at virt 0x%lx\n", phys, virt);
-	pdpte = pmap_descend(pml4, pml4i, true);
-	pde = pmap_descend(pdpte, pdpti, true);
-	pte = pmap_descend(pde, pdi, true);
+	pdpte = pmap_descend(pml4, pml4i, true, kMMUDefaultProt);
+	pde = pmap_descend(pdpte, pdpti, true, kMMUDefaultProt);
+	pte = pmap_descend(pde, pdi, true, kMMUDefaultProt);
 
-	pte_set(P2V(&pte[pti]), phys, kMMUPresent | kMMUWrite | kMMUUser);
+	pte_set(P2V(&pte[pti]), phys, vm_prot_to_i386(prot));
 }
 
 /*
@@ -226,13 +259,13 @@ pmap_enter(pml4e_t *pml4, paddr_t phys, vaddr_t virt)
  * \size is in bytes, must be multiple of PGSIZE.
  */
 void
-pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size)
+pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size, vm_prot_t prot)
 {
 	size_t npages = size / PGSIZE;
 	kprintf("pmap_map: mapping phys %p at virt %p (size 0x%lx)\n", phys,
 	    virt, size);
 	for (int i = 0; i < npages; i++, virt += PGSIZE, phys += PGSIZE) {
-		pmap_enter(pmap->pml4, phys, virt);
+		pmap_enter(pmap->pml4, phys, virt, prot);
 	}
 }
 

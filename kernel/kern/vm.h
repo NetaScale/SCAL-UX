@@ -36,6 +36,13 @@ typedef uintptr_t voff_t;
 
 typedef struct pmap pmap_t;
 
+typedef enum vm_prot {
+	kVMRead = 0x1,
+	kVMWrite = 0x2,
+	kVMExecute = 0x4,
+	kVMAll = kVMRead | kVMWrite | kVMExecute,
+} vm_prot_t;
+
 /* Map of a virtual address space */
 typedef struct vm_map {
 	spinlock_t lock;
@@ -49,14 +56,16 @@ typedef struct vm_map {
 	pmap_t *pmap;
 } vm_map_t;
 
-enum vm_map_entry_flags {
-	kVMMapEntryCopyOnWrite = 0x1,
+enum vm_map_entry_inheritance {
+	kVMMapEntryInheritNone,
+	kVMMapEntryInheritShared,
+	kVMMapEntryInheritCopy,
 };
 
 /* Entry describing some region within a map */
 typedef struct vm_map_entry {
 	TAILQ_ENTRY(vm_map_entry) entries;
-	enum vm_map_entry_flags flags;
+	enum vm_map_entry_inheritance inheritance;
 	struct vm_object *obj;
 	vaddr_t vaddr;
 	size_t size; /* length in bytes */
@@ -94,13 +103,18 @@ typedef struct vm_object {
 	} type;
 	spinlock_t lock;
 	size_t size; /* length in bytes */
+	size_t refcnt;
 	union {
 		struct {
 			paddr_t phys; /* physical address of 1st page */
 		} gen;		      /* for kVMGeneric */
 		struct {
+			bool copy; /* whether this is a copy-on-write mapping */
 			vm_amap_t *amap;
+			/* pagerops for this object */
 			struct vm_pagerops *pagerops;
+			/* if this object COWs another, the original parent */
+			struct vm_object *parent;
 			/* if this is a mapping of a vnode, its associated vnode
 			 */
 			struct vnode *vnode;
@@ -152,6 +166,8 @@ vm_page_t *vm_alloc_page();
 /* allocate a new vm_map */
 vm_map_t *vm_map_new();
 
+vm_amap_entry_t *amap_find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off);
+
 /*
  * Allocate anonymous memory and map it into the given map. All other
  * parameters akin to vm_map_object.
@@ -190,14 +206,22 @@ int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 int vm_object_new_anon(vm_object_t **out, size_t size, vm_pagerops_t *pagerops,
     struct vnode *vn);
 
+/**
+ * Make a copy-on-write duplicate of an object.
+ *
+ * @param obj LOCKED object to duplicate
+ */
+vm_object_t *vm_object_copy(vm_object_t *obj);
+
 /* get n contiguous pages. returns physical address of first. */
 paddr_t pmap_alloc_page(size_t n);
 
-/* allocate a new pmap */
+/* Create a brand new pmap, only used to create the kernel pmap. */
 pmap_t *pmap_new();
 
 /* map a contiguous region of \p size bytes */
-void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size);
+void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size,
+    vm_prot_t prot);
 
 /* invalidate tlb entry for address */
 void pmap_invlpg(vaddr_t addr);

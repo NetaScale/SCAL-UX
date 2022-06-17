@@ -44,13 +44,15 @@ vm_init(paddr_t kphys)
 	kprintf("vm_init done\n");
 }
 
+pmap_t *pmap_makekpmap();
+
 vm_map_t *
 vm_map_new()
 {
 	vm_map_t *map = kcalloc(sizeof *map, 1);
 
 	TAILQ_INIT(&map->entries);
-	map->pmap = pmap_new();
+	map->pmap = pmap_makekpmap();
 	map->lock = 0;
 
 	return map;
@@ -143,7 +145,8 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 
 	lock(&map->lock);
 	entry_before = TAILQ_FIRST(&map->entries);
-	entry->flags |= copy ? kVMMapEntryCopyOnWrite : 0;
+	if (copy)
+		obj = vm_object_copy(obj);
 
 	/* didn't bother testing this placement code, hope it works */
 	if (vaddr == VADDR_MAX) {
@@ -205,7 +208,6 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 
 next:
 	kprintf("  - choosing vaddr %p\n", vaddr);
-	entry->flags = 0;
 	entry->vaddr = vaddr;
 	entry->size = size;
 	entry->obj = obj;
@@ -216,7 +218,7 @@ next:
 		TAILQ_INSERT_HEAD(&map->entries, entry, entries);
 
 	if (obj->type == kVMGeneric)
-		pmap_map(map->pmap, obj->gen.phys, vaddr, size);
+		pmap_map(map->pmap, obj->gen.phys, vaddr, size, kVMAll);
 
 	unlock(&map->lock);
 
@@ -224,170 +226,3 @@ next:
 
 	return 0;
 }
-
-/*
- * Find an entry for a given virtual address within a map.
- *
- * @param map LOCKED map to search.
- */
-static vm_map_entry_t *
-find_entry_for_addr(vm_map_t *map, vaddr_t vaddr)
-{
-	vm_map_entry_t *entry;
-	TAILQ_FOREACH (entry, &map->entries, entries) {
-		if (vaddr >= entry->vaddr && vaddr < entry->vaddr + entry->size)
-			return entry;
-	}
-	return NULL;
-}
-
-/**
- * Find the amap entry representing an offset within an amap.
- * @param amap LOCKED amap
- */
-static vm_amap_entry_t *
-find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off)
-{
-	vm_amap_entry_t *prev = NULL;
-	vm_amap_entry_t *anon;
-	TAILQ_FOREACH (anon, &amap->pages, entries) {
-		if (anon->anon->offs == off)
-			return anon;
-	}
-	return NULL;
-}
-
-/**
- * Handle a pagefault associated with an anon/vnode object.
- * @param map UNLOCKED map
- * @param obj LOCKED object
- * @param vaddr faulting address
- * @param poff offset of faulting address
- * @param needcopy whether a new anonymous page is needed (i.e. COW write)
- */
-static void
-vm_fault_handle_anon(vm_map_t *map, vm_object_t *obj, vaddr_t vaddr, voff_t off,
-    bool needcopy)
-{
-	vm_anon_t *anon;
-
-	obj->anon.pagerops->get(obj, off, &anon, needcopy);
-	pmap_map(map->pmap, anon->physpg->paddr, vaddr, PGSIZE);
-	pmap_invlpg(vaddr);
-}
-
-/* handle a page fault */
-int
-vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
-{
-	vm_map_entry_t *entry;
-	vm_object_t *obj;
-	voff_t off;
-	bool needcopy;
-
-	kprintf("vm_fault vaddr: %p write: %d\n", vaddr, write);
-
-	lock(&map->lock);
-	entry = find_entry_for_addr(map, vaddr);
-	if (entry)
-		lock(&entry->obj->lock);
-	unlock(&map->lock);
-
-	if (!entry) {
-		kprintf("no entry for vaddr %p\n", vaddr);
-		vm_map_print(map);
-		return -1;
-	}
-
-	obj = entry->obj;
-	if (obj->type == kVMGeneric) {
-		kprintf("unexpected object type for obj %p\n", obj);
-		vm_map_print(map);
-		return -1;
-	}
-	off = vaddr - entry->vaddr;
-	needcopy = (entry->flags & kVMMapEntryCopyOnWrite) && write;
-	vm_fault_handle_anon(map, obj, vaddr, off, needcopy);
-
-	unlock(&obj->lock);
-
-	return 0;
-}
-
-static void
-copyphyspage(paddr_t dst, paddr_t src)
-{
-	vaddr_t dstv = HHDM_BASE + dst, srcv = HHDM_BASE + src;
-	memcpy(dstv, srcv, PGSIZE);
-}
-
-static int
-anon_get(vm_object_t *obj, voff_t off, vm_anon_t **out, bool needcopy)
-{
-	vm_amap_entry_t *aent = find_anon(obj->anon.amap, NULL, off);
-	vm_anon_t *anon = aent ? aent->anon : NULL;
-
-	if (anon) {
-		kprintf("map in an existing anon\n");
-		if (needcopy) {
-			vm_anon_t *newanon = kmalloc(sizeof *anon);
-			newanon->offs = anon->offs;
-			newanon->refcnt = 1;
-			newanon->physpg = vm_alloc_page();
-			anon->refcnt--;
-			copyphyspage(newanon->physpg->paddr,
-			    anon->physpg->paddr);
-			anon = newanon;
-		}
-	} else {
-		/*
-		 * needcopy irrelevant; we're getting a brand new page for it
-		 * regardless  -- FIXME: but we're linking it into our amap so
-		 * this comment is now incorrect. Only link it in if we must.
-		 */
-		kprintf("make a new anon for pg  %ld in amap\n", off);
-		anon = kmalloc(sizeof *anon);
-		anon->physpg = vm_alloc_page();
-		anon->refcnt = 1;
-		anon->offs = off;
-		aent = kmalloc(sizeof *aent);
-		aent->anon = anon;
-		TAILQ_INSERT_TAIL(&obj->anon.amap->pages, aent, entries);
-	}
-
-	*out = anon;
-
-	return 0;
-}
-
-static int
-vnode_get(vm_object_t *obj, voff_t off, vm_anon_t **out, bool needcopy)
-{
-	vnode_t *vn = obj->anon.vnode;
-	vm_amap_entry_t *aent = find_anon(vn->vmobj->anon.amap, NULL, off);
-	vm_anon_t *anon = aent ? aent->anon : NULL;
-
-	if (!anon)
-		assert(vn->ops->getpage(vn, off, &anon, 0) == 0);
-
-	if (needcopy) {
-		vm_anon_t *newanon = kmalloc(sizeof *anon);
-		newanon->offs = anon->offs;
-		newanon->refcnt = 1;
-		newanon->physpg = vm_alloc_page();
-		anon->refcnt--;
-		copyphyspage(newanon->physpg->paddr, anon->physpg->paddr);
-		anon = newanon;
-	}
-	*out = anon;
-
-	return 0;
-}
-
-vm_pagerops_t vm_anon_pagerops = {
-	.get = anon_get,
-};
-
-vm_pagerops_t vm_vnode_pagerops = {
-	.get = vnode_get,
-};
