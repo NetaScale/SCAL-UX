@@ -683,6 +683,7 @@ int npf_vpprintf(npf_putc pc, void *pc_ctx, char const *format, va_list args) {
   pc_cnt.pc = pc;
   pc_cnt.ctx = pc_ctx;
   pc_cnt.n = 0;
+  spl_t spl = splhigh();
 
   lock(&lock_msgbuf);
 
@@ -996,6 +997,7 @@ int npf_vpprintf(npf_putc pc, void *pc_ctx, char const *format, va_list args) {
   }
 
   unlock(&lock_msgbuf);
+  splx(spl);
 
   return pc_cnt.n;
 }
@@ -1101,4 +1103,3 @@ int npf_vsnprintf(char *buffer, size_t bufsz, char const *format, va_list vlist)
   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
-

@@ -155,3 +155,14 @@ sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence)
 	file->pos = offset;
 	return offset;
 }
+
+int
+sys_close(struct posix_proc *proc, int fd)
+{
+	file_t **file;
+
+	file = &proc->files[fd];
+
+	if (*file == NULL)
+		return -EBADF;
+}

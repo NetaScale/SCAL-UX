@@ -42,9 +42,15 @@ start_init(void *bin)
 	thread_run(thr1);
 }
 
+static void callout(void *stuff)
+{
+	kprintf("hello from callout\n");
+}
+
 void
 posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize, void *libcbin, size_t libcsize)
 {
+	kprintf("POSIX subsystem\n");
 	timeslicing_start();
 
 	/* reset system priority level, everything should now be ready to go */
@@ -67,6 +73,15 @@ posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize, void *libcbin
 	pmap_stats();
 	kmalloc(PGSIZE * 32);
 
-	// for (;;)
-	//	asm volatile("pause");
+	callout_t deadline, deadline2;
+	deadline.timeout = 1000;
+	deadline.fun =callout;
+	deadline2.timeout = 1000;
+	deadline2.fun =callout;
+	kprintf("Setting callout..\n");
+	callout_enqueue(&deadline);
+	callout_enqueue(&deadline2);
+
+	for (;;)
+		asm volatile("pause");
 }

@@ -6,9 +6,6 @@
 
 #include <stdint.h>
 
-#include "intr.h"
-#include "kern/kern.h"
-
 /*
  * The principle: interrupts from 32 to 48 for soft. from 48 to 80 for hard.
  * - interrupts from 0 are blockable only with kSPLHigh (except NMIs)
@@ -84,14 +81,6 @@ static inline spl_t
 spl0()
 {
 	return splx(kSPL0);
-}
-
-/* assert SPL less than or equal to \p spl */
-static inline void
-splassert(spl_t spl)
-{
-	if (splget() > spl)
-		fatal("SPL_NOT_LESS_OR_EQUAL %lx\n", spl);
 }
 
 #endif /* SPL_H_ */

@@ -1,4 +1,5 @@
 #include "amd64.h"
+#include "kern/queue.h"
 #include "liballoc.h"
 #include "process.h"
 #include "spl.h"
@@ -8,6 +9,24 @@ spinlock_t process_lock;
 process_t proc0 = { .pid = 0, .name = "[kernel]" };
 cpu_t *cpus;
 size_t ncpus;
+
+void
+callout_enqueue(callout_t *callout)
+{
+	callout_t *co;
+	spl_t spl = splhigh();
+	TAILQ_FOREACH (co, &CURCPU()->pendingcallouts, entries) {
+		if (co->timeout > callout->timeout) {
+			TAILQ_INSERT_BEFORE(co, callout, entries);
+			goto next;
+		}
+		callout->timeout -= co->timeout;
+	}
+	kprintf("callout relative %d\n", callout->timeout);
+	TAILQ_INSERT_TAIL(&CURCPU()->pendingcallouts, callout, entries);
+next:
+	splx(spl);
+}
 
 void
 setup_proc0()
@@ -77,7 +96,7 @@ thread_new_kernel(void *entry, void *arg)
 
 	thread->proc = &proc0;
 	thread->kernel = true;
-	thread->kstack = 0;
+	thread->kstack = 0x0;
 	thread->pcb.frame.cs = 0x28;
 	thread->pcb.frame.ss = 0x30;
 	thread->pcb.frame.rip = (uintptr_t)entry;
@@ -90,6 +109,32 @@ thread_new_kernel(void *entry, void *arg)
 	lock(&cpus[1].lock);
 	TAILQ_INSERT_TAIL(&cpus[1].runqueue, thread, runqueue);
 	unlock(&cpus[1].lock);
+}
+
+/**
+ * Called on every tick.
+ *
+ * \pre interrupts remain disabled
+ */
+void
+tick()
+{
+	callout_t *co;
+	cpu_t *cpu = CURCPU();
+
+	cpu->counter++;
+	if (cpu->timeslice > 0)
+		cpu->timeslice--;
+
+	co = TAILQ_FIRST(&cpu->pendingcallouts);
+	if (co && --co->timeout == 0) {
+		TAILQ_REMOVE(&cpu->pendingcallouts, co, entries);
+		TAILQ_INSERT_TAIL(&cpu->elapsedcallouts, co, entries);
+		if (!cpu->calloutdpc.bound) {
+			TAILQ_INSERT_HEAD(&cpu->dpcqueue, &cpu->calloutdpc,
+			    dpcqueue);
+		}
+	}
 }
 
 void
@@ -132,7 +177,8 @@ callouts_run(void *arg)
 		if (first) {
 			fun = first->fun;
 			arg = first->arg;
-			TAILQ_REMOVE(&CURCPU()->elapsedcallouts, first, queue);
+			TAILQ_REMOVE(&CURCPU()->elapsedcallouts, first,
+			    entries);
 		}
 		splx(spl);
 

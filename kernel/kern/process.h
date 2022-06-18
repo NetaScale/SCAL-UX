@@ -27,9 +27,14 @@ typedef struct dpc {
  */
 typedef struct callout {
 	/** for cpu_t::pendingcallouts or cpu_t::elapsedcallouts */
-	TAILQ_ENTRY(callout) queue;
+	TAILQ_ENTRY(callout) entries;
 	void (*fun)(void *arg);
 	void *arg;
+	/**
+	 * time (relative to now if this is the head of the callout queue,
+	 * otherwise relative to previous callout) in milliseconds till expiry
+	 */
+	uint64_t timeout;
 } callout_t;
 
 typedef struct cpu {
@@ -41,6 +46,7 @@ typedef struct cpu {
 	tss_t *tss; /* points into a static structure right now - TODO allow
 			allocations contained within a single page */
 	uint64_t counter; /* per-cpu counter */
+	uint64_t timeslice; /* remaining timeslice of current thread */
 	/* end todos */
 	/** currently-running thread */
 	struct thread *curthread;
@@ -105,6 +111,11 @@ typedef struct process {
 	/* Threads belonging to this process. */
 	LIST_HEAD(, thread) threads;
 } process_t;
+
+/**
+ * Enqueue a callout onto this CPU's queue.
+ */
+void callout_enqueue(callout_t *callout);
 
 /*
  * Fork a process to create a new one. The new process inherits the parents'

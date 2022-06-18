@@ -2,12 +2,13 @@
  * miscellaneous definitions for in-kernel
  */
 
-#ifndef VXKERN_H_
-#define VXKERN_H_
+#ifndef KERN_H_
+#define KERN_H_
 
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "amd64/spl.h"
 #include "klock.h"
 
 #define kprintf(...) npf_pprintf(limterm_putc, NULL, __VA_ARGS__)
@@ -35,4 +36,12 @@ extern spinlock_t lock_msgbuf;
 /* needs lock/unlock, lock_msgbuf... */
 #include "nanoprintf.h"
 
-#endif /* VXKERN_H_ */
+/* assert SPL less than or equal to \p spl */
+static inline void
+splassert(spl_t spl)
+{
+	if (splget() > spl)
+		fatal("SPL_NOT_LESS_OR_EQUAL %lx\n", spl);
+}
+
+#endif /* KERN_H_ */

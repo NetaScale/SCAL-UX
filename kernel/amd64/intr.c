@@ -72,6 +72,7 @@ idt_load()
 }
 
 void schedule(intr_frame_t *frame);
+void tick();
 
 void
 handle_int(intr_frame_t *frame, uintptr_t num)
@@ -81,6 +82,10 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		kprintf("int %lu: ip 0x%lx, code 0x%lx,\n", num, frame->rip,
 		    frame->code);
 #endif
+
+	if (num != kIntNumLAPICTimer)
+		asm("sti");
+
 	switch (num) {
 	case 14: /* pagefault */
 		if (vm_fault(kmap, (vaddr_t)read_cr2(),
@@ -88,9 +93,11 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 			goto unhandled;
 		break;
 
+	case 32: /* reschedule */
+		break;
+
 	case kIntNumLAPICTimer:
-		(void)__atomic_add_fetch(&CURCPU()->counter, 1,
-		    __ATOMIC_RELAXED);
+		tick();
 		lapic_eoi();
 		break;
 
@@ -116,9 +123,9 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 
 		kprintf("halting\n\n");
 
-		asm volatile("cli");
+		//asm volatile("cli");
 		for (;;) {
-			__asm__("hlt");
+			__asm__("pause");
 		}
 	}
 	}
@@ -128,7 +135,14 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 }
 
 #define INT 0x8e
-#define TRAP 0x8f
+/*
+ * using interrupt gates for everything now, because sometimes something strange
+ * was happening with swapgs - probably interrupts nesting during the window of
+ * time in which we're running at CPL 0 but have yet to swapgs, making the
+ * nested interrupt fail to do so.
+ * so now we explicitly enable interrupts ourselves when it is safe to do so.
+ */
+#define TRAP 0x8e
 #define TRAP_USER 0xef
 #define INTS(X)     \
 	X(4, TRAP)  \
@@ -139,6 +153,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	X(12, TRAP) \
 	X(13, TRAP) \
 	X(14, TRAP) \
+	X(32, INT)  \
 	X(48, INT)  \
 	X(128, TRAP_USER)
 
@@ -231,5 +246,5 @@ void
 timeslicing_start()
 {
 	lapic_write(kLAPICRegTimer, kLAPICTimerPeriodic | kIntNumLAPICTimer);
-	lapic_write(kLAPICRegTimerInitial, CURCPU()->lapic_tps / 100);
+	lapic_write(kLAPICRegTimerInitial, CURCPU()->lapic_tps / 1000);
 }

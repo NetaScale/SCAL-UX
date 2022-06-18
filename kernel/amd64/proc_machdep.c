@@ -93,28 +93,30 @@ setup_cpu_gdt(cpu_t *cpu)
 void
 schedule(intr_frame_t *frame)
 {
-	cpu_t *cpu;
+	cpu_t *cpu = CURCPU();
 	thread_t *nextthread;
 	spl_t spl = splsoft();
 
+	splassert(kSPLSoft);
 	dpcs_run();
 
-	if (spl >= kSPLSoft /* && !want_reschedule_for_some_reason??? */)
-		goto finish; /* need spl0 for regular scheduling */
+	splhigh();
 
-	cpu = CURCPU();
+	if (spl >= kSPLSoft || cpu->timeslice > 0)
+		goto finish;
 
 	/* save old frame */
 	cpu->curthread->pcb.frame = *frame;
 
+	cpu->timeslice = 20;
 	TAILQ_INSERT_TAIL(&cpu->runqueue, cpu->curthread, runqueue);
 	nextthread = cpu->curthread = TAILQ_FIRST(&cpu->runqueue);
 	TAILQ_REMOVE(&cpu->runqueue, nextthread, runqueue);
 
-	if (!nextthread->kernel) {
-		cpu->tss->rsp0 = (uint64_t)cpu->curthread->kstack;
+	cpu->tss->rsp0 = (uint64_t)cpu->curthread->kstack;
+
+	if (!nextthread->kernel)
 		wrmsr(kAMD64MSRFSBase, nextthread->pcb.fs);
-	}
 
 	*frame = cpu->curthread->pcb.frame;
 
