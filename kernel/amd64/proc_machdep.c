@@ -109,7 +109,9 @@ schedule(intr_frame_t *frame)
 	cpu->curthread->pcb.frame = *frame;
 
 	cpu->timeslice = 20;
-	TAILQ_INSERT_TAIL(&cpu->runqueue, cpu->curthread, runqueue);
+	if (cpu->curthread->state == kRunnable)
+		TAILQ_INSERT_TAIL(&cpu->runqueue, cpu->curthread, runqueue);
+
 	nextthread = cpu->curthread = TAILQ_FIRST(&cpu->runqueue);
 	TAILQ_REMOVE(&cpu->runqueue, nextthread, runqueue);
 

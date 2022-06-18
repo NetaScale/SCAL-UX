@@ -111,6 +111,7 @@ common_init(struct limine_smp_info *smpi)
 	TAILQ_INIT(&cpu->dpcqueue);
 	TAILQ_INIT(&cpu->pendingcallouts);
 	TAILQ_INIT(&cpu->elapsedcallouts);
+	TAILQ_INIT(&cpu->waitqueue);
 	cpu->calloutdpc.bound = false;
 	cpu->calloutdpc.fun = callouts_run;
 

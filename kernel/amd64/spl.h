@@ -69,6 +69,7 @@ splhard()
 	return splraise(kSPLHard);
 }
 
+
 /* raise SPL to soft if this is higher than current */
 static inline spl_t
 splsoft()

@@ -143,7 +143,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
  * so now we explicitly enable interrupts ourselves when it is safe to do so.
  */
 #define TRAP 0x8e
-#define TRAP_USER 0xef
+#define INT_USER 0xee
 #define INTS(X)     \
 	X(4, TRAP)  \
 	X(6, TRAP)  \
@@ -155,7 +155,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	X(14, TRAP) \
 	X(32, INT)  \
 	X(48, INT)  \
-	X(128, TRAP_USER)
+	X(128, INT_USER)
 
 #define EXTERN_ISR_THUNK(VAL, GATE) extern void *isr_thunk_##VAL;
 

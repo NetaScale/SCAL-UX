@@ -15,6 +15,9 @@ callout_enqueue(callout_t *callout)
 {
 	callout_t *co;
 	spl_t spl = splhigh();
+#ifdef DEBUG_CALLOUT
+	kprintf("callout absolute %lu\n", callout->timeout);
+#endif
 	TAILQ_FOREACH (co, &CURCPU()->pendingcallouts, entries) {
 		if (co->timeout > callout->timeout) {
 			TAILQ_INSERT_BEFORE(co, callout, entries);
@@ -22,9 +25,18 @@ callout_enqueue(callout_t *callout)
 		}
 		callout->timeout -= co->timeout;
 	}
-	kprintf("callout relative %d\n", callout->timeout);
+	kprintf("callout scheduled in %lums\n", callout->timeout);
 	TAILQ_INSERT_TAIL(&CURCPU()->pendingcallouts, callout, entries);
 next:
+	splx(spl);
+}
+
+void
+callout_dequeue(callout_t *callout)
+{
+	callout_t *co;
+	spl_t spl = splhigh();
+	TAILQ_REMOVE(&CURCPU()->pendingcallouts, callout, entries);
 	splx(spl);
 }
 
@@ -84,6 +96,7 @@ thread_new(process_t *proc, bool iskernel)
 void
 thread_run(thread_t *thread)
 {
+	thread->state = kRunnable;
 	lock(&cpus[0].lock);
 	TAILQ_INSERT_TAIL(&cpus[0].runqueue, thread, runqueue);
 	unlock(&cpus[0].lock);
@@ -127,7 +140,7 @@ tick()
 		cpu->timeslice--;
 
 	co = TAILQ_FIRST(&cpu->pendingcallouts);
-	if (co && --co->timeout == 0) {
+	if (co && (co->timeout == 0  || --co->timeout == 0)) {
 		TAILQ_REMOVE(&cpu->pendingcallouts, co, entries);
 		TAILQ_INSERT_TAIL(&cpu->elapsedcallouts, co, entries);
 		if (!cpu->calloutdpc.bound) {

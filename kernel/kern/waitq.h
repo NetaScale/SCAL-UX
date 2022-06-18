@@ -3,14 +3,20 @@
 
 #include "klock.h"
 #include "kern/queue.h"
-#include "process.h"
 #include "spl.h"
 
 typedef uintptr_t waitq_event_t;
 
+typedef enum waitq_result {
+        kWaitQResultWaiting = -1,
+        kWaitQResultTimeout,
+        kWaitQResultEvent,
+} waitq_result_t;
+
 /**
  * An entry in a wait queue. May either be a thread to be woken when the waitq
- * is signalled, or a subqueue to be signalled in turn.
+ * is signalled, or a subqueue to be signalled in turn. Embedded in the object
+ * which will do the waiting.
  */
 typedef struct waitq_entry {
         enum {
@@ -29,9 +35,8 @@ typedef struct waitq_entry {
  */
 typedef struct waitq {
         spinlock_t lock;
-        TAILQ_HEAD(, waitq_entry) entries;
+        TAILQ_HEAD(, waitq_entry) waiters;
         spl_t oldspl;
-        callout_t timeout;
 } waitq_t;
 
 
@@ -55,17 +60,17 @@ static inline void waitq_unlock(waitq_t *wq)
 void waitq_init(waitq_t *wq);
 
 /**
- * Wake one waiter on a waitq.
- */
-void waitq_wake_one_locked(waitq_t *wq, waitq_event_t ev);
-
-/**
  * Wait on a waitq for the given event for up to \p msecs milliseconds.
  *
  * @returns event number if an event was triggered
  * @returns 0 if timeout elapsed
  */
-uint64_t waitq_await_locked(waitq_t *wq, waitq_event_t ev, uint64_t msecs);
+uint64_t waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t msecs);
+
+/**
+ * Wake one waiter on a waitq.
+ */
+void waitq_wake_one(waitq_t *wq, waitq_event_t ev);
 
 
 #endif /* WAITQ_H_ */

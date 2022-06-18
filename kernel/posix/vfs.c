@@ -124,7 +124,7 @@ sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte)
 	file_t *file = proc->files[fd];
 	int r;
 
-	kprintf("SYS_READ(nbytes: %d off: %d)\n", nbyte, file->pos);
+	kprintf("SYS_READ(nbytes: %zu off: %zu)\n", nbyte, file->pos);
 
 	if (file == NULL)
 		return -EBADF;
@@ -150,7 +150,7 @@ sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence)
 
 	assert(whence == SEEK_SET);
 
-	kprintf("SYS_SEEK(offset: %d)\n", offset);
+	kprintf("SYS_SEEK(offset: %ld)\n", offset);
 
 	file->pos = offset;
 	return offset;

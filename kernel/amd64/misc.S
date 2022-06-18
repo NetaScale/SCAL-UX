@@ -17,6 +17,7 @@
 .macro MAKE_ISR_THUNK kind, number
 .global isr_thunk_\number
 isr_thunk_\number:
+	cli
 .if \kind != ._intWithCode
 	# need to fill in the space in the interrupt frame struct
 	push $0
@@ -78,6 +79,6 @@ MAKE_ISR_THUNK ._intWithCode, 12
 MAKE_ISR_THUNK ._intWithCode, 13
 
 MAKE_ISR_THUNK ._intWithCode, 14
-MAKE_ISR_THUNK ._intWithCode, 32 # reschedule
+MAKE_ISR_THUNK ._intNoCode, 32 # reschedule
 MAKE_ISR_THUNK ._intNoCode, 48 # lapic timer
 MAKE_ISR_THUNK ._intNoCode, 128 # posix syscalls

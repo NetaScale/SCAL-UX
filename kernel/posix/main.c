@@ -6,8 +6,10 @@
 
 #include "kern/liballoc.h"
 #include "kern/process.h"
+#include "kern/waitq.h"
 #include "posix_proc.h"
 #include "spl.h"
+#include "intr.h"
 #include "vfs.h"
 
 static void
@@ -34,17 +36,12 @@ start_init(void *bin)
 	assert(vm_allocate(kmap, NULL, &vaddr, 4096, 1) == 0);
 	memcpy(0x0, initcode, sizeof(initcode));
 
-	thr1->pcb.frame.rsp = kmalloc(4096) + 4096;
+	thr1->pcb.frame.rsp = (uintptr_t)kmalloc(4096) + 4096;
 	thr1->pcb.frame.rip = 0x0;
 	thr1->pcb.frame.rdi = 0x0;
 	thr1->pcb.frame.rbp = 0x0;
 
 	thread_run(thr1);
-}
-
-static void callout(void *stuff)
-{
-	kprintf("hello from callout\n");
 }
 
 void
@@ -73,14 +70,11 @@ posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize, void *libcbin
 	pmap_stats();
 	kmalloc(PGSIZE * 32);
 
-	callout_t deadline, deadline2;
-	deadline.timeout = 1000;
-	deadline.fun =callout;
-	deadline2.timeout = 1000;
-	deadline2.fun =callout;
-	kprintf("Setting callout..\n");
-	callout_enqueue(&deadline);
-	callout_enqueue(&deadline2);
+	waitq_t wq;
+	waitq_init(&wq);
+	kprintf("waitq awaiting...\n");
+	int x = waitq_await(&wq, 25, 1000);
+	kprintf("waitq X: %d\n", x); /* will timeout */
 
 	for (;;)
 		asm volatile("pause");

@@ -5,6 +5,7 @@
 #include "kern/queue.h"
 #include "kern/vm.h"
 #include "pcb.h"
+#include "waitq.h"
 
 /*
  * Deferred Procedure Calls, inspired by those of Windows NT and playing a
@@ -57,6 +58,11 @@ typedef struct cpu {
 	TAILQ_HEAD(, thread) runqueue;
 
 	/**
+	 * Queue of waiting threads. Needs SPL soft and process_lock.
+	 */
+	TAILQ_HEAD(, thread) waitqueue;
+
+	/**
 	 * Queue of pending DPCs. Needs SPL high.
 	 */
 	TAILQ_HEAD(, dpc) dpcqueue;
@@ -80,10 +86,17 @@ typedef struct cpu {
 } cpu_t;
 
 typedef struct thread {
-	/* For cpu_t::runqueue. */
+	/* For cpu_t::runqueues/waitqueue. */
 	TAILQ_ENTRY(thread) runqueue;
 	/* For process::threads. */
 	LIST_ENTRY(thread) threads;
+
+	spinlock_t lock;
+
+	enum {
+		kRunnable,
+		kWaiting,
+	} state;
 
 	/* per-arch process control block */
 	pcb_t pcb;
@@ -92,6 +105,17 @@ typedef struct thread {
 	vaddr_t kstack;
 	/* process to which it belongs */
 	struct process *proc;
+
+	/* waitq on which the thread is currently waiting */
+	waitq_t *wq;
+	/* event on which the thread is waiting from the waitq */
+	waitq_event_t wqev;
+	/* result of the wait */
+	waitq_result_t wqres;
+	/* entry in wq */
+	waitq_entry_t wqent;
+	/* timeout for wq wait */
+	callout_t wqtimeout;
 } thread_t;
 
 /*
@@ -117,6 +141,12 @@ typedef struct process {
  */
 void callout_enqueue(callout_t *callout);
 
+/**
+ * Dequeue a callout from this CPU's queue.
+ */
+void
+callout_dequeue(callout_t *callout);
+
 /*
  * Fork a process to create a new one. The new process inherits the parents'
  * address space (according to map entry's inheritance settings) but is
@@ -129,6 +159,13 @@ process_t *process_new(process_t *parent);
  * thread_run().
  */
 thread_t *thread_new(process_t *proc, bool iskernel);
+
+/**
+ * Block current thread to await a result from its waitq.
+ *
+ * \pre \p thread is locked
+ */
+waitq_result_t thread_block_locked();
 
 /*
  * Launch a thread. It is set runnable and placed in an appropriate runqueue.
