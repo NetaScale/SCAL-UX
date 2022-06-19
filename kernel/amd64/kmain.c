@@ -125,14 +125,18 @@ common_init(struct limine_smp_info *smpi)
 
 	setup_cpu_gdt(cpu);
 
+	thread->cpu = cpu;
 	thread->kernel = true;
 	thread->kstack = 0x0;
 	thread->proc = &proc0;
+	thread->state = kRunning;
 	cpu->curthread = thread;
 	TAILQ_INIT(&cpu->runqueue);
 	lock(&process_lock);
 	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
 	unlock(&process_lock);
+
+	vm_activate(kmap->pmap);
 
 	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
 }

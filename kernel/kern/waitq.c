@@ -4,15 +4,15 @@
 #include "spl.h"
 #include "waitq.h"
 
+/* callout function for an expired waitq timeout */
 static void
 waitq_timeout(void *arg)
 {
 	thread_t *thread = (thread_t *)arg;
 	lock(&thread->lock);
-	TAILQ_REMOVE(&thread->wq->waiters, &thread->wqent, entries);
-	thread->wq = NULL;
-	thread->wqev = 0x0;
-	thread->wqres = kWaitQResultTimeout;
+	waitq_lock(thread->wq);
+	waitq_clear_locked(thread, kWaitQResultTimeout);
+	waitq_unlock(thread->wq);
         unlock(&thread->lock);
         thread_run(thread);
 }
@@ -24,13 +24,21 @@ waitq_init(waitq_t *wq)
 	TAILQ_INIT(&wq->waiters);
 }
 
+void waitq_clear_locked(struct thread * thread, waitq_result_t res)
+{
+	TAILQ_REMOVE(&thread->wq->waiters, &thread->wqent, entries);
+	thread->wq = NULL;
+	thread->wqev = 0x0;
+	thread->wqres = kWaitQResultTimeout;
+}
+
 uint64_t
 waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t msecs)
 {
 	spl_t spl;
 	thread_t *thread = CURCPU()->curthread;
 
-	splassert(kSPL0);
+	splassertle(kSPL0);
 
 	thread->wqent.thread = thread;
 	thread->wqtimeout.fun = waitq_timeout;

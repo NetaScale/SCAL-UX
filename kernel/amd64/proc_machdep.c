@@ -94,10 +94,10 @@ void
 schedule(intr_frame_t *frame)
 {
 	cpu_t *cpu = CURCPU();
-	thread_t *nextthread;
+	thread_t *lastthread, *nextthread;
 	spl_t spl = splsoft();
 
-	splassert(kSPLSoft);
+	splassertle(kSPLSoft);
 	dpcs_run();
 
 	splhigh();
@@ -106,21 +106,39 @@ schedule(intr_frame_t *frame)
 		goto finish;
 
 	/* save old frame */
-	cpu->curthread->pcb.frame = *frame;
+	lastthread = cpu->curthread;
+	lastthread->pcb.frame = *frame;
 
-	cpu->timeslice = 20;
-	if (cpu->curthread->state == kRunnable)
-		TAILQ_INSERT_TAIL(&cpu->runqueue, cpu->curthread, runqueue);
+	if (lastthread->state == kRunning) {
+		TAILQ_INSERT_TAIL(&cpu->runqueue, lastthread, runqueue);
+		cpu->curthread->state = kRunnable;
+	} else if (lastthread->state == kWaiting) {
+		/* already placed on waitqueue */
+	} else if (lastthread->state == kExiting) {
+		if (!thread_exit_dpc.bound) {
+			TAILQ_INSERT_TAIL(&exited_threads, lastthread,
+			    runqueue);
+			TAILQ_INSERT_HEAD(&cpu->dpcqueue, &thread_exit_dpc,
+			    dpcqueue);
+			thread_exit_dpc.bound = true;
+		}
+	}
 
 	nextthread = cpu->curthread = TAILQ_FIRST(&cpu->runqueue);
+	assert(nextthread);
+	lock(&nextthread->lock);
+	nextthread->state = kRunning;
 	TAILQ_REMOVE(&cpu->runqueue, nextthread, runqueue);
 
+	cpu->timeslice = 20;
 	cpu->tss->rsp0 = (uint64_t)cpu->curthread->kstack;
 
 	if (!nextthread->kernel)
 		wrmsr(kAMD64MSRFSBase, nextthread->pcb.fs);
 
 	*frame = cpu->curthread->pcb.frame;
+
+	unlock(&nextthread->lock);
 
 finish:
 	splx(spl);

@@ -46,7 +46,7 @@ typedef struct cpu {
 	uint64_t lapic_tps; /* lapic ticks per second for divider 16 */
 	tss_t *tss; /* points into a static structure right now - TODO allow
 			allocations contained within a single page */
-	uint64_t counter; /* per-cpu counter */
+	uint64_t counter;   /* per-cpu counter */
 	uint64_t timeslice; /* remaining timeslice of current thread */
 	/* end todos */
 	/** currently-running thread */
@@ -86,7 +86,7 @@ typedef struct cpu {
 } cpu_t;
 
 typedef struct thread {
-	/* For cpu_t::runqueues/waitqueue. */
+	/* For cpu_t::runqueues/waitqueue or ::exited_threads. */
 	TAILQ_ENTRY(thread) runqueue;
 	/* For process::threads. */
 	LIST_ENTRY(thread) threads;
@@ -95,8 +95,19 @@ typedef struct thread {
 
 	enum {
 		kRunnable,
+		kRunning,
 		kWaiting,
+		/** destruction will be enqueued on next reschedule */
+		kExiting,
 	} state;
+
+	/** whether the thread should exit asap */
+	bool should_exit : 1;
+	/** whether the thread is in a system call */
+	bool in_syscall : 1;
+
+	/** CPU to which thread is bound */
+	cpu_t *cpu;
 
 	/* per-arch process control block */
 	pcb_t pcb;
@@ -144,8 +155,7 @@ void callout_enqueue(callout_t *callout);
 /**
  * Dequeue a callout from this CPU's queue.
  */
-void
-callout_dequeue(callout_t *callout);
+void callout_dequeue(callout_t *callout);
 
 /*
  * Fork a process to create a new one. The new process inherits the parents'
@@ -160,6 +170,11 @@ process_t *process_new(process_t *parent);
  */
 thread_t *thread_new(process_t *proc, bool iskernel);
 
+/*
+ * Create a new kernel thread with the given entry point and single argument.
+ */
+void thread_new_kernel(void *entry, void *arg);
+
 /**
  * Block current thread to await a result from its waitq.
  *
@@ -172,12 +187,6 @@ waitq_result_t thread_block_locked();
  */
 void thread_run(thread_t *thread);
 
-/*
- * Create a new kernel thread with the given entry point and single argument.
- * The thread is immediately placed on a CPU's runqueue.
- */
-void thread_new_kernel(void *entry, void *arg);
-
 /**
  * @section internal
  */
@@ -186,7 +195,10 @@ void callouts_run(void *arg);
 /* run pending DPCs; called only by the scheduler */
 void dpcs_run();
 
+extern dpc_t thread_exit_dpc;
+
 extern TAILQ_HEAD(allprocs, process) allprocs;
+extern TAILQ_HEAD(exited_threads, thread) exited_threads;
 extern spinlock_t process_lock;
 extern process_t proc0;
 extern cpu_t *cpus;

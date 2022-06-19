@@ -70,11 +70,13 @@ posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize, void *libcbin
 	pmap_stats();
 	kmalloc(PGSIZE * 32);
 
+#if 0
 	waitq_t wq;
 	waitq_init(&wq);
 	kprintf("waitq awaiting...\n");
 	int x = waitq_await(&wq, 25, 1000);
 	kprintf("waitq X: %d\n", x); /* will timeout */
+#endif
 
 	for (;;)
 		asm volatile("pause");

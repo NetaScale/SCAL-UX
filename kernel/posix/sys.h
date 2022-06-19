@@ -9,11 +9,12 @@ enum {
 	kPXSysExec,
 	kPXSysMmap,
 	kPXSysOpen,
+	kPXSysClose,
 	kPXSysRead,
 	kPXSysSeek,
 	kPXSysSetFSBase,
+	kPXSysExit,
 };
-
 
 /*
  * number in rax, arg1 rdi, arg2 rsi, arg3 rdx, arg4 r10, arg5 r8, arg6 r9
@@ -21,10 +22,15 @@ enum {
  */
 
 static inline uintptr_t
-syscall1(uintptr_t num, uintptr_t arg1)
+syscall1(uintptr_t num, uintptr_t arg1, uintptr_t *errp)
 {
-	uintptr_t ret;
-	asm volatile("int $0x80" : "=a"(ret) : "a"(num), "D"(arg1) : "memory");
+	uintptr_t ret, err;
+	asm volatile("int $0x80"
+		     : "=a"(ret), "=D"(err)
+		     : "a"(num), "D"(arg1)
+		     : "memory");
+	if (errp)
+		*errp = err;
 	return ret;
 }
 
@@ -45,7 +51,8 @@ syscall2(uintptr_t num, uintptr_t arg1, uintptr_t arg2, uintptr_t *errp)
 }
 
 static inline uintptr_t
-syscall3(intptr_t num, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t *errp)
+syscall3(intptr_t num, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3,
+    uintptr_t *errp)
 {
 	uintptr_t ret, err;
 

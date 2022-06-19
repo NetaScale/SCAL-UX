@@ -10,6 +10,7 @@ typedef uintptr_t waitq_event_t;
 typedef enum waitq_result {
         kWaitQResultWaiting = -1,
         kWaitQResultTimeout,
+        kWaitQResultInterrupted,
         kWaitQResultEvent,
 } waitq_result_t;
 
@@ -64,8 +65,16 @@ void waitq_init(waitq_t *wq);
  *
  * @returns event number if an event was triggered
  * @returns 0 if timeout elapsed
+ *
+ * \pre SPL < soft (to allow rescheduling)
  */
 uint64_t waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t msecs);
+
+/**
+ * Clear waiting early for a given thread.
+ *
+ * \pre \p thread is locked; \p thread->wq is locked; SPL <= soft */
+void waitq_clear_locked(struct thread * thread, waitq_result_t res);
 
 /**
  * Wake one waiter on a waitq.

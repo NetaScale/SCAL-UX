@@ -16,6 +16,15 @@ vnode_t *root_vnode = NULL;
 
 #define countof(ARRAY) (sizeof(ARRAY) / sizeof(ARRAY[0]))
 
+static void
+file_unref(file_t *file)
+{
+	if (--file->refcnt == 0) {
+		// vn_unref(file->vn);
+		kfree(file);
+	}
+}
+
 int
 vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname)
 {
@@ -124,7 +133,7 @@ sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte)
 	file_t *file = proc->files[fd];
 	int r;
 
-	kprintf("SYS_READ(nbytes: %zu off: %zu)\n", nbyte, file->pos);
+	kprintf("SYS_READ(nbytes: %lu off: %lu)\n", nbyte, file->pos);
 
 	if (file == NULL)
 		return -EBADF;
@@ -157,12 +166,22 @@ sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence)
 }
 
 int
-sys_close(struct posix_proc *proc, int fd)
+sys_close(struct posix_proc *proc, int fd, uintptr_t *errp)
 {
-	file_t **file;
+	file_t *file;
 
-	file = &proc->files[fd];
+	/* lock proc fdlock */
+	file = proc->files[fd];
 
-	if (*file == NULL)
-		return -EBADF;
+	if (file == NULL) {
+		*errp = EBADF;
+		return 0;
+	}
+
+	file_unref(file);
+	proc->files[fd] = NULL;
+
+	/* todo unlock proc fdlock */
+
+	return 0;
 }

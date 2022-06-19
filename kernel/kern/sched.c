@@ -5,7 +5,7 @@ waitq_result_t thread_block_locked()
         thread_t * thread = CURCPU()->curthread;
         spl_t spl;
         
-        splassert(kSPL0);
+        splassertle(kSPL0);
         spl = splhigh();
         TAILQ_INSERT_TAIL(&CURCPU()->waitqueue, thread, runqueue);
         thread->state = kWaiting;

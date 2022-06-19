@@ -16,10 +16,19 @@ int
 posix_syscall(intr_frame_t *frame)
 {
 	posix_proc_t *proc = CURPXPROC();
+	thread_t *thread = CURCPU()->curthread;
+	uintptr_t arg1 = frame->rdi;
 
 	assert(proc);
 
-#define ARG1 frame->rdi
+	lock(&thread->lock);
+	thread->in_syscall = true;
+	if (thread->should_exit)
+		goto cleanup;
+	else
+		unlock(&thread->lock);
+
+#define ARG1 arg1
 #define ARG2 frame->rsi
 #define ARG3 frame->rdx
 #define ARG4 frame->r10
@@ -28,6 +37,8 @@ posix_syscall(intr_frame_t *frame)
 
 #define RET frame->rax
 #define ERR frame->rdi
+
+	ERR = 0;
 
 	switch (frame->rax) {
 	case kPXSysDebug: {
@@ -62,6 +73,11 @@ posix_syscall(intr_frame_t *frame)
 		break;
 	}
 
+	case kPXSysClose: {
+		RET = sys_close(proc, ARG1, &ERR);
+		break;
+	}
+
 	case kPXSysRead: {
 		int r = sys_read(proc, ARG1, ARG2, ARG3);
 		if (r < 0) {
@@ -87,16 +103,31 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysSetFSBase: {
-		CURCPU()->curthread->pcb.fs = ARG1;
+		thread->pcb.fs = ARG1;
 		wrmsr(kAMD64MSRFSBase, ARG1);
 		RET = 0;
 		break;
 	}
 
+	case kPXSysExit: {
+		RET = sys_exit(proc, ARG1);
+	}
 	}
 
-	CURCPU()->curthread->pcb.frame.rax = RET;
-	CURCPU()->curthread->pcb.frame.rdi = ERR;
+	thread->pcb.frame.rax = RET;
+	thread->pcb.frame.rdi = ERR;
+
+cleanup:
+	thread->in_syscall = false;
+	if (thread->should_exit) {
+		spl_t spl = splhigh();
+		thread->state = kExiting;
+		CURCPU()->timeslice = 0;
+		unlock(&thread->lock);
+		splx(spl);
+		asm("int $32");
+	}
+	unlock(&thread->lock);
 
 	return 0;
 }

@@ -4,12 +4,14 @@
 #include "kern/process.h"
 #include "vfs.h"
 
-typedef struct posix_proc {
-    process_t *proc; /* VXK process */
+#define CURPXPROC() CURCPU()->curthread->proc->pxproc
 
-    file_t *files[64]; /* FD table */
+typedef struct posix_proc {
+	process_t *proc; /* VXK process */
+
+	file_t *files[64]; /* FD table */
 } posix_proc_t;
 
-#define CURPXPROC() CURCPU()->curthread->proc->pxproc
+int sys_exit(posix_proc_t *proc, int code);
 
 #endif /* POSIX_PROC_H_ */

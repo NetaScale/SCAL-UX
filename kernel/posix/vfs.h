@@ -119,6 +119,7 @@ int vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 int vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
 int sys_open(struct posix_proc *proc, const char * path, int mode);
+int sys_close(struct posix_proc *proc, int fd, uintptr_t *errp);
 int sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
 int sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence);
 

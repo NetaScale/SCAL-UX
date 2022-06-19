@@ -4,20 +4,38 @@
 #include "process.h"
 #include "spl.h"
 
+static void thread_exiter(void *arg);
+
+dpc_t thread_exit_dpc = {
+	.fun = thread_exiter,
+};
 struct allprocs allprocs = TAILQ_HEAD_INITIALIZER(allprocs);
+struct exited_threads exited_threads = TAILQ_HEAD_INITIALIZER(exited_threads);
 spinlock_t process_lock;
 process_t proc0 = { .pid = 0, .name = "[kernel]" };
 cpu_t *cpus;
 size_t ncpus;
+size_t lastcpu = 0; /* cpu roundrobin */
+
+static void
+thread_exiter(void *arg)
+{
+	kprintf("THREAD EXITER\n");
+}
+
+static cpu_t *
+nextcpu()
+{
+	if (++lastcpu >= ncpus)
+		lastcpu = 0;
+	return &cpus[lastcpu];
+}
 
 void
 callout_enqueue(callout_t *callout)
 {
 	callout_t *co;
 	spl_t spl = splhigh();
-#ifdef DEBUG_CALLOUT
-	kprintf("callout absolute %lu\n", callout->timeout);
-#endif
 	TAILQ_FOREACH (co, &CURCPU()->pendingcallouts, entries) {
 		if (co->timeout > callout->timeout) {
 			TAILQ_INSERT_BEFORE(co, callout, entries);
@@ -25,7 +43,6 @@ callout_enqueue(callout_t *callout)
 		}
 		callout->timeout -= co->timeout;
 	}
-	kprintf("callout scheduled in %lums\n", callout->timeout);
 	TAILQ_INSERT_TAIL(&CURCPU()->pendingcallouts, callout, entries);
 next:
 	splx(spl);
@@ -84,6 +101,8 @@ thread_new(process_t *proc, bool iskernel)
 		thread->pcb.frame.rflags = 0x202;
 	}
 
+	thread->cpu = nextcpu();
+
 	spl = splhigh();
 	lock(&process_lock);
 	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
@@ -97,31 +116,18 @@ void
 thread_run(thread_t *thread)
 {
 	thread->state = kRunnable;
-	lock(&cpus[0].lock);
-	TAILQ_INSERT_TAIL(&cpus[0].runqueue, thread, runqueue);
-	unlock(&cpus[0].lock);
+	kprintf("Letting thread %p run on cpu %d\n", thread, thread->cpu->num);
+	lock(&thread->cpu->lock);
+	TAILQ_INSERT_TAIL(&thread->cpu->runqueue, thread, runqueue);
+	unlock(&thread->cpu->lock);
 }
 
 void
 thread_new_kernel(void *entry, void *arg)
 {
-	thread_t *thread = kmalloc(sizeof *thread);
-
-	thread->proc = &proc0;
-	thread->kernel = true;
-	thread->kstack = 0x0;
-	thread->pcb.frame.cs = 0x28;
-	thread->pcb.frame.ss = 0x30;
+	thread_t *thread = thread_new(&proc0, true);
 	thread->pcb.frame.rip = (uintptr_t)entry;
 	thread->pcb.frame.rdi = (uintptr_t)arg;
-	thread->pcb.frame.rsp = (uintptr_t)kmalloc(4096) + 4096;
-
-	lock(&process_lock);
-	LIST_INSERT_HEAD(&proc0.threads, thread, threads);
-	unlock(&process_lock);
-	lock(&cpus[1].lock);
-	TAILQ_INSERT_TAIL(&cpus[1].runqueue, thread, runqueue);
-	unlock(&cpus[1].lock);
 }
 
 /**
@@ -140,12 +146,13 @@ tick()
 		cpu->timeslice--;
 
 	co = TAILQ_FIRST(&cpu->pendingcallouts);
-	if (co && (co->timeout == 0  || --co->timeout == 0)) {
+	if (co && (co->timeout == 0 || --co->timeout == 0)) {
 		TAILQ_REMOVE(&cpu->pendingcallouts, co, entries);
 		TAILQ_INSERT_TAIL(&cpu->elapsedcallouts, co, entries);
 		if (!cpu->calloutdpc.bound) {
 			TAILQ_INSERT_HEAD(&cpu->dpcqueue, &cpu->calloutdpc,
 			    dpcqueue);
+			cpu->calloutdpc.bound = true;
 		}
 	}
 }
