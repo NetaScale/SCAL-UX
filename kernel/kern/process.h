@@ -195,10 +195,9 @@ void callouts_run(void *arg);
 /* run pending DPCs; called only by the scheduler */
 void dpcs_run();
 
-extern dpc_t thread_exit_dpc;
 
 extern TAILQ_HEAD(allprocs, process) allprocs;
-extern TAILQ_HEAD(exited_threads, thread) exited_threads;
+
 extern spinlock_t process_lock;
 extern process_t proc0;
 extern cpu_t *cpus;

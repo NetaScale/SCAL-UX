@@ -115,13 +115,13 @@ schedule(intr_frame_t *frame)
 	} else if (lastthread->state == kWaiting) {
 		/* already placed on waitqueue */
 	} else if (lastthread->state == kExiting) {
-		if (!thread_exit_dpc.bound) {
-			TAILQ_INSERT_TAIL(&exited_threads, lastthread,
-			    runqueue);
-			TAILQ_INSERT_HEAD(&cpu->dpcqueue, &thread_exit_dpc,
-			    dpcqueue);
-			thread_exit_dpc.bound = true;
-		}
+		/* thread is ready for immediate removal */
+			splx(kSPLSoft);
+			/* free stack; */
+			/* deref process */
+			/* notify any waiters??? */
+			kfree(lastthread);
+			splhigh();
 	}
 
 	nextthread = cpu->curthread = TAILQ_FIRST(&cpu->runqueue);

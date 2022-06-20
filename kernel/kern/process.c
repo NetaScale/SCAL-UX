@@ -10,18 +10,11 @@ dpc_t thread_exit_dpc = {
 	.fun = thread_exiter,
 };
 struct allprocs allprocs = TAILQ_HEAD_INITIALIZER(allprocs);
-struct exited_threads exited_threads = TAILQ_HEAD_INITIALIZER(exited_threads);
 spinlock_t process_lock;
 process_t proc0 = { .pid = 0, .name = "[kernel]" };
 cpu_t *cpus;
 size_t ncpus;
 size_t lastcpu = 0; /* cpu roundrobin */
-
-static void
-thread_exiter(void *arg)
-{
-	kprintf("THREAD EXITER\n");
-}
 
 static cpu_t *
 nextcpu()
