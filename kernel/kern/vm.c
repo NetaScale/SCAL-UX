@@ -58,6 +58,15 @@ vm_map_new()
 	return map;
 }
 
+void vm_map_free(vm_map_t *map)
+{
+	vm_deallocate(map, 0x0, VADDR_MAX);
+	lock(&map->lock);
+	pmap_free(map->pmap);
+	unlock(&map->lock);
+	kfree(map);
+}
+
 void
 vm_map_print(vm_map_t *map)
 {
@@ -124,8 +133,6 @@ vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 		else if (entry->vaddr >= end)
 			break; /* finished */
 		else if (entry->vaddr >= start && ENTRY_END(entry) <= end) {
-			kprintf("complete deallocation(%p size %lx)\n",
-			    entry->vaddr, entry->size);
 			vm_object_release(entry->obj);
 			TAILQ_REMOVE(&map->entries, entry, entries);
 		} else {

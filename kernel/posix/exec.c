@@ -179,9 +179,7 @@ sys_exec(posix_proc_t *proc, const char *path, const char *argp[],
 	pkg.stack = VADDR_MAX;
 	assert(vm_allocate(proc->proc->map, NULL, &stack, USER_STACK_SIZE,
 		   false) == 0);
-	kprintf("INITIAL STACK! %p\n", stack);
 	stack += USER_STACK_SIZE;
-	kprintf("REVISED STACK! %p\n", stack);
 	pkg.stack = stack;
 	thread->stack = stack;
 	assert(copyargs(&pkg, argp, envp) == 0);

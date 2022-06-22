@@ -119,11 +119,9 @@ schedule(intr_frame_t *frame)
 		/* thread is ready for immediate removal */
 		splx(kSPLSoft);
 		lock(&process_lock);
+		/* need a working pmap */
+		vm_activate(kmap->pmap);
 		LIST_REMOVE(lastthread, threads);
-		if (LIST_EMPTY(&lastthread->proc->threads)) {
-			kprintf("last thread of process %d exited\n",
-			    lastthread->proc->pid);
-		}
 		/* free stacks */
 		kfree(lastthread->kstack - 16384); /* TODO KSTACK_SIZE */
 		vm_deallocate(lastthread->proc->map,
@@ -131,6 +129,11 @@ schedule(intr_frame_t *frame)
 		/* deref process */
 		/* notify any waiters??? */
 		kfree(lastthread);
+		if (LIST_EMPTY(&lastthread->proc->threads)) {
+			kprintf("last thread of process %d exited\n",
+			    lastthread->proc->pid);
+			pmap_free(lastthread->proc->map->pmap);
+		}
 		unlock(&process_lock);
 		splhigh();
 	}

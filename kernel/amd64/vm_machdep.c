@@ -76,10 +76,29 @@ pmap_new()
 	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
 	pmap->pml4 = pmap_alloc_page(1);
 	for (int i = 255; i < 512; i++) {
-		pte_set(P2V(&pmap->pml4[i]), *(paddr_t*)P2V(&kmap->pmap->pml4[i]),
-		    kMMUDefaultProt);
+		pte_set(P2V(&pmap->pml4[i]),
+		    *(paddr_t *)P2V(&kmap->pmap->pml4[i]), kMMUDefaultProt);
 	}
 	return pmap;
+}
+
+void
+pmap_free_sub(uint64_t *table, int level)
+{
+	if (table == NULL)
+		return;
+	if (level > 1)
+		for (int i = 0; i < 255; i++) {
+			pte_t entry = *(pte_t *)P2V(&table[i]);
+			pmap_free_sub(pte_get_addr(entry), level - 1);
+		}
+	kprintf("free %p\n", table);
+}
+
+void
+pmap_free(pmap_t *pmap)
+{
+	pmap_free_sub(pmap->pml4, 4);
 }
 
 void
@@ -183,6 +202,7 @@ pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 		addr = pte_get_addr(*entry);
 	} else if (alloc) {
 		addr = (uint64_t *)pmap_alloc_page(1);
+		kprintf("alloced page %p\n", addr);
 		if (!addr)
 			fatal("out of pages");
 		pte_set(entry, addr, mmuprot);
@@ -195,7 +215,7 @@ paddr_t
 pmap_trans(pmap_t *pmap, vaddr_t virt)
 {
 	uintptr_t virta = (uintptr_t)virt;
-	pml4e_t * pml4 = pmap->pml4;
+	pml4e_t *pml4 = pmap->pml4;
 	int pml4i = ((virta >> 39) & 0x1FF);
 	int pdpti = ((virta >> 30) & 0x1FF);
 	int pdi = ((virta >> 21) & 0x1FF);

@@ -8,7 +8,8 @@ designed with the goal of eventually accommodating the Valutron virtual machine
 
 Two major components of its kernel can currently be conceptualised:
 
-- VXK: a lightweight system providing primitives like (preemptively-multitasked)
+- VXK (standing for the Valutron Executive, known in short as the Executive): a
+  lightweight system providing primitives like (preemptively-multitasked)
   processes, threads, virtual memory management, IPC, interrupt handling, etc.
 - The Posix personality: provides interfaces similar to those of BSD Unix. This
   is currently part of the kernel together with VXK, and closely bound
@@ -26,11 +27,28 @@ be.
 Design
 ------
 
-The executive borrows from the concepts of Mach and NetBSD. The virtual memory
-manager is largely modeled after NetBSD's UVM. Some notes on its handling of
-anonymous mappings can be found in [docs/vm_notes.md].
+The executive (VXK) borrows from the concepts of Mach and NetBSD. The virtual
+memory manager is largely modeled after NetBSD's UVM. Some notes (mainly on its
+handling of anonymous mappings can be found in [docs/vm_notes.md].
 
-The (very tentative as yet) VFS is similar to the design of the SunOS VFS.
+### Concepts of the Executive
+
+The core concepts are four:
+  - **Process**: a logical unit composed of an address space map and a set of
+  Rights, in which Threads may run.
+  - **Thread**: A thread of execution within a process.
+  - **Message**: An asynchronously-sent unit of communication.
+  - **Right**: A capability by which messages may be either received or sent.
+
+Rights refer to underlying message queues and vary in type: some permit sending,
+others receiving, and a filter may be attached, yielding a Filtered Right, which
+may permit only certain kinds of messages to be sent or received.
+
+### Concepts of the Posix personality
+
+The Posix personality is structured as a fairly typical Unix running atop the
+underlying Executive.
+Its (very tentative as yet) VFS is similar to the design of the SunOS VFS.
 
 Third-party components
 ----------------------
@@ -50,4 +68,4 @@ To-dos
 - better kernel heap
   - new kind of `vm_object_t` kVMKernel to link `vm_page_t`s into directly
   - expandable mappings (kVMKernel must expand without needing new allocations)
-  - slab allocator to closely integrate with this
+  - replace liballoc with a slab allocator that integrates with this

@@ -237,6 +237,9 @@ paddr_t pmap_alloc_page(size_t n);
 /* Create a new pmap, inheriting the higher half from the kernel. */
 pmap_t *pmap_new();
 
+/** Free a pmap. */
+void pmap_free(pmap_t *pmap);
+
 /* map a contiguous region of \p size bytes */
 void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size,
     vm_prot_t prot);
