@@ -108,24 +108,33 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	return 0;
 }
 
+#define ENTRY_END(ENTP) (entry->vaddr + entry->size)
+
 int
-vm_object_new_anon(vm_object_t **out, size_t size, vm_pagerops_t *pagerops,
-    vnode_t *vn)
+vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 {
-	vm_object_t *obj = kcalloc(sizeof *obj, 1);
+	spl_t spl = splsoft();
+	vm_map_entry_t *entry, *next;
+	vaddr_t end = start + size;
 
-	assert(obj);
+	lock(&map->lock);
+	TAILQ_FOREACH_SAFE (entry, &map->entries, entries, next) {
+		if (ENTRY_END(entry) <= start)
+			continue; /* prior to start */
+		else if (entry->vaddr >= end)
+			break; /* finished */
+		else if (entry->vaddr >= start && ENTRY_END(entry) <= end) {
+			kprintf("complete deallocation(%p size %lx)\n",
+			    entry->vaddr, entry->size);
+			vm_object_release(entry->obj);
+			TAILQ_REMOVE(&map->entries, entry, entries);
+		} else {
+			fatal("unhandled case partial vm_deallocate");
+		}
+	}
+	unlock(&map->lock);
 
-	obj->type = kVMAnonymous;
-	obj->anon.amap = kmalloc(sizeof(*obj->anon.amap));
-	TAILQ_INIT(&obj->anon.amap->pages);
-	obj->anon.amap->refcnt = 1;
-	obj->anon.pagerops = pagerops;
-	obj->size = size;
-	obj->anon.vnode = vn;
-
-	*out = obj;
-
+	splx(spl);
 	return 0;
 }
 
@@ -153,11 +162,11 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 		/* find a suitable place */
 		/* PORT: don't encode memory map of an arch here */
 		vaddr_t min = (vaddr_t)(map->type == kVMMapKernel ?
-			      0xffff80000000 :
-			      0x100000000);
+			0xffff80000000 :
+			0x1000);
 		vaddr_t max = (vaddr_t)(map->type == kVMMapKernel ?
-			      UINT64_MAX :
-			      0x7fffffffffff);
+			UINT64_MAX :
+			0x7fffffffffff);
 		vaddr_t entry_end;
 
 		if (!entry_before) {
@@ -172,11 +181,12 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 		    entry_end + size);
 
 		if (entry_end + size >= max) {
-			kprintf("nowhere to map it, failing\n");
+			kprintf("nowhere to map it 1, failing\n");
 			return -1;
 		}
 
 		if (entry_end >= min) {
+			kprintf("entry end greater than min\n");
 			vm_map_entry_t *entry2 = TAILQ_NEXT(entry_before,
 			    entries);
 			if (!entry2 || entry2->vaddr >= entry_end + size) {
@@ -188,7 +198,7 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 		entry_before = TAILQ_NEXT(entry_before, entries);
 
 		if (!entry_before) {
-			kprintf("nowhere to map it, failing\n");
+			kprintf("nowhere to map it 2, failing\n");
 			return -1;
 		} else
 			goto loop;

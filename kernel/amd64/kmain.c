@@ -271,6 +271,7 @@ _start(void)
 		done();
 	}
 
+#if 0
 	void setup_objc();
 	setup_objc();
 
@@ -278,6 +279,8 @@ _start(void)
 	struct limine_file *mod = module_request.response->modules[0];
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
+
+#endif
 
 	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize,
 	    void *libc, size_t libcsize);

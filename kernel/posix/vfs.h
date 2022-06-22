@@ -40,7 +40,8 @@ struct vnops {
 	int (*lookup)(vnode_t *dvn, vnode_t **out, const char *name);
 
 	/**
-	 * Get a page from a VREG vnode's backing store or cache.
+	 * Get a page from a VREG vnode's backing store or cache. Overridable so
+	 * that tmpfs can avoid having two sets of pages around.
 	 *
 	 * @param dvn LOCKED directory vnode
 	 * @param off offset in bytes into the vnode (will be multiple of
@@ -52,6 +53,8 @@ struct vnops {
 	 */
 	int (
 	    *getpage)(vnode_t *dvn, voff_t off, vm_anon_t **out, bool needcopy);
+
+	/* todo: putpages */
 
 	int (*read)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
@@ -65,8 +68,8 @@ typedef struct vattr {
 typedef struct vnode {
 	size_t refcnt;
 	vtype_t type;
-	vm_object_t *vmobj;
-	void *data; /* fs-private data */
+	vm_object_t *vmobj; /* page cache */
+	void *data;	    /* fs-private data */
 	struct vnops *ops;
 	vattr_t attr;
 	spinlock_t interlock;
@@ -99,7 +102,6 @@ typedef struct file {
 	size_t pos;
 } file_t;
 
-
 void tmpfs_mountroot();
 
 /**
@@ -118,7 +120,7 @@ int vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off);
  */
 int vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
-int sys_open(struct posix_proc *proc, const char * path, int mode);
+int sys_open(struct posix_proc *proc, const char *path, int mode);
 int sys_close(struct posix_proc *proc, int fd, uintptr_t *errp);
 int sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
 int sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence);

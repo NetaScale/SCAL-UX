@@ -10,14 +10,16 @@
 
 #include "amd64.h"
 #include "kern/liballoc.h"
-#include "kern/process.h"
 #include "kern/vm.h"
 #include "pcb.h"
+#include "posix/posix_proc.h"
 #include "vfs.h"
+#include "vxk/param.h"
 
 #define ELFMAG "\177ELF"
 
 typedef struct exec_package {
+	vm_map_t *map;	  /* map to load into */
 	vaddr_t stack;	  /* bottom of stack */
 	vaddr_t sp;	  /* initial stack pointer to execute with */
 	vaddr_t entry;	  /* entry IP */
@@ -81,7 +83,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 		size = PGROUNDUP(pageoff + phdr->p_memsz);
 		segbase += (uintptr_t)base;
 
-		vm_allocate(kmap, NULL, &segbase, size, false);
+		vm_allocate(pkg->map, NULL, &segbase, size, false);
 
 		r = vfs_read(vn, segbase + pageoff, phdr->p_filesz,
 		    phdr->p_offset);
@@ -150,11 +152,20 @@ copyargs(exec_package_t *pkg, const char *argp[], const char *envp[])
 
 /* todo: don't wipe the map, it makes it impossible to recover */
 int
-exec(const char *path, const char *argp[], const char *envp[],
-    intr_frame_t *frame)
+sys_exec(posix_proc_t *proc, const char *path, const char *argp[],
+    const char *envp[], intr_frame_t *frame)
 {
 	int r;
 	exec_package_t pkg, rtldpkg;
+	vaddr_t stack = VADDR_MAX;
+	thread_t *thread = CURTHREAD();
+
+	/* end all other threads of the process.... */
+
+	assert(proc->proc->map != kmap);
+	pkg.map = rtldpkg.map = proc->proc->map;
+
+	vm_deallocate(proc->proc->map, 0x0, (size_t)VADDR_MAX);
 
 	/* assume it's not PIE */
 	r = loadelf(path, (vaddr_t)0x0, &pkg);
@@ -166,14 +177,19 @@ exec(const char *path, const char *argp[], const char *envp[],
 		return r;
 
 	pkg.stack = VADDR_MAX;
-	assert(vm_allocate(kmap, NULL, &pkg.stack, 4096 * 8, false) == 0);
-	pkg.stack += 4096 * 8;
+	assert(vm_allocate(proc->proc->map, NULL, &stack, USER_STACK_SIZE,
+		   false) == 0);
+	kprintf("INITIAL STACK! %p\n", stack);
+	stack += USER_STACK_SIZE;
+	kprintf("REVISED STACK! %p\n", stack);
+	pkg.stack = stack;
+	thread->stack = stack;
 	assert(copyargs(&pkg, argp, envp) == 0);
 
 	frame->rip = (uint64_t)rtldpkg.entry;
 	frame->rsp = (uint64_t)pkg.sp;
-	CURCPU()->curthread->pcb.frame.rip = (uint64_t)rtldpkg.entry;
-	CURCPU()->curthread->pcb.frame.rsp = (uint64_t)pkg.sp;
+	thread->pcb.frame.rip = (uint64_t)rtldpkg.entry;
+	thread->pcb.frame.rsp = (uint64_t)pkg.sp;
 
 	return 0;
 }

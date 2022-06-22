@@ -1,6 +1,8 @@
 #ifndef PROCESS_H_
 #define PROCESS_H_
 
+#include <vxk/param.h>
+
 #include "amd64.h" /* for curcpu */
 #include "kern/queue.h"
 #include "kern/vm.h"
@@ -113,7 +115,10 @@ typedef struct thread {
 	pcb_t pcb;
 	/* kernel thread or user? */
 	bool kernel;
+	/* if a user process, its kernel stack base address */
 	vaddr_t kstack;
+	/* if a user process, its stack base address */
+	vaddr_t stack;
 	/* process to which it belongs */
 	struct process *proc;
 
@@ -146,6 +151,11 @@ typedef struct process {
 	/* Threads belonging to this process. */
 	LIST_HEAD(, thread) threads;
 } process_t;
+
+static inline thread_t *CURTHREAD()
+{
+	return CURCPU()->curthread;
+}
 
 /**
  * Enqueue a callout onto this CPU's queue.
@@ -194,7 +204,6 @@ void thread_run(thread_t *thread);
 void callouts_run(void *arg);
 /* run pending DPCs; called only by the scheduler */
 void dpcs_run();
-
 
 extern TAILQ_HEAD(allprocs, process) allprocs;
 

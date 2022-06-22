@@ -10,6 +10,7 @@
 #include "kern/process.h"
 #include "kern/vm.h"
 #include "spl.h"
+#include "vxk/param.h"
 
 typedef struct {
 	uint16_t length;
@@ -116,12 +117,22 @@ schedule(intr_frame_t *frame)
 		/* already placed on waitqueue */
 	} else if (lastthread->state == kExiting) {
 		/* thread is ready for immediate removal */
-			splx(kSPLSoft);
-			/* free stack; */
-			/* deref process */
-			/* notify any waiters??? */
-			kfree(lastthread);
-			splhigh();
+		splx(kSPLSoft);
+		lock(&process_lock);
+		LIST_REMOVE(lastthread, threads);
+		if (LIST_EMPTY(&lastthread->proc->threads)) {
+			kprintf("last thread of process %d exited\n",
+			    lastthread->proc->pid);
+		}
+		/* free stacks */
+		kfree(lastthread->kstack - 16384); /* TODO KSTACK_SIZE */
+		vm_deallocate(lastthread->proc->map,
+		    lastthread->stack - USER_STACK_SIZE, USER_STACK_SIZE);
+		/* deref process */
+		/* notify any waiters??? */
+		kfree(lastthread);
+		unlock(&process_lock);
+		splhigh();
 	}
 
 	nextthread = cpu->curthread = TAILQ_FIRST(&cpu->runqueue);
@@ -135,6 +146,8 @@ schedule(intr_frame_t *frame)
 
 	if (!nextthread->kernel)
 		wrmsr(kAMD64MSRFSBase, nextthread->pcb.fs);
+	if (nextthread != lastthread)
+		vm_activate(nextthread->proc->map->pmap);
 
 	*frame = cpu->curthread->pcb.frame;
 

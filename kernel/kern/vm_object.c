@@ -1,6 +1,7 @@
 #include "kern/queue.h"
 #include "liballoc.h"
 #include "vm.h"
+#include "posix/vfs.h"
 
 /* !! assumptions present that all vm_anons are in-memory */
 
@@ -69,4 +70,31 @@ vm_object_copy(vm_object_t *obj)
 	newobj->anon.pagerops = &vm_anon_pagerops;
 
 	return newobj;
+}
+
+int
+vm_object_new_anon(vm_object_t **out, size_t size, vm_pagerops_t *pagerops,
+    vnode_t *vn)
+{
+	vm_object_t *obj = kcalloc(sizeof *obj, 1);
+
+	assert(obj);
+
+	obj->type = kVMAnonymous;
+	obj->anon.amap = kmalloc(sizeof(*obj->anon.amap));
+	TAILQ_INIT(&obj->anon.amap->pages);
+	obj->anon.amap->refcnt = 1;
+	obj->anon.pagerops = pagerops;
+	obj->size = size;
+	obj->anon.vnode = vn;
+
+	*out = obj;
+
+	return 0;
+}
+
+int vm_object_release(vm_object_t *obj)
+{
+	kprintf("vm_object_release %p\n", obj);
+	return 0;
 }

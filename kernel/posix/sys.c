@@ -9,15 +9,15 @@
 #include "sys.h"
 #include "vm_posix.h"
 
-int exec(const char *path, const char *argp[], const char *envp[],
-    intr_frame_t *frame);
+int sys_exec(posix_proc_t *proc, const char *path, const char *argp[],
+    const char *envp[], intr_frame_t *frame);
 
 int
 posix_syscall(intr_frame_t *frame)
 {
+	uintptr_t arg1 = frame->rdi;
 	posix_proc_t *proc = CURPXPROC();
 	thread_t *thread = CURCPU()->curthread;
-	uintptr_t arg1 = frame->rdi;
 
 	assert(proc);
 
@@ -47,10 +47,10 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysExec: {
-		kprintf("PXSYS_exec: %s\n", (char *)frame->rdi);
+		kprintf("PXSYS_exec: %s\n", (char *)ARG1);
 		const char *args[] = { "init", "no", NULL };
 		const char *envs[] = { "VAR=42", NULL };
-		assert(exec("/init", args, envs, frame) == 0);
+		assert(sys_exec(proc, "/init", args, envs, frame) == 0);
 		break;
 	}
 

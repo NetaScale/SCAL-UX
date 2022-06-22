@@ -75,8 +75,8 @@ pmap_new()
 {
 	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
 	pmap->pml4 = pmap_alloc_page(1);
-	for (int i = 255; i < 511; i++) {
-		pte_set(&pmap->pml4[i], (paddr_t)kmap->pmap->pml4[i],
+	for (int i = 255; i < 512; i++) {
+		pte_set(P2V(&pmap->pml4[i]), *(paddr_t*)P2V(&kmap->pmap->pml4[i]),
 		    kMMUDefaultProt);
 	}
 	return pmap;
@@ -191,10 +191,11 @@ pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 	return addr;
 }
 
-void
-pmap_trans(pml4e_t *pml4, vaddr_t virt)
+paddr_t
+pmap_trans(pmap_t *pmap, vaddr_t virt)
 {
 	uintptr_t virta = (uintptr_t)virt;
+	pml4e_t * pml4 = pmap->pml4;
 	int pml4i = ((virta >> 39) & 0x1FF);
 	int pdpti = ((virta >> 30) & 0x1FF);
 	int pdi = ((virta >> 21) & 0x1FF);
@@ -209,27 +210,28 @@ pmap_trans(pml4e_t *pml4, vaddr_t virt)
 
 	pdpte = pmap_descend(pml4, pml4i, false, 0);
 	if (!pdpte) {
-		kprintf("no pml4 entry");
-		return;
+		kprintf("no pml4 entry\n");
+		return 0x0;
 	}
 
 	pde = pmap_descend(pdpte, pdpti, false, 0);
 	if (!pde) {
-		kprintf("no pdpt entry");
-		return;
+		kprintf("no pdpt entry\n");
+		return 0x0;
 	}
 
 	pte = pmap_descend(pde, pdi, false, 0);
 	if (!pte) {
-		kprintf("no pte entry");
-		return;
+		kprintf("no pte entry\n");
+		return 0x0;
 	}
 
+	pte = P2V(pte);
+
 	if (!(pte[pti] & kMMUPresent))
-		kprintf("no pte entry\n");
+		return 0x0;
 	else
-		kprintf("virt addr %p translates to phys addr 0x%lx\n", virt,
-		    (uintptr_t)pte_get_addr(pte[pti]) + pi);
+		return pte_get_addr(pte[pti]) + pi;
 }
 
 /* map a single given page at a virtual address. pml4 should be a phys addr */

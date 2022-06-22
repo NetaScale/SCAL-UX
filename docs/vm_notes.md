@@ -76,3 +76,4 @@ Adaptations for map-local trimming
 - `vm_anon_t` would have to carry an "actually mapped" refcnt
 - `vm_amap_entry_t` would have to carry a bool "is this page actually mapped into
   the address space"
+- on those counts reaching zero, the page may be locked and paged out

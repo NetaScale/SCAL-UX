@@ -4,11 +4,6 @@
 #include "process.h"
 #include "spl.h"
 
-static void thread_exiter(void *arg);
-
-dpc_t thread_exit_dpc = {
-	.fun = thread_exiter,
-};
 struct allprocs allprocs = TAILQ_HEAD_INITIALIZER(allprocs);
 spinlock_t process_lock;
 process_t proc0 = { .pid = 0, .name = "[kernel]" };
@@ -63,7 +58,7 @@ process_new(process_t *parent)
 	process_t *proc = kmalloc(sizeof *proc);
 	spl_t spl;
 
-	proc->map = parent->map;
+	proc->map = vm_map_fork(parent->map);
 	LIST_INIT(&proc->threads);
 
 	spl = splhigh();
@@ -88,10 +83,14 @@ thread_new(process_t *proc, bool iskernel)
 		thread->pcb.frame.ss = 0x38;
 	} else {
 		thread->kernel = false;
-		thread->kstack = kmalloc(8192) + 8192;
+		thread->kstack = kmalloc(16384) + 16384; /* TODO KSTACK_SIZE */
 		thread->pcb.frame.cs = 0x38 | 0x3;
 		thread->pcb.frame.ss = 0x40 | 0x3;
 		thread->pcb.frame.rflags = 0x202;
+		thread->stack = VADDR_MAX;
+		vm_allocate(proc->map, NULL, &thread->stack, USER_STACK_SIZE,
+		    false);
+		thread->stack += USER_STACK_SIZE;
 	}
 
 	thread->cpu = nextcpu();
@@ -109,7 +108,7 @@ void
 thread_run(thread_t *thread)
 {
 	thread->state = kRunnable;
-	kprintf("Letting thread %p run on cpu %d\n", thread, thread->cpu->num);
+	kprintf("Letting thread %p run on cpu %lu\n", thread, thread->cpu->num);
 	lock(&thread->cpu->lock);
 	TAILQ_INSERT_TAIL(&thread->cpu->runqueue, thread, runqueue);
 	unlock(&thread->cpu->lock);
@@ -172,7 +171,7 @@ dpcs_run()
 		if (!fun)
 			break;
 
-		first->fun(first->arg);
+		fun(arg);
 	}
 }
 
@@ -198,6 +197,6 @@ callouts_run(void *arg)
 		if (!fun)
 			break;
 
-		first->fun(first->arg);
+		fun(arg);
 	}
 }

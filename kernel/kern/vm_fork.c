@@ -24,6 +24,10 @@ vm_map_t *vm_map_fork(vm_map_t *map)
                         newent->obj->refcnt++;
                         newent->size = ent->size;
                         newent->vaddr = ent->vaddr;
+                } else {
+                        kprintf("vm_map_fork: unhandled inheritance\n");
                 }
         }
+
+        return newmap;
 }

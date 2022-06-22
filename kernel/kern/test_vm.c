@@ -6,7 +6,7 @@ int
 test_vm()
 {
 	vaddr_t addr1 = VADDR_MAX, addr2 = VADDR_MAX;
-	vm_object_t *obj, *obj2;
+	vm_object_t *obj;
 
 	kprintf("-------\ntesting anonymous COW\n");
 

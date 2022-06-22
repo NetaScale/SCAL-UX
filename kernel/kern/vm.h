@@ -160,17 +160,22 @@ typedef struct vm_pagerops {
 	int (*get)(vm_object_t *, voff_t, vm_anon_t **, bool /* needcopy? */);
 } vm_pagerops_t;
 
+/** Activate a pmap, i.e. load it into CR3 or equivalent immediately. */
+void vm_activate(pmap_t *pmap);
+
 /* allocate a physical page */
 vm_page_t *vm_alloc_page();
 
 /* allocate a new vm_map */
 vm_map_t *vm_map_new();
 
+vm_map_t *vm_map_fork(vm_map_t *map);
+
 vm_amap_entry_t *amap_find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off);
 /** copy an anon (does not decrement \p anon's refcnt) */
 vm_anon_t *anon_copy(vm_anon_t *anon);
 
-/*
+/**
  * Allocate anonymous memory and map it into the given map. All other
  * parameters akin to vm_map_object.
  *
@@ -181,6 +186,11 @@ vm_anon_t *anon_copy(vm_anon_t *anon);
  */
 int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
     bool immediate);
+
+/**
+ * Deallocate address space from a given map.
+ */
+int vm_deallocate(vm_map_t *map, vaddr_t start, size_t size);
 
 /* handle a page fault */
 int vm_fault(vm_map_t *map, vaddr_t vaddr, bool write);
@@ -202,11 +212,17 @@ void vm_init(paddr_t kphys);
 int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
     bool copy);
 
-/*
+/**
  * Allocate a new anonymous/vnode object.
  */
 int vm_object_new_anon(vm_object_t **out, size_t size, vm_pagerops_t *pagerops,
     struct vnode *vn);
+
+/**
+ * Release a reference to an object. Its associated resources may be freed if
+ * no references remain.
+ */
+int vm_object_release(vm_object_t *obj);
 
 /**
  * Make a copy-on-write duplicate of an object.
@@ -218,7 +234,7 @@ vm_object_t *vm_object_copy(vm_object_t *obj);
 /* get n contiguous pages. returns physical address of first. */
 paddr_t pmap_alloc_page(size_t n);
 
-/* Create a brand new pmap, only used to create the kernel pmap. */
+/* Create a new pmap, inheriting the higher half from the kernel. */
 pmap_t *pmap_new();
 
 /* map a contiguous region of \p size bytes */
@@ -227,6 +243,11 @@ void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size,
 
 /* invalidate tlb entry for address */
 void pmap_invlpg(vaddr_t addr);
+
+/** translate virt to physical address with respect to \p pmap */
+paddr_t pmap_trans(pmap_t *pmap, vaddr_t virt);
+
+/* print pmap statistics */
 void pmap_stats();
 
 /* set to 1 when the VM system is up and running */

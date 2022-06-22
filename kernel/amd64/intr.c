@@ -88,7 +88,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 
 	switch (num) {
 	case 14: /* pagefault */
-		if (vm_fault(kmap, (vaddr_t)read_cr2(),
+		if (vm_fault(CURTHREAD()->proc->map, (vaddr_t)read_cr2(),
 			frame->code & kX86MMUPFWrite) < 0)
 			goto unhandled;
 		break;

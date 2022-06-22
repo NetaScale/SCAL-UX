@@ -33,8 +33,10 @@ start_init(void *bin)
 	thread_t *thr1 = thread_new(proc1, false);
 	vaddr_t vaddr = 0x0;
 
-	assert(vm_allocate(kmap, NULL, &vaddr, 4096, 1) == 0);
-	memcpy(0x0, initcode, sizeof(initcode));
+	assert(vm_allocate(proc1->map, NULL, &vaddr, 4096, 1) == 0);
+	/* fault it in */
+	vm_fault(proc1->map, 0x0, true);
+	memcpy(P2V(pmap_trans(proc1->map->pmap, 0x0)), initcode, sizeof(initcode));
 
 	thr1->pcb.frame.rsp = (uintptr_t)kmalloc(4096) + 4096;
 	thr1->pcb.frame.rip = 0x0;
