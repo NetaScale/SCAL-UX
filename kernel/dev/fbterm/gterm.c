@@ -1,3 +1,4 @@
+#include <string.h>
 #include "image.h"
 #include "gterm.h"
 #include "term.h"
@@ -210,62 +211,96 @@ static void loop_external(struct gterm_t *gterm, size_t xstart, size_t xend, siz
 }
 static void loop_margin(struct gterm_t *gterm, size_t xstart, size_t xend, size_t ystart, size_t yend)
 {
-    genloop(gterm, xstart, xend, ystart, yend, blend_margin);
+    //genloop(gterm, xstart, xend, ystart, yend, blend_margin);
 }
 static void loop_internal(struct gterm_t *gterm, size_t xstart, size_t xend, size_t ystart, size_t yend)
 {
     genloop(gterm, xstart, xend, ystart, yend, blend_internal);
 }
 
+
+
 static void generate_canvas(struct gterm_t *gterm)
 {
-    if (gterm->background)
+    int bgcol = 0x00666699;
+    int margin = 40;
+    int titlebar_start_y = 40;
+    int titlebar_end_y = titlebar_start_y + 25;
+    int titlebar_start_x = 40;
+    int titlebar_end_x = gterm->framebuffer.width - margin;
+
+    #define BGCANVAS(x, y) gterm->bg_canvas[(y) * gterm->framebuffer.width + (x)]
+    #define HLINE(y, xstart, xend, col) for (int ani = (xstart); ani < (xend); ani++) \
+        BGCANVAS(ani, y) = col;
+    #define VLINE(ystart, yend, x, col) for (int ani = (ystart); ani < (yend); ani++) \
+        BGCANVAS(x, ani) = col;
+
+    for (size_t y = 0; y < gterm->framebuffer.height; y++)
     {
-        int64_t margin_no_gradient = (int64_t)gterm->margin - gterm->margin_gradient;
-
-        if (margin_no_gradient < 0) margin_no_gradient = 0;
-
-        size_t scan_stop_x = gterm->framebuffer.width - margin_no_gradient;
-        size_t scan_stop_y = gterm->framebuffer.height - margin_no_gradient;
-
-        loop_external(gterm, 0, gterm->framebuffer.width, 0, margin_no_gradient);
-        loop_external(gterm, 0, gterm->framebuffer.width, scan_stop_y, gterm->framebuffer.height);
-        loop_external(gterm, 0, margin_no_gradient, margin_no_gradient, scan_stop_y);
-        loop_external(gterm, scan_stop_x, gterm->framebuffer.width, margin_no_gradient, scan_stop_y);
-
-        size_t gradient_stop_x = gterm->framebuffer.width - gterm->margin;
-        size_t gradient_stop_y = gterm->framebuffer.height - gterm->margin;
-
-        if (gterm->margin_gradient)
+        for (size_t x = 0; x < gterm->framebuffer.width; x++)
         {
-            loop_margin(gterm, margin_no_gradient, scan_stop_x, margin_no_gradient, gterm->margin);
-            loop_margin(gterm, margin_no_gradient, scan_stop_x, gradient_stop_y, scan_stop_y);
-            loop_margin(gterm, margin_no_gradient, gterm->margin, gterm->margin, gradient_stop_y);
-            loop_margin(gterm, gradient_stop_x, scan_stop_x, gterm->margin, gradient_stop_y);
+            gterm->bg_canvas[y * gterm->framebuffer.width + x] = bgcol;
         }
-
-        loop_internal(gterm, gterm->margin, gradient_stop_x, gterm->margin, gradient_stop_y);
     }
-    else
+
+    /* black line top titlebar */
+    HLINE(titlebar_start_y, margin, titlebar_end_x, 0x00000000);
+    /* white line top titlebar */
+    HLINE(titlebar_start_y + 1, margin, titlebar_end_x - 1, 0xffffffff);
+    /* grey line bottom titlebar */
+    HLINE(titlebar_start_y + 23, margin + 2, titlebar_end_x - 1, 0x575757);
+    /* black line bottom titlebar */
+    HLINE(titlebar_start_y + 24, margin, titlebar_end_x, 0x00000000);
+    /* black linebottom of window */
+    HLINE(gterm->framebuffer.height - margin, titlebar_start_x, titlebar_end_x, 0x000000000);
+    /* grey linebottom of window */
+    HLINE(1 + gterm->framebuffer.height - margin, titlebar_start_x + 1, titlebar_end_x + 1, 0x00575757);
+
+    /* white line left titlebar */
+    VLINE(titlebar_start_y + 1, titlebar_start_y + 24, titlebar_start_x + 1, 0xffffffff);
+    /* grey line right titlebar */
+    VLINE(titlebar_start_y + 1, titlebar_start_y + 24, titlebar_end_x - 1, 0x575757);
+
+    /* black line left window */
+    VLINE(titlebar_start_y, gterm->framebuffer.height - margin, titlebar_start_x, 0x0);
+    /* black line right window */
+    VLINE(titlebar_start_y, 1 + gterm->framebuffer.height - margin, gterm->framebuffer.width - margin, 0x0);
+    /* gray shadow line right window */
+    VLINE(titlebar_start_y + 1, 2 + gterm->framebuffer.height - margin, 1 + gterm->framebuffer.width - margin, 0x00575757);
+
+    /* fill titlebar grey */
+    for (int i = titlebar_start_y + 2 ; i < titlebar_end_y - 2; i++)
+        HLINE(i, titlebar_start_x + 2, titlebar_end_x - 1, 0x00b8b8b8);
+
+    /* fill white background */
+    for (int i = titlebar_end_y ; i < gterm->framebuffer.height - margin; i++)
+        HLINE(i, titlebar_start_x + 1, titlebar_end_x, 0xffffffff);
+
+    for (size_t y = 0; y < gterm->framebuffer.height; y++)
     {
-        for (size_t y = 0; y < gterm->framebuffer.height; y++)
+        for (size_t x = 0; x < gterm->framebuffer.width; x++)
         {
-            for (size_t x = 0; x < gterm->framebuffer.width; x++)
-            {
-                gterm->bg_canvas[y * gterm->framebuffer.width + x] = gterm->default_bg;
-                plot_px(gterm, x, y, gterm->default_bg);
-            }
+            plot_px(gterm, x, y, gterm->bg_canvas[y * gterm->framebuffer.width + x]);
         }
+    }
+
+    char text[] = "SCAL/UX Operating System";
+    int startx = (gterm->framebuffer.width / 2) - ((gterm->glyph_width + 1) * strlen(text) / 2);
+    void plot_char_abs(struct gterm_t *gterm, struct gterm_char *c, size_t x, size_t y);
+
+    for (int i = 0 ; i < strlen(text); i++) {
+        struct gterm_char chr = {
+            .bg = 0xffffffff,
+            .fg = 0x0,
+            .c = text[i]
+        };
+        plot_char_abs(gterm, &chr, startx, titlebar_start_y + 6);
+        startx += gterm->glyph_width + 1;
     }
 }
 
-static void plot_char(struct gterm_t *gterm, struct gterm_char *c, size_t x, size_t y)
+void plot_char_abs(struct gterm_t *gterm, struct gterm_char *c, size_t x, size_t y)
 {
-    if (x >= gterm->cols || y >= gterm->rows) return;
-
-    x = gterm->offset_x + x * gterm->glyph_width;
-    y = gterm->offset_y + y * gterm->glyph_height;
-
     bool *glyph = &gterm->vga_font_bool[c->c * gterm->vga_font_height * gterm->vga_font_width];
 
     for (size_t gy = 0; gy < gterm->glyph_height; gy++)
@@ -285,6 +320,16 @@ static void plot_char(struct gterm_t *gterm, struct gterm_char *c, size_t x, siz
             }
         }
     }
+}
+
+static void plot_char(struct gterm_t *gterm, struct gterm_char *c, size_t x, size_t y)
+{
+    if (x >= gterm->cols || y >= gterm->rows) return;
+
+    x = gterm->offset_x + x * gterm->glyph_width;
+    y = gterm->offset_y + y * gterm->glyph_height;
+
+    plot_char_abs(gterm, c, x, y);
 }
 
 static void plot_char_fast(struct gterm_t *gterm, struct gterm_char *old, struct gterm_char *c, size_t x, size_t y)
@@ -578,6 +623,7 @@ bool gterm_init(struct gterm_t *gterm, struct term_t *term, struct framebuffer_t
     gterm->context.scroll_enabled = true;
 
     gterm->margin = 64;
+    gterm->margin_top = 65;
     gterm->margin_gradient = 4;
 
     memcpy(gterm->ansi_colours, style.ansi_colours, 32);
@@ -639,6 +685,7 @@ bool gterm_init(struct gterm_t *gterm, struct term_t *term, struct framebuffer_t
                 gterm->vga_font_bool[i * gterm->vga_font_height * gterm->vga_font_width + y * gterm->vga_font_width + x] = bit ;
             }
         }
+    }
 
 #if 0
         uint8_t *glyph = &gterm->vga_font_bits[i * gterm->vga_font_height * 2];
@@ -662,7 +709,6 @@ bool gterm_init(struct gterm_t *gterm, struct term_t *term, struct framebuffer_t
             }
         }
 #endif
-    }
 
     gterm->vga_font_scale_x = 1;
     gterm->vga_font_scale_y = 1;
@@ -682,10 +728,10 @@ bool gterm_init(struct gterm_t *gterm, struct term_t *term, struct framebuffer_t
     gterm->glyph_height = gterm->vga_font_height * gterm->vga_font_scale_y;
 
     gterm->cols = term->cols = (gterm->framebuffer.width - gterm->margin * 2) / gterm->glyph_width;
-    gterm->rows = term->rows = (gterm->framebuffer.height - gterm->margin * 2) / gterm->glyph_height;
+    gterm->rows = term->rows = (gterm->framebuffer.height - gterm->margin - gterm->margin_top) / gterm->glyph_height;
 
     gterm->offset_x = gterm->margin + ((gterm->framebuffer.width - gterm->margin * 2) % gterm->glyph_width) / 2;
-    gterm->offset_y = gterm->margin + ((gterm->framebuffer.height - gterm->margin * 2) % gterm->glyph_height) / 2;
+    gterm->offset_y = gterm->margin_top + ((gterm->framebuffer.height - gterm->margin - gterm->margin_top) % gterm->glyph_height) / 2;
 
     gterm->grid_size = gterm->rows * gterm->cols * sizeof(struct gterm_char);
     gterm->grid = alloc_mem(gterm->grid_size);

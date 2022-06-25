@@ -68,7 +68,7 @@ struct gterm_t
 
     size_t rows;
     size_t cols;
-    size_t margin;
+    size_t margin, margin_top;
     size_t margin_gradient;
 
     size_t grid_size;

@@ -27,8 +27,8 @@ static int termnum = 0;
 	parent = nil;
 	_fb = fb;
 	style = (struct style_t) { DEFAULT_ANSI_COLOURS,
-		DEFAULT_ANSI_BRIGHT_COLOURS, 0xA0000000, 0xFFFFFF, 64, 0 };
-	back = (struct background_t) { NULL, STRETCHED, 0x00000000 };
+		DEFAULT_ANSI_BRIGHT_COLOURS, 0xFFFFFFFF, 0x00000000, 40, 0 };
+	back = (struct background_t) { NULL, 0, 0x00000000 };
 	frm = (struct framebuffer_t) { .address = (uintptr_t)fb.base,
 		.width = fb.width,
 		.height = fb.height,

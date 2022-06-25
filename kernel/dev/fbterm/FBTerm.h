@@ -11,6 +11,7 @@
 	struct framebuffer_t frm;
 	struct term_t term;
 	struct style_t style;
+	struct image_t img;
 	struct background_t back;
 	struct font_t font;
 }
