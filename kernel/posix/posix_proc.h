@@ -9,6 +9,7 @@
 typedef struct posix_proc {
 	process_t *proc; /* VXK process */
 
+	spinlock_t fdlock; /* locks files */
 	file_t *files[64]; /* FD table */
 } posix_proc_t;
 

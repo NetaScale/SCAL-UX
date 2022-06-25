@@ -60,7 +60,7 @@ vm_map_new()
 
 void vm_map_free(vm_map_t *map)
 {
-	vm_deallocate(map, 0x0, VADDR_MAX);
+	vm_deallocate(map, 0x0, (size_t)VADDR_MAX);
 	lock(&map->lock);
 	pmap_free(map->pmap);
 	unlock(&map->lock);
@@ -73,7 +73,7 @@ vm_map_print(vm_map_t *map)
 	vm_map_entry_t *entry;
 	lock(&map->lock);
 	TAILQ_FOREACH (entry, &map->entries, entries) {
-		kprintf("%p-%p obj %p (type %d size %p)\n", entry->vaddr,
+		kprintf("%p-%p obj %p (type %d size 0x%lx)\n", entry->vaddr,
 		    entry->vaddr + (entry->size - 1), entry->obj,
 		    entry->obj->type, entry->obj->size);
 	}
@@ -111,7 +111,7 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size,
 	if (out)
 		*out = obj;
 
-	kprintf("allocated object %p size %p at vaddr %p\n", obj, size,
+	kprintf("allocated object %p size 0x%lx at vaddr %p\n", obj, size,
 	    *vaddrp);
 
 	return 0;
@@ -184,8 +184,10 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	loop:
 		entry_end = entry_before->vaddr + entry_before->size;
 
+#ifdef DEBUG_VMMAP
 		kprintf("entry_end: %p entry_end + size: %p\n", entry_end,
 		    entry_end + size);
+#endif
 
 		if (entry_end + size >= max) {
 			kprintf("nowhere to map it 1, failing\n");
@@ -193,7 +195,6 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 		}
 
 		if (entry_end >= min) {
-			kprintf("entry end greater than min\n");
 			vm_map_entry_t *entry2 = TAILQ_NEXT(entry_before,
 			    entries);
 			if (!entry2 || entry2->vaddr >= entry_end + size) {

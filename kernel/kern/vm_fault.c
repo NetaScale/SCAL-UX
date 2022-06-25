@@ -102,7 +102,6 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, bool write)
 	vm_map_entry_t *entry;
 	vm_object_t *obj;
 	voff_t off;
-	bool needcopy;
 
 #ifdef DEBUG_VM
 	kprintf("vm_fault vaddr: %p write: %d\n", vaddr, write);

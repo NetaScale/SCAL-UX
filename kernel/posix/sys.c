@@ -15,9 +15,9 @@ int sys_exec(posix_proc_t *proc, const char *path, const char *argp[],
 int
 posix_syscall(intr_frame_t *frame)
 {
-	uintptr_t arg1 = frame->rdi;
 	posix_proc_t *proc = CURPXPROC();
 	thread_t *thread = CURCPU()->curthread;
+	uintptr_t err = 0;
 
 	assert(proc);
 
@@ -28,7 +28,7 @@ posix_syscall(intr_frame_t *frame)
 	else
 		unlock(&thread->lock);
 
-#define ARG1 arg1
+#define ARG1 frame->rdi
 #define ARG2 frame->rsi
 #define ARG3 frame->rdx
 #define ARG4 frame->r10
@@ -37,8 +37,6 @@ posix_syscall(intr_frame_t *frame)
 
 #define RET frame->rax
 #define ERR frame->rdi
-
-	ERR = 0;
 
 	switch (frame->rax) {
 	case kPXSysDebug: {
@@ -74,12 +72,12 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysClose: {
-		RET = sys_close(proc, ARG1, &ERR);
+		RET = sys_close(proc, ARG1, &err);
 		break;
 	}
 
 	case kPXSysRead: {
-		int r = sys_read(proc, ARG1, ARG2, ARG3);
+		int r = sys_read(proc, ARG1, (void*)ARG2, ARG3);
 		if (r < 0) {
 			RET = -1;
 			ERR = -r;
@@ -114,8 +112,7 @@ posix_syscall(intr_frame_t *frame)
 	}
 	}
 
-	thread->pcb.frame.rax = RET;
-	thread->pcb.frame.rdi = ERR;
+	ERR = err;
 
 cleanup:
 	thread->in_syscall = false;

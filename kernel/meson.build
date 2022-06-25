@@ -1,4 +1,6 @@
-kern_srcs = files('devicekit/objc.m',
+kern_srcs = files(
+  'devicekit/objc.m', 'devicekit/autoconf.m',
+  'devicekit/DKDevice.m', 'devicekit/DKLimineFB.m',
 
   'kern/klibc.c', 'kern/ksrv.c', 'kern/liballoc_sysdep.c', 'kern/liballoc.c',
   'kern/process.c', 'kern/sched.c', 'kern/vm.c', 'kern/vm_fault.c',
@@ -8,4 +10,5 @@ kern_srcs = files('devicekit/objc.m',
 
   'posix/exec.c', 'posix/main.c', 'posix/posix_proc.c', 'posix/sys.c',
   'posix/vfs.c', 'posix/tmpfs.c', 'posix/vm_posix.c')
+subdir('dev/fbterm')
 subdir(arch)

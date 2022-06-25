@@ -36,4 +36,6 @@ test_vm()
 	kprintf(" =%s\n", (char *)addr2);
 
 	kprintf("done\n------\n");
+
+	return 0;
 }

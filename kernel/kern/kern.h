@@ -13,6 +13,7 @@
 
 #define kprintf(...) npf_pprintf(limterm_putc, NULL, __VA_ARGS__)
 #define kvpprintf(...) npf_vpprintf(limterm_putc, NULL, __VA_ARGS__)
+#define ksnprintf(...) npf_snprintf(__VA_ARGS__)
 #define assert(...)                          \
 	{                                    \
 		if (!(__VA_ARGS__))          \

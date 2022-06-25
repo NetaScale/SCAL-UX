@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<refentry version="5.1" xmlns="http://docbook.org/ns/docbook"
+          xmlns:xlink="http://www.w3.org/1999/xlink"
+          xmlns:xila="http://www.w3.org/2001/XInclude/local-attributes"
+          xmlns:xi="http://www.w3.org/2001/XInclude"
+          xmlns:trans="http://docbook.org/ns/transclusion"
+          xmlns:svg="http://www.w3.org/2000/svg"
+          xmlns:m="http://www.w3.org/1998/Math/MathML"
+          xmlns:html="http://www.w3.org/1999/xhtml"
+          xmlns:db="http://docbook.org/ns/docbook">
+  <refmeta>
+    <refentrytitle>intro(amd64)</refentrytitle>
+
+    <manvolnum>9</manvolnum>
+  </refmeta>
+
+  <refnamediv>
+    <refname>amd64</refname>
+
+    <refpurpose>the SCAL/UX port to AMD 64/Intel IA-32e-based PCs</refpurpose>
+  </refnamediv>
+
+  <refsection>
+    <title>Description</title>
+
+    <refsection>
+      <title>Memory map</title>
+
+      <para>Memory is laid out as follows:</para>
+
+      <variablelist>
+        <varlistentry>
+          <term>0x0-0x00007fffffffffff</term>
+
+          <listitem>
+            <para>User address space</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>0xffff800000000000-0xffff810000000000</term>
+
+          <listitem>
+            <para>Direct map of memory (1tb)</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>0xffffffff80000000-0xffffffffffffffff</term>
+
+          <listitem>
+            <para>Kernel mappings</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+
+      <para>The user-space address space is laid out specifically thus:</para>
+
+      <variablelist>
+        <varlistentry>
+          <term>0x0-0x8000</term>
+
+          <listitem>
+            <para>Null mapping - always raises segmentation fault</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>0x400000</term>
+
+          <listitem>
+            <para>Program load address</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>0x40000000</term>
+
+          <listitem>
+            <para>Dynamic linker load address</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </refsection>
+  </refsection>
+</refentry>

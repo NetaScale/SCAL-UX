@@ -59,8 +59,10 @@ implementing [Jeff Bonwick](https://www.usenix.org/conference/2001-usenix-annual
 updated slab allocator some day.
 - mlibc: Provides a libc.
 - nanoprintf: used for kernel `printf`.
-- NetBSD: `sys/queue.h` used as `kern/queue.h`.
+- NetBSD: `sys/queue.h` used as `kern/queue.h`; Bold8x16 font used for FBConsole
+- Solaris: Sun Demi Gallant font available for FBConsole
 - ObjFW: provides an Objective-C runtime.
+- Limine/`limine-terminal-port`: used by FBConsole to provide a terminal
 
 To-dos
 ------

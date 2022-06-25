@@ -1,0 +1,7 @@
+gen = generator(bin2c,
+    output : '@PLAINNAME@.c',
+    arguments : [ '-i', '@INPUT@', '-o', '@OUTPUT@', '-s', '@BASENAME@'  ]
+)
+
+kern_srcs += files('FBTerm.m', 'gterm.c', 'term.c')
+kern_srcs += gen.process(['sun12x22.psfu', 'nbsdbold.psfu'])

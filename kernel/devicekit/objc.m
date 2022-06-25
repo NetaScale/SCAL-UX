@@ -1,44 +1,6 @@
 #include "kern/kern.h"
 
-__attribute__((__objc_root_class__)) @interface OFObject {
-	Class _isa;
-}
-
-+ do;
-+ (void)load;
-+ (void)unload;
-+ (void)initialize;
-+ (Class)class;
-@end
-
-@implementation OFObject
-
-+ do
-{
-	kprintf("hello from objc\n");
-}
-
-+ (void)load
-{
-	kprintf("load\n");
-}
-
-+ (void)unload
-{
-	kprintf("unload\n");
-}
-
-+ (void)initialize
-{
-	kprintf("initialize\n");
-}
-
-+ (Class)class
-{
-	return self;
-}
-
-@end
+#import <OFObject.h>
 
 extern void (*init_array_start)(void);
 extern void (*init_array_end)(void);
@@ -50,4 +12,5 @@ setup_objc()
 	for (void (**func)(void) = &init_array_start; func != &init_array_end;
 	     func++)
 		(*func)();
+	kprintf("Class name: %s\n", [OFObject classNameCString]);
 }

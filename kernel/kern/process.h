@@ -132,6 +132,9 @@ typedef struct thread {
 	waitq_entry_t wqent;
 	/* timeout for wq wait */
 	callout_t wqtimeout;
+
+	/** the below should move into the posix subsystem */
+	bool signal_awaiting;
 } thread_t;
 
 /*

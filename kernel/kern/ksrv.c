@@ -52,8 +52,7 @@ kmod_lookupsym(const char *name)
 {
 	kmod_t *kmod;
 
-	TAILQ_FOREACH(kmod, &kmods, entries)
-	{
+	TAILQ_FOREACH (kmod, &kmods, entries) {
 		const Elf64_Sym *sym = NULL;
 		int bind;
 
@@ -270,7 +269,8 @@ kmod_load(void *addr)
 			break;
 
 		case DT_INIT_ARRAY:
-			initfns = (void (*)(void))(kmod.base + ent->d_un.d_ptr);
+			initfns = (void (**)(void))(
+			    kmod.base + ent->d_un.d_ptr);
 			break;
 
 		case DT_INIT_ARRAYSZ:

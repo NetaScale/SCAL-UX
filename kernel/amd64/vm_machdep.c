@@ -202,7 +202,6 @@ pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 		addr = pte_get_addr(*entry);
 	} else if (alloc) {
 		addr = (uint64_t *)pmap_alloc_page(1);
-		kprintf("alloced page %p\n", addr);
 		if (!addr)
 			fatal("out of pages");
 		pte_set(entry, addr, mmuprot);

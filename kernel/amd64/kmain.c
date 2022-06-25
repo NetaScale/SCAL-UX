@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "amd64.h"
+#include "dev/fbterm//term.h"
 #include "intr.h"
 #include "kern/kern.h"
 #include "kern/liballoc.h"
@@ -50,8 +51,15 @@ static volatile struct limine_smp_request smp_request = {
 	.revision = 0
 };
 
+#if 0
 static volatile struct limine_terminal_request terminal_request = {
 	.id = LIMINE_TERMINAL_REQUEST,
+	.revision = 0
+};
+#endif
+
+static volatile struct limine_framebuffer_request framebuffer_request = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
 	.revision = 0
 };
 
@@ -244,16 +252,11 @@ setup_cpus()
 
 void setup_proc0();
 
+
 // The following will be our kernel's entry point.
 void
 _start(void)
 {
-	// Ensure we got a terminal
-	if (terminal_request.response == NULL ||
-	    terminal_request.response->terminal_count < 1) {
-		done();
-	}
-
 	serial_init();
 
 	kprintf("SCAL/UX\n\n");
@@ -271,7 +274,6 @@ _start(void)
 		done();
 	}
 
-#if 0
 	void setup_objc();
 	setup_objc();
 
@@ -280,8 +282,16 @@ _start(void)
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
 
-#endif
+	int autoconf(struct limine_framebuffer_response * limfb);
+	autoconf(framebuffer_request.response);
 
+	struct limine_framebuffer *limfb =
+	    framebuffer_request.response->framebuffers[0];
+
+	extern void fbterm_init(struct limine_framebuffer * limfb);
+	fbterm_init(limfb);
+
+#if 0 
 	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize,
 	    void *libc, size_t libcsize);
 	posix_main(module_request.response->modules[1]->address,
@@ -290,6 +300,8 @@ _start(void)
 	    module_request.response->modules[2]->size,
 	    module_request.response->modules[3]->address,
 	    module_request.response->modules[3]->size);
+
+#endif
 
 	// We're done, just hang...
 	done();

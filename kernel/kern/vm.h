@@ -169,7 +169,12 @@ vm_page_t *vm_alloc_page();
 /* allocate a new vm_map */
 vm_map_t *vm_map_new();
 
+
+/** Fork a vm_map into a new map. */
 vm_map_t *vm_map_fork(vm_map_t *map);
+
+/** Print the contents of a vm_map with kprintf. */
+void vm_map_print(vm_map_t *map);
 
 vm_amap_entry_t *amap_find_anon(vm_amap_t *amap, vm_anon_t **prevp, voff_t off);
 /** copy an anon (does not decrement \p anon's refcnt) */
