@@ -1,31 +1,72 @@
+#include "FBTerm.h"
 #include "amd64/limine.h"
+#include "dev/fbterm/term.h"
+#include "amd64.h"
 #include "kern/vm.h"
-#include "term.h"
 
 extern char sun12x22[], nbsdbold[];
 
-struct framebuffer_t frm;
-struct background_t back;
-struct term_t term;
-struct style_t style = { DEFAULT_ANSI_COLOURS, DEFAULT_ANSI_BRIGHT_COLOURS,
-	0xA0000000, 0xFFFFFF, 64, 0 };
-struct background_t back = { NULL, STRETCHED, 0x00000000 };
-struct font_t font;
+FBTerm *syscon = nil;
+static int termnum = 0;
 
-void
-fbterm_init(struct limine_framebuffer *limfb)
+@implementation FBTerm
+
++ (BOOL)probeWithFB:(LimineFB *)fb
 {
-	frm = (struct framebuffer_t) { .address = (uintptr_t)limfb->address,
-		.width = limfb->width,
-		.height = limfb->height,
-		.pitch = limfb->pitch };
+	if (syscon == nil) {
+		syscon = [[self alloc] initWithFB:fb];
+		return YES;
+	}
+	return NO;
+}
+
+- (id)initWithFB:(LimineFB *)fb
+{
+	self = [super init];
+
+	parent = nil;
+	_fb = fb;
+	style = (struct style_t) { DEFAULT_ANSI_COLOURS,
+		DEFAULT_ANSI_BRIGHT_COLOURS, 0xA0000000, 0xFFFFFF, 64, 0 };
+	back = (struct background_t) { NULL, STRETCHED, 0x00000000 };
+	frm = (struct framebuffer_t) { .address = (uintptr_t)fb.base,
+		.width = fb.width,
+		.height = fb.height,
+		.pitch = fb.pitch };
 	font = (struct font_t) {
 		.address = (uintptr_t)nbsdbold,
 		.spacing = 1,
 		.scale_x = 1,
 		.scale_y = 1,
 	};
+
+	ksnprintf(name, sizeof name, "FBTerm%d", termnum++);
+
 	term_init(&term, NULL, false);
 	term_vbe(&term, frm, font, style, back);
 	term_print(&term, "hello from FBTerm\n");
+
+	if (syscon == nil)
+		syscon = self;
+
+	[self registerDevice];
+
+	return self;
+}
+
+- (void)putc:(int)c
+{
+	term_putchar(&term, c);
+	if (c == '\n')
+		term_double_buffer_flush(&term);
+}
+
+@end
+
+void
+sysconputc(int c)
+{
+	if (syscon) {
+		[syscon putc: c];
+	}
 }

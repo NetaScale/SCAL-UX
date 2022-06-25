@@ -1,13 +1,15 @@
-#include "DKLimineFB.h"
+#include "dev/LimineFB.h"
+#include "dev/fbterm/FBTerm.h"
 
 int
 autoconf(struct limine_framebuffer_response *limfb)
 {
-
 	kprintf("DeviceKit version 0\n");
 
 	if (limfb != NULL)
-		[DKLimineFB probeWithLimineFBResponse:limfb];
+		[LimineFB probeWithLimineFBResponse:limfb];
+
+	[FBTerm probeWithFB:sysfb];
 
 	return 0;
 }

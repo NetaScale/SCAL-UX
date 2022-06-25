@@ -2,18 +2,17 @@
 #include <stdint.h>
 
 #include "amd64.h"
-#include "dev/fbterm//term.h"
 #include "intr.h"
 #include "kern/kern.h"
 #include "kern/liballoc.h"
 #include "kern/process.h"
 #include "kern/queue.h"
+#include "dev/fbterm/FBTerm.h"
 #include "kern/vm.h"
 #include "limine.h"
 #include "spl.h"
 
 bool vm_up = false;
-struct limine_terminal *terminal;
 vm_pregion_t *g_1st_mem = NULL;
 vm_pregion_t *g_last_mem = NULL;
 
@@ -50,13 +49,6 @@ static volatile struct limine_smp_request smp_request = {
 	.id = LIMINE_SMP_REQUEST,
 	.revision = 0
 };
-
-#if 0
-static volatile struct limine_terminal_request terminal_request = {
-	.id = LIMINE_TERMINAL_REQUEST,
-	.revision = 0
-};
-#endif
 
 static volatile struct limine_framebuffer_request framebuffer_request = {
 	.id = LIMINE_FRAMEBUFFER_REQUEST,
@@ -97,8 +89,7 @@ limterm_putc(int ch, void *ctx)
 	while (!(inb(kPortCOM1 + 5) & 0x20))
 		;
 	outb(kPortCOM1, ch);
-	// terminal_request.response->write(
-	//    terminal_request.response->terminals[0], (const char *)&ch, 1);
+	sysconputc(ch);
 }
 
 void
@@ -285,13 +276,7 @@ _start(void)
 	int autoconf(struct limine_framebuffer_response * limfb);
 	autoconf(framebuffer_request.response);
 
-	struct limine_framebuffer *limfb =
-	    framebuffer_request.response->framebuffers[0];
-
-	extern void fbterm_init(struct limine_framebuffer * limfb);
-	fbterm_init(limfb);
-
-#if 0 
+#if 1
 	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize,
 	    void *libc, size_t libcsize);
 	posix_main(module_request.response->modules[1]->address,

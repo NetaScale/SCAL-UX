@@ -1,15 +1,16 @@
-#ifndef DKLIMINEFB_H_
-#define DKLIMINEFB_H_
+#ifndef LIMINEFB_H_
+#define LIMINEFB_H_
 
-#include "DKDevice.h"
-#include "amd64/limine.h"
+#include "devicekit/DKDevice.h"
 #include "kern/vm.h"
 
-@interface DKLimineFB : DKDevice
-{
-    uint64_t width, height, pitch;
-    uint16_t bpp;
-    vaddr_t base;
+struct limine_framebuffer_response;
+struct limine_framebuffer;
+
+@interface LimineFB : DKDevice {
+	uint64_t width, height, pitch;
+	uint16_t bpp;
+	vaddr_t base;
 }
 
 @property (nonatomic) uint64_t width, height, pitch;
@@ -21,4 +22,6 @@
 - initWithLimineFB:(struct limine_framebuffer *)fb;
 @end
 
-#endif /* DKLIMINEFB_H_ */
+extern LimineFB *sysfb;
+
+#endif /* LIMINEFB_H_ */
