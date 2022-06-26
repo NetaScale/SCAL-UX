@@ -6,7 +6,7 @@
 #include "kern/vm.h"
 
 struct posix_proc;
-typedef enum vtype { VNON, VREG, VDIR } vtype_t;
+typedef enum vtype { VNON, VREG, VDIR, VCHR } vtype_t;
 typedef struct vnode vnode_t;
 typedef struct file file_t;
 
@@ -72,6 +72,7 @@ typedef struct vnode {
 	void *data;	    /* fs-private data */
 	struct vnops *ops;
 	vattr_t attr;
+	dev_t dev;
 	spinlock_t interlock;
 } vnode_t;
 

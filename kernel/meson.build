@@ -8,7 +8,8 @@ kern_srcs = files(
 
   'kern/test_vm.c',
 
-  'posix/exec.c', 'posix/main.c', 'posix/posix_proc.c', 'posix/sys.c',
-  'posix/vfs.c', 'posix/tmpfs.c', 'posix/vm_posix.c')
+  'posix/dev.c', 'posix/exec.c', 'posix/main.c', 'posix/posix_proc.c',
+  'posix/sys.c', 'posix/vfs.c', 'posix/tmpfs.c', 'posix/tty.c',
+  'posix/vm_posix.c')
 subdir('dev')
 subdir(arch)

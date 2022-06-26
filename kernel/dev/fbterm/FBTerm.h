@@ -5,9 +5,11 @@
 #include "../LimineFB.h"
 #include "devicekit/DKDevice.h"
 #include "term.h"
+#include "posix/tty.h"
 
 @interface FBTerm : DKDevice {
 	LimineFB *_fb;
+	tty_t tty;
 	struct framebuffer_t frm;
 	struct term_t term;
 	struct style_t style;

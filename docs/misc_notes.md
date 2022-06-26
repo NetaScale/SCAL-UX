@@ -22,3 +22,12 @@ init:
 ```
 x86_64-scalux-gcc -fPIC -shared test.c -I/tmp/scalux/usr/include -L build/subprojects/mlibc/
 ```
+
+
+ttys
+----
+
+the TTY layer interposes between a vnode and its
+underlying character device
+
+read(), and so on call tty_read etc if the cdevsw entry has is_tty = true
