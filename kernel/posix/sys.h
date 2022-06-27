@@ -26,6 +26,19 @@ enum {
  */
 
 static inline uintptr_t
+syscall0(uintptr_t num, uintptr_t *errp)
+{
+	uintptr_t ret, err;
+	asm volatile("int $0x80"
+		     : "=a"(ret), "=D"(err)
+		     : "a"(num)
+		     : "memory");
+	if (errp)
+		*errp = err;
+	return ret;
+}
+
+static inline uintptr_t
 syscall1(uintptr_t num, uintptr_t arg1, uintptr_t *errp)
 {
 	uintptr_t ret, err;
