@@ -92,7 +92,7 @@ pmap_free_sub(uint64_t *table, int level)
 			pte_t entry = *(pte_t *)P2V(&table[i]);
 			pmap_free_sub(pte_get_addr(entry), level - 1);
 		}
-	kprintf("free %p\n", table);
+	kprintf("anon page %p enqueued for reclamation\n", table);
 }
 
 void

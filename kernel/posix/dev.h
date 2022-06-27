@@ -5,12 +5,12 @@
 
 #include <stdbool.h>
 
-struct proc;
+struct posix_proc;
 
 typedef struct cdevsw {
 	bool valid : 1, is_tty : 1;
 	void *private;
-	int (*open)(dev_t dev, int mode, struct proc *proc);
+	int (*open)(dev_t dev, int mode, struct posix_proc *proc);
 	int (*write)(dev_t dev, void *buf, size_t nbyte, off_t off);
 } cdevsw_t;
 

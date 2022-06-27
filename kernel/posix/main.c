@@ -4,12 +4,13 @@
 
 #include <string.h>
 
+#include "fcntl.h"
+#include "intr.h"
 #include "kern/liballoc.h"
 #include "kern/process.h"
 #include "kern/waitq.h"
 #include "posix_proc.h"
 #include "spl.h"
-#include "intr.h"
 #include "vfs.h"
 
 static void
@@ -36,7 +37,14 @@ start_init(void *bin)
 	assert(vm_allocate(proc1->map, NULL, &vaddr, 4096, 1) == 0);
 	/* fault it in */
 	vm_fault(proc1->map, 0x0, true);
-	memcpy(P2V(pmap_trans(proc1->map->pmap, 0x0)), initcode, sizeof(initcode));
+	memcpy(P2V(pmap_trans(proc1->map->pmap, 0x0)), initcode,
+	    sizeof(initcode));
+
+	//asm("cli");
+	assert(sys_open(proc1->pxproc, "/dev/console", O_RDWR) >= 0);
+	assert(sys_open(proc1->pxproc, "/dev/console", O_RDWR) >= 0);
+	assert(sys_open(proc1->pxproc, "/dev/console", O_RDWR) >= 0);
+	//asm("sti");
 
 	thr1->pcb.frame.rsp = (uintptr_t)kmalloc(4096) + 4096;
 	thr1->pcb.frame.rip = 0x0;
@@ -47,9 +55,10 @@ start_init(void *bin)
 }
 
 void
-posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize, void *libcbin, size_t libcsize)
+posix_main(struct limine_framebuffer_response *fb, void *initbin, size_t size,
+    void *ldbin, size_t ldsize, void *libcbin, size_t libcsize)
 {
-	kprintf("POSIX subsystem\n");
+	kprintf("POSIX subsystem is going up\n");
 	timeslicing_start();
 
 	/* reset system priority level, everything should now be ready to go */
@@ -66,11 +75,13 @@ posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize, void *libcbin
 	root_vnode->ops->create(root_vnode, &tvn, "libc.so");
 	assert(vfs_write(tvn, libcbin, libcsize, 0x0) == 0);
 
+	root_vnode->ops->mkdir(root_vnode, &root_dev, "dev");
+
+	int autoconf(struct limine_framebuffer_response * limfb);
+	autoconf(fb);
+
 	kprintf("starting init process...\n");
 	start_init(initbin);
-
-	pmap_stats();
-	kmalloc(PGSIZE * 32);
 
 #if 0
 	waitq_t wq;

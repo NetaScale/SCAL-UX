@@ -1,5 +1,5 @@
-#ifndef VNODE_H_
-#define VNODE_H_
+#ifndef VFS_H_
+#define VFS_H_
 
 #include <sys/types.h>
 
@@ -35,9 +35,27 @@ struct vnops {
 	 *
 	 * @param dvn LOCKED directory vnode
 	 * @param out [out] resultant vnode (add a ref for caller)
-	 * @param 3 filename
+	 * @param name filename
 	 */
 	int (*lookup)(vnode_t *dvn, vnode_t **out, const char *name);
+
+	/**
+	 * Create a new directory in the given directory.
+	 *
+	 * @param dvn LOCKED directory vnode
+	 * @param out [out] resultant vnode (add a ref for caller)
+	 * @param name filename
+	 */
+	int (*mkdir)(vnode_t *dvn, vnode_t **out, const char *name);
+
+	/**
+	 * Create a new directory in the given directory.
+	 *
+	 * @param dvn LOCKED directory vnode
+	 * @param out [out] resultant vnode (add a ref for caller)
+	 * @param name filename
+	 */
+	int (*mknod)(vnode_t *dvn, vnode_t **out, const char *name, dev_t dev);
 
 	/**
 	 * Get a page from a VREG vnode's backing store or cache. Overridable so
@@ -51,10 +69,12 @@ struct vnops {
 	 * the anon should not be from or entered into the cache as it'll be
 	 * written to forthwith).
 	 */
-	int (
-	    *getpage)(vnode_t *dvn, voff_t off, vm_anon_t **out, bool needcopy);
+	int (*getpage)(vnode_t *dvn, voff_t off, vm_anon_t **out,
+	    bool needscopy);
 
 	/* todo: putpages */
+
+	int (*open)(vnode_t *vn, int mode, struct posix_proc *proc);
 
 	int (*read)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
@@ -121,11 +141,15 @@ int vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off);
  */
 int vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
+/* open a file; returns fd */
 int sys_open(struct posix_proc *proc, const char *path, int mode);
 int sys_close(struct posix_proc *proc, int fd, uintptr_t *errp);
 int sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
+int sys_write(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
 int sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence);
+int sys_isatty(struct posix_proc *proc, int fd, uintptr_t *errp);
 
 extern vnode_t *root_vnode;
+extern vnode_t *root_dev;
 
-#endif /* VNODE_H_ */
+#endif /* VFS_H_ */

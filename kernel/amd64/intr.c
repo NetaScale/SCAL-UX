@@ -74,6 +74,22 @@ idt_load()
 void schedule(intr_frame_t *frame);
 void tick();
 
+static void
+trace(intr_frame_t *frame)
+{
+	struct frame {
+		struct frame *rbp;
+		uint64_t rip;
+	} *aframe = (struct frame *)frame->rbp;
+
+	kprintf(" - RIP %p\n", (void *)frame->rip);
+
+	if (aframe != NULL)
+		do
+			kprintf(" - RIP %p\n", (void *)aframe->rip);
+		while ((aframe = aframe->rbp) && aframe->rip != 0x0);
+}
+
 void
 handle_int(intr_frame_t *frame, uintptr_t num)
 {
@@ -108,22 +124,12 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 
 	unhandled:
 	default: {
-		struct frame {
-			struct frame *rbp;
-			uint64_t rip;
-		} *aframe = (struct frame *)frame->rbp;
 
 		kprintf("unhandled int %lu/code %lx\n", num, frame->code);
-
-		kprintf(" - RIP %p\n", (void *)frame->rip);
-		if (aframe != NULL)
-			do
-				kprintf(" - RIP %p\n", (void *)aframe->rip);
-			while ((aframe = aframe->rbp) && aframe->rip != 0x0);
-
+		trace(frame);
 		kprintf("halting\n\n");
 
-		//asm volatile("cli");
+		// asm volatile("cli");
 		for (;;) {
 			__asm__("pause");
 		}

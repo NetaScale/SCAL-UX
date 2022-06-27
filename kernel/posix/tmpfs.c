@@ -37,7 +37,8 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		if (node->type == VREG) {
 			vn->vmobj = node->reg.vmobj;
 			node->reg.vmobj->anon.vnode = vn;
-		}
+		} else if (node->type == VCHR)
+			vn->dev = node->chr.dev;
 		vn->data = node;
 		*vout = vn;
 		return 0;
@@ -74,7 +75,7 @@ tlookup(tmpnode_t *node, const char *filename)
 }
 
 static tmpnode_t *
-tmakenode(tmpnode_t *dn, vtype_t type, const char *name)
+tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
 {
 	tmpnode_t *n = kmalloc(sizeof *n);
 	tmpdirent_t *td = kmalloc(sizeof *td);
@@ -96,6 +97,10 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name)
 		n->dir.parent = dn;
 		break;
 
+	case VCHR:
+		n->chr.dev = dev;
+		break;
+
 	default:
 		assert("unreached");
 	}
@@ -112,7 +117,7 @@ tmp_create(vnode_t *dvn, vnode_t **out, const char *pathname)
 
 	assert(dvn->type == VDIR);
 
-	n = tmakenode(VNTOTN(dvn), VREG, pathname);
+	n = tmakenode(VNTOTN(dvn), VREG, pathname, 0);
 	assert(n != NULL);
 
 	return tmpfs_vget(NULL, out, (ino_t)n);
@@ -158,6 +163,32 @@ tmp_lookup(vnode_t *vn, vnode_t **out, const char *pathname)
 }
 
 int
+tmp_mkdir(vnode_t *dvn, vnode_t **out, const char *pathname)
+{
+	tmpnode_t *n;
+
+	assert(dvn->type == VDIR);
+
+	n = tmakenode(VNTOTN(dvn), VDIR, pathname, 0);
+	assert(n != NULL);
+
+	return tmpfs_vget(NULL, out, (ino_t)n);
+}
+
+int
+tmp_mknod(vnode_t *dvn, vnode_t **out, const char *pathname, dev_t dev)
+{
+	tmpnode_t *n;
+
+	assert(dvn->type == VDIR);
+
+	n = tmakenode(VNTOTN(dvn), VCHR, pathname, dev);
+	assert(n != NULL);
+
+	return tmpfs_vget(NULL, out, (ino_t)n);
+}
+
+int
 tmp_getpage(vnode_t *vn, voff_t a_off, vm_anon_t **out, bool needcopy)
 {
 	return vm_anon_pagerops.get(vn->vmobj, a_off, out, needcopy);
@@ -195,7 +226,7 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		pageoff = 0;
 	}
 
-	return 0;
+	return nbyte;
 }
 
 int
@@ -207,10 +238,8 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	voff_t pageoff = off - base;
 	size_t npages = (pageoff + nbyte) / PGSIZE + 1;
 
-	if (vn->type == VCHR)
-
-		if (off + nbyte > vn->attr.size)
-			vn->attr.size = off + nbyte;
+	if (off + nbyte > vn->attr.size)
+		vn->attr.size = off + nbyte;
 
 	for (size_t page = base / PGSIZE; page < npages; page++) {
 		vm_anon_t *anon;
@@ -233,16 +262,16 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		pageoff = 0;
 	}
 
-	return 0;
+	return nbyte /* FIXME: */;
 }
 
 /*
  * spec ops
  */
 int
-tmp_spec_open(vnode_t *vn, int mode, struct proc *proc)
+tmp_spec_open(vnode_t *vn, int mode, struct posix_proc *proc)
 {
-	return -1;
+	return cdevsw[major(vn->dev)].open(vn->dev, mode, proc);
 }
 
 int
@@ -254,13 +283,15 @@ tmp_spec_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 struct vnops tmpfs_vnops = {
 	.create = tmp_create,
 	.fallocate = tmp_fallocate,
-	.lookup = tmp_lookup,
 	.getpage = tmp_getpage,
+	.lookup = tmp_lookup,
+	.mkdir = tmp_mkdir,
+	.mknod = tmp_mknod,
 	.read = tmp_read,
 	.write = tmp_write,
 };
 
 struct vnops tmpfs_spec_vnops = {
-	//.open = tmp_open,
-	.write = tmp_write,
+	.open = tmp_spec_open,
+	.write = tmp_spec_write,
 };

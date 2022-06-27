@@ -32,6 +32,8 @@ enqueue(tty_t *tty, int c)
 	if (tty->writehead == sizeof(tty->buf))
 		tty->writehead = 0;
 	tty->buflen++;
+
+	return 0;
 }
 
 static int
@@ -125,12 +127,12 @@ tty_input(tty_t *tty, int c)
 }
 
 int
-tty_read(struct file *file, void *buf, size_t nbyte, off_t off)
+tty_read(dev_t dev, void *buf, size_t nbyte, off_t off)
 {
 	size_t nread = 0;
 	tty_t *tty = NULL;
 
-        assert (off == 0);
+	assert(off == 0);
 
 	if (tty->buflen < nbyte)
 		nbyte = tty->buflen;
@@ -151,7 +153,11 @@ tty_read(struct file *file, void *buf, size_t nbyte, off_t off)
 }
 
 int
-tty_write(struct file *file, void *buf, size_t nbyte, off_t off)
+tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 {
-	return -ENXIO;
+	tty_t *tty = NULL;
+	for (int i = 0; i < nbyte; i++) {
+		sysconputc(((char *)buf)[i]);
+	}
+	return nbyte;
 }

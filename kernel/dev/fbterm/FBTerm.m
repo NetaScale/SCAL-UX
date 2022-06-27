@@ -4,13 +4,16 @@
 #include "dev/fbterm/term.h"
 #include "kern/vm.h"
 #include "posix/dev.h"
+#include "posix/tty.h"
+#include "posix/vfs.h"
 
 extern char sun12x22[], nbsdbold[];
 
 FBTerm *syscon = nil;
 static int termnum = 0;
 
-static int fbtwrite(dev_t dev, void *buf, size_t nbyte, off_t off);
+static int fbtopen(dev_t dev, int mode, struct posix_proc *proc);
+static int fbtputch(void *data, int ch);
 
 @implementation FBTerm
 
@@ -26,6 +29,7 @@ static int fbtwrite(dev_t dev, void *buf, size_t nbyte, off_t off);
 - (id)initWithFB:(LimineFB *)fb
 {
 	cdevsw_t cdev;
+
 	self = [super init];
 
 	parent = nil;
@@ -44,19 +48,32 @@ static int fbtwrite(dev_t dev, void *buf, size_t nbyte, off_t off);
 		.scale_y = 1,
 	};
 
+	tty.termios.c_cc[VINTR] = 0x03;
+	tty.termios.c_cc[VEOL] = '\n';
+	tty.termios.c_cc[VEOF] = '\0';
+	tty.termios.c_cflag = TTYDEF_CFLAG;
+	tty.termios.c_iflag = TTYDEF_IFLAG;
+	tty.termios.c_lflag = TTYDEF_LFLAG;
+	tty.termios.c_oflag = TTYDEF_OFLAG;
+	tty.termios.ibaud = tty.termios.obaud = TTYDEF_SPEED;
+	tty.putch = fbtputch;
+	tty.data = self;
+
 	ksnprintf(name, sizeof name, "FBTerm%d", termnum++);
 
 	term_init(&term, NULL, false);
 	term_vbe(&term, frm, font, style, back);
-	term_print(&term, "hello from FBTerm\n");
 
 	if (syscon == nil) {
+		int maj;
+		vnode_t *node;
 		syscon = self;
 		cdev.is_tty = true;
 		cdev.private = self;
-		cdev.open = NULL;
-		cdev.write = fbtwrite;
-		cdevsw_attach(&cdev);
+		cdev.open = fbtopen;
+		cdev.write = tty_write;
+		maj = cdevsw_attach(&cdev);
+		assert(root_dev->ops->mknod(root_dev, &node, "console", makedev(maj, 0)) == 0);
 	}
 
 	[self registerDevice];
@@ -64,9 +81,13 @@ static int fbtwrite(dev_t dev, void *buf, size_t nbyte, off_t off);
 	return self;
 }
 
+- (tty_t*)tty {
+	return &tty;
+}
+
 - (void)write:(void *)buf len:(size_t)len
 {
-	term_write(&term, buf, len);
+	term_write(&term, (uint64_t)buf, len);
 }
 
 - (void)putc:(int)c
@@ -78,10 +99,14 @@ static int fbtwrite(dev_t dev, void *buf, size_t nbyte, off_t off);
 
 @end
 
-static int
-fbtwrite(dev_t dev, void *buf, size_t nbyte, off_t off)
+static int fbtopen(dev_t dev, int mode, struct posix_proc *proc)
 {
-	[syscon write:buf len:nbyte];
+	return 0;
+}
+
+static int fbtputch(void *data, int c)
+{
+	[(FBTerm*)data putc: c];
 	return 0;
 }
 

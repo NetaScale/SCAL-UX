@@ -8,10 +8,14 @@ enum {
 	kPXSysDebug,
 	kPXSysExec,
 	kPXSysMmap,
+	
 	kPXSysOpen,
 	kPXSysClose,
 	kPXSysRead,
+	kPXSysWrite,
 	kPXSysSeek,
+	kPXSysIsATTY,
+
 	kPXSysSetFSBase,
 	kPXSysExit,
 };

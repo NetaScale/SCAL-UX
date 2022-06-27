@@ -77,7 +77,21 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysRead: {
-		int r = sys_read(proc, ARG1, (void*)ARG2, ARG3);
+		int r = sys_read(proc, ARG1, (void *)ARG2, ARG3);
+		if (r < 0) {
+			RET = -1;
+			ERR = -r;
+		} else {
+			RET = r;
+			ERR = 0;
+		}
+		break;
+	}
+
+	case kPXSysWrite: {
+		asm("cli");
+		int r = sys_write(proc, ARG1, (void *)ARG2, ARG3);
+		asm("sti");
 		if (r < 0) {
 			RET = -1;
 			ERR = -r;
@@ -97,6 +111,11 @@ posix_syscall(intr_frame_t *frame)
 			RET = r;
 			ERR = 0;
 		}
+		break;
+	}
+
+	case kPXSysIsATTY: {
+		RET = sys_isatty(proc, ARG1, &err);
 		break;
 	}
 

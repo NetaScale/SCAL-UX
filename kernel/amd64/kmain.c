@@ -2,12 +2,12 @@
 #include <stdint.h>
 
 #include "amd64.h"
+#include "dev/fbterm/FBTerm.h"
 #include "intr.h"
 #include "kern/kern.h"
 #include "kern/liballoc.h"
 #include "kern/process.h"
 #include "kern/queue.h"
-#include "dev/fbterm/FBTerm.h"
 #include "kern/vm.h"
 #include "limine.h"
 #include "spl.h"
@@ -243,7 +243,6 @@ setup_cpus()
 
 void setup_proc0();
 
-
 // The following will be our kernel's entry point.
 void
 _start(void)
@@ -273,13 +272,12 @@ _start(void)
 	kprintf("mod %s: %p\n", mod->path, mod->address);
 	kmod_load(mod->address);
 
-	int autoconf(struct limine_framebuffer_response * limfb);
-	autoconf(framebuffer_request.response);
-
 #if 1
-	void posix_main(void *initbin, size_t size, void *ldbin, size_t ldsize,
-	    void *libc, size_t libcsize);
-	posix_main(module_request.response->modules[1]->address,
+	void posix_main(struct limine_framebuffer_response * fb, void *initbin,
+	    size_t size, void *ldbin, size_t ldsize, void *libc,
+	    size_t libcsize);
+	posix_main(framebuffer_request.response,
+	    module_request.response->modules[1]->address,
 	    module_request.response->modules[1]->size,
 	    module_request.response->modules[2]->address,
 	    module_request.response->modules[2]->size,

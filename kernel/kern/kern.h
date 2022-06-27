@@ -17,7 +17,7 @@
 #define assert(...)                          \
 	{                                    \
 		if (!(__VA_ARGS__))          \
-			fatal(#__VA_ARGS__); \
+			fatal("assertion failed: " #__VA_ARGS__ "\n"); \
 	}
 #define fatal(...)                      \
 	{                               \

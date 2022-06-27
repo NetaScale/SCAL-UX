@@ -2,11 +2,13 @@
 #include <fcntl.h>
 #include <string.h>
 
+#include "dev.h"
 #include "kern/liballoc.h"
 #include "posix_proc.h"
 #include "vfs.h"
 
 vnode_t *root_vnode = NULL;
+vnode_t *root_dev = NULL;
 
 #define VOP_READ(vnode, buf, nbyte, off) \
 	vnode->ops->read(vnode, buf, nbyte, off)
@@ -112,8 +114,16 @@ sys_open(struct posix_proc *proc, const char *path, int mode)
 
 	r = vfs_lookup(root_vnode, &vn, path);
 	if (r < 0) {
-		kprintf("result %d\n", r);
+		kprintf("lookup returned %d\n", r);
 		return r;
+	}
+
+	if (vn->ops->open) {
+		r = vn->ops->open(vn, mode, proc);
+		if (r < 0) {
+			kprintf("lookup returned %d\n", r);
+			return r;
+		}
 	}
 
 	proc->files[fd] = kmalloc(sizeof(file_t));
@@ -125,44 +135,6 @@ sys_open(struct posix_proc *proc, const char *path, int mode)
 
 	kprintf("yielded fd %d\n", fd);
 	return fd;
-}
-
-int
-sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte)
-{
-	file_t *file = proc->files[fd];
-	int r;
-
-	kprintf("SYS_READ(nbytes: %lu off: %lu)\n", nbyte, file->pos);
-
-	if (file == NULL)
-		return -EBADF;
-
-	r = vfs_read(file->vn, buf, nbyte, file->pos);
-	if (r < 0) {
-		kprintf("vfs_read got %d\n", r);
-		return r;
-	}
-
-	file->pos += nbyte;
-
-	return nbyte;
-}
-
-int
-sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence)
-{
-	file_t *file = proc->files[fd];
-
-	if (file == NULL)
-		return -EBADF;
-
-	assert(whence == SEEK_SET);
-
-	kprintf("SYS_SEEK(offset: %ld)\n", offset);
-
-	file->pos = offset;
-	return offset;
 }
 
 int
@@ -184,4 +156,87 @@ sys_close(struct posix_proc *proc, int fd, uintptr_t *errp)
 	/* todo unlock proc fdlock */
 
 	return 0;
+}
+
+int
+sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte)
+{
+	file_t *file = proc->files[fd];
+	int r;
+
+	kprintf("SYS_READ(%d, nbytes: %lu off: %lu)\n", fd, nbyte, file->pos);
+
+	if (file == NULL)
+		return -EBADF;
+
+	r = vfs_read(file->vn, buf, nbyte, file->pos);
+	if (r < 0) {
+		kprintf("vfs_read got %d\n", r);
+		return r;
+	}
+
+	file->pos += nbyte;
+
+	return nbyte;
+}
+
+int
+sys_write(struct posix_proc *proc, int fd, void *buf, size_t nbyte)
+{
+	file_t *file = proc->files[fd];
+	int r;
+
+	kprintf("SYS_WRITE(%d, nbytes: %lu off: %lu)\n", fd, nbyte, file->pos);
+
+	if (file == NULL)
+		return -EBADF;
+
+	r = vfs_write(file->vn, buf, nbyte, file->pos);
+	if (r < 0) {
+		kprintf("vfs_write got %d\n", r);
+		return r;
+	}
+
+	file->pos += r;
+
+	return r;
+}
+
+int
+sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence)
+{
+	file_t *file = proc->files[fd];
+
+	if (file == NULL)
+		return -EBADF;
+
+	if (file->vn->type != VREG)
+		return -ESPIPE;
+
+	assert(whence == SEEK_SET);
+
+	kprintf("SYS_SEEK(offset: %ld)\n", offset);
+
+	file->pos = offset;
+	return offset;
+}
+
+int
+sys_isatty(struct posix_proc *proc, int fd, uintptr_t *errp)
+{
+	file_t *file;
+
+	file = proc->files[fd];
+
+	if (file == NULL) {
+		*errp = EBADF;
+		return 0;
+	}
+
+	if (file->vn->type != VCHR || !cdevsw[major(file->vn->dev)].is_tty) {
+		*errp = ENOTTY;
+		return 0;
+	}
+
+	return 1;
 }
