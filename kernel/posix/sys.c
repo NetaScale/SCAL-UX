@@ -46,15 +46,15 @@ posix_syscall(intr_frame_t *frame)
 
 	case kPXSysExec: {
 		kprintf("PXSYS_exec: %s\n", (char *)ARG1);
-		const char *args[] = { "init", "no", NULL };
+		const char *args[] = { "bash", NULL };
 		const char *envs[] = { "VAR=42", NULL };
-		assert(sys_exec(proc, "/init", args, envs, frame) == 0);
+		assert(sys_exec(proc, "/bash", args, envs, frame) == 0);
 		break;
 	}
 
 	case kPXSysMmap: {
 		void *addr = (void *)ARG1 == NULL ? VADDR_MAX : (void *)ARG1;
-		ERR = -vm_mmap(proc, &addr, ARG2, ARG3, ARG4, ARG5, ARG6);
+		err = -vm_mmap(proc, &addr, ARG2, ARG3, ARG4, ARG5, ARG6);
 		RET = (uintptr_t)addr;
 		break;
 	}
@@ -63,10 +63,10 @@ posix_syscall(intr_frame_t *frame)
 		int r = sys_open(proc, (const char *)ARG1, ARG2);
 		if (r < 0) {
 			RET = -1;
-			ERR = -r;
+			err = -r;
 		} else {
 			RET = r;
-			ERR = 0;
+			err = 0;
 		}
 		break;
 	}
@@ -80,10 +80,10 @@ posix_syscall(intr_frame_t *frame)
 		int r = sys_read(proc, ARG1, (void *)ARG2, ARG3);
 		if (r < 0) {
 			RET = -1;
-			ERR = -r;
+			err = -r;
 		} else {
 			RET = r;
-			ERR = 0;
+			err = 0;
 		}
 		break;
 	}
@@ -94,10 +94,10 @@ posix_syscall(intr_frame_t *frame)
 		asm("sti");
 		if (r < 0) {
 			RET = -1;
-			ERR = -r;
+			err = -r;
 		} else {
 			RET = r;
-			ERR = 0;
+			err = 0;
 		}
 		break;
 	}
@@ -106,10 +106,10 @@ posix_syscall(intr_frame_t *frame)
 		int r = sys_seek(proc, ARG1, ARG2, ARG3);
 		if (r < 0) {
 			RET = -1;
-			ERR = -r;
+			err = -r;
 		} else {
 			RET = r;
-			ERR = 0;
+			err = 0;
 		}
 		break;
 	}
@@ -132,6 +132,7 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	ERR = err;
+
 
 cleanup:
 	thread->in_syscall = false;

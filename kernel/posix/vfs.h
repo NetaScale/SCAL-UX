@@ -123,13 +123,22 @@ typedef struct file {
 	size_t pos;
 } file_t;
 
+
+enum lookup_flags {
+	kLookupCreat = 1,
+	kLookupMkdir =2,
+	kLookupMknod =4,
+	kLookupMustDir = 8,
+};
+
 void tmpfs_mountroot();
 
 /**
  * Lookup path \p path relative to @locked \p cwd and store the result in
  * \p out. Refcount of the vnode is incremented.
+ * If \p last2 is set, then returns the second-to-last component of the path.
  */
-int vfs_lookup(vnode_t *cwd, vnode_t **out, const char *path);
+int vfs_lookup(vnode_t *cwd, vnode_t **out, const char *path, int flags);
 
 /**
  * Read from @locked \p vn \p nbyte bytes at offset \p off into buffer \p buf.

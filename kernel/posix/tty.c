@@ -158,6 +158,11 @@ tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 	tty_t *tty = NULL;
 	for (int i = 0; i < nbyte; i++) {
 		sysconputc(((char *)buf)[i]);
+#if 0
+		void limterm_putc(int ch, void *ctx);
+		limterm_putc(((char *)buf)[i], NULL);
+#endif
 	}
+	sysconflush();
 	return nbyte;
 }

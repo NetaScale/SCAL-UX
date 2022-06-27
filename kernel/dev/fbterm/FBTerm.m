@@ -73,7 +73,8 @@ static int fbtputch(void *data, int ch);
 		cdev.open = fbtopen;
 		cdev.write = tty_write;
 		maj = cdevsw_attach(&cdev);
-		assert(root_dev->ops->mknod(root_dev, &node, "console", makedev(maj, 0)) == 0);
+		assert(root_dev->ops->mknod(root_dev, &node, "console",
+			   makedev(maj, 0)) == 0);
 	}
 
 	[self registerDevice];
@@ -81,7 +82,8 @@ static int fbtputch(void *data, int ch);
 	return self;
 }
 
-- (tty_t*)tty {
+- (tty_t *)tty
+{
 	return &tty;
 }
 
@@ -97,16 +99,23 @@ static int fbtputch(void *data, int ch);
 		term_double_buffer_flush(&term);
 }
 
+- (void)flush
+{
+	term_double_buffer_flush(&term);
+}
+
 @end
 
-static int fbtopen(dev_t dev, int mode, struct posix_proc *proc)
+static int
+fbtopen(dev_t dev, int mode, struct posix_proc *proc)
 {
 	return 0;
 }
 
-static int fbtputch(void *data, int c)
+static int
+fbtputch(void *data, int c)
 {
-	[(FBTerm*)data putc: c];
+	[(FBTerm *)data putc:c];
 	return 0;
 }
 
@@ -116,4 +125,10 @@ sysconputc(int c)
 	if (syscon) {
 		[syscon putc:c];
 	}
+}
+
+void
+sysconflush()
+{
+	[syscon flush];
 }

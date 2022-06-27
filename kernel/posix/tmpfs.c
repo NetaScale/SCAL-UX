@@ -169,6 +169,8 @@ tmp_mkdir(vnode_t *dvn, vnode_t **out, const char *pathname)
 
 	assert(dvn->type == VDIR);
 
+	kprintf("tmp_mkdir vnode %p path %s\n", dvn, pathname);
+
 	n = tmakenode(VNTOTN(dvn), VDIR, pathname, 0);
 	assert(n != NULL);
 

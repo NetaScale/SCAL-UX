@@ -14,7 +14,9 @@ vnode_t *root_dev = NULL;
 	vnode->ops->read(vnode, buf, nbyte, off)
 #define VOP_WRITE(vnode, buf, nbyte, off) \
 	vnode->ops->write(vnode, buf, nbyte, off)
+#define VOP_CREAT(vnode, out, name) vnode->ops->create(vnode, out, name)
 #define VOP_LOOKUP(vnode, out, path) vnode->ops->lookup(vnode, out, path)
+#define VOP_MKDIR(vnode, out, name) vnode->ops->mkdir(vnode, out, name)
 
 #define countof(ARRAY) (sizeof(ARRAY) / sizeof(ARRAY[0]))
 
@@ -27,18 +29,26 @@ file_unref(file_t *file)
 	}
 }
 
-int
-vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname)
+static vnode_t *
+reduce(vnode_t *vn)
 {
-	vnode_t *vn;
+	return vn;
+}
+
+int
+vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname, int flags)
+{
+	vnode_t *vn, *prevvn = NULL;
 	char path[255], *sub, *next;
 	size_t sublen;
 	bool last = false;
+	bool mustdir = flags & kLookupMustDir;
+	size_t len = strlen(pathname);
 	int r;
 
 	if (pathname[0] == '/' || cwd == NULL) {
 		vn = root_vnode;
-		if (*(pathname++) == '\0') {
+		if (*(pathname + 1) == '\0') {
 			*out = vn;
 			return 0;
 		}
@@ -47,6 +57,17 @@ vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname)
 
 	strcpy(path, pathname);
 	sub = path;
+
+	if (path[len - 1] == '/') {
+		size_t last = len - 1;
+		while (path[last] == '/')
+			path[last--] = '\0';
+		mustdir = true;
+		if (*path == '\0') {
+			*out = vn;
+			return 0;
+		}
+	}
 
 loop:
 	sublen = 0;
@@ -63,22 +84,44 @@ loop:
 	} else
 		*next = '\0';
 
-	if (strcmp(sub, ".") == 0)
-		; /* do nothing */
-	else {
+	if (strcmp(sub, ".") == 0 || sublen == 0)
+		goto next; /* . or trailing */
+
+	prevvn = vn;
+
+	if (!last || (!(flags & kLookupMkdir) && !(flags & kLookupCreat) &&
+	    !(flags & kLookupMknod))) {
+		//kprintf("lookup %s in %p\n", sub, vn);
 		r = VOP_LOOKUP(vn, &vn, sub);
-		if (r < 0) {
-			return r;
-		}
+	    }
+	else if (flags & kLookupMkdir)
+		r = VOP_MKDIR(vn, &vn, sub);
+	else if (flags & kLookupCreat)
+		r = VOP_CREAT(vn, &vn, sub);
+
+	if (prevvn != vn)
+		// vn_unref(vn); TODO:
+		;
+	if (r < 0) {
+		// vn_unref(vn);
+		return r;
 	}
 
-	if (last) {
-		*out = vn;
-		return 0;
-	}
+next:
+	if (last)
+		goto out;
+
+
+	//kprintf("sub %s => %p\n", sub, vn);
 
 	sub += sublen + 1;
 	goto loop;
+
+out:
+	if (mustdir)
+		vn = reduce(vn);
+	*out = vn;
+	return 0;
 }
 
 int
@@ -112,7 +155,7 @@ sys_open(struct posix_proc *proc, const char *path, int mode)
 	if (fd == -1)
 		return -ENFILE;
 
-	r = vfs_lookup(root_vnode, &vn, path);
+	r = vfs_lookup(root_vnode, &vn, path, 0);
 	if (r < 0) {
 		kprintf("lookup returned %d\n", r);
 		return r;

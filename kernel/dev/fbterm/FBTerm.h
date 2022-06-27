@@ -4,8 +4,8 @@
 #ifdef __OBJC__
 #include "../LimineFB.h"
 #include "devicekit/DKDevice.h"
-#include "term.h"
 #include "posix/tty.h"
+#include "term.h"
 
 @interface FBTerm : DKDevice {
 	LimineFB *_fb;
@@ -22,6 +22,7 @@
 
 - initWithFB:(LimineFB *)fb;
 
+- (void)flush;
 - (void)putc:(int)c;
 
 @end

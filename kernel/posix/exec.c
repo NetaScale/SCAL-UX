@@ -36,7 +36,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	Elf64_Phdr *phdrs;
 	int r;
 
-	r = vfs_lookup(root_vnode, &vn, path);
+	r = vfs_lookup(root_vnode, &vn, path, 0);
 	if (r < 0) {
 		kprintf("exec: failed to lookup %s (errno %d)\n", path, -r);
 		return r;
@@ -172,7 +172,7 @@ sys_exec(posix_proc_t *proc, const char *path, const char *argp[],
 	if (r < 0)
 		return r;
 
-	r = loadelf("/ld.so", (vaddr_t)0x40000000, &rtldpkg);
+	r = loadelf("/usr/lib/ld.so", (vaddr_t)0x40000000, &rtldpkg);
 	if (r < 0)
 		return r;
 
