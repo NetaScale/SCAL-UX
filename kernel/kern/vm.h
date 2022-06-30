@@ -169,7 +169,6 @@ vm_page_t *vm_alloc_page();
 /* allocate a new vm_map */
 vm_map_t *vm_map_new();
 
-
 /** Fork a vm_map into a new map. */
 vm_map_t *vm_map_fork(vm_map_t *map);
 

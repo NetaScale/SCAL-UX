@@ -58,7 +58,8 @@ vm_map_new()
 	return map;
 }
 
-void vm_map_free(vm_map_t *map)
+void
+vm_map_free(vm_map_t *map)
 {
 	vm_deallocate(map, 0x0, (size_t)VADDR_MAX);
 	lock(&map->lock);

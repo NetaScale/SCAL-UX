@@ -9,3 +9,6 @@
 	path = vendor/limine
 	url = https://github.com/limine-bootloader/limine.git
 	branch = v3.0-branch-binary
+[submodule "kernel/dev/lai"]
+	path = kernel/dev/acpi/lai
+	url = ../lai

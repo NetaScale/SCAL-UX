@@ -40,7 +40,7 @@ The core concepts are four:
   - **Message**: An asynchronously-sent unit of communication.
   - **Right**: A capability by which messages may be either received or sent.
 
-Rights refer to underlying message queues and vary in type: some permit sending,
+Rights refer to underlying mailboxes and vary in type: some permit sending,
 others receiving, and a filter may be attached, yielding a Filtered Right, which
 may permit only certain kinds of messages to be sent or received.
 
@@ -59,10 +59,20 @@ implementing [Jeff Bonwick](https://www.usenix.org/conference/2001-usenix-annual
 updated slab allocator some day.
 - mlibc: Provides a libc.
 - nanoprintf: used for kernel `printf`.
-- NetBSD: `sys/queue.h` used as `kern/queue.h`; Bold8x16 font used for FBConsole
-- Solaris: Sun Demi Gallant font available for FBConsole
+- NetBSD: (`kernel/kern/queue.h`): NetBSD's `sys/queue.h`.
+  - (`kernel/dev/fbterm/nbsdbold.psfu`): Bold8x16 font used for FBTerm.
+- Solaris (`kernel/dev/fbterm/sun12x22.psfu`): Sun Demi Gallant font available
+  for FBTerm
 - ObjFW: provides an Objective-C runtime.
-- Limine/`limine-terminal-port`: used by FBConsole to provide a terminal
+- Limine/`limine-terminal-port` (some files in`kernel/dev/fbterm/`): used by
+  FBTerm to provide a terminal.
+- Managarm LAI (`kernel/dev/acpi/lai`): Lightweight ACPI Implementation used by
+  Acpi* drivers.
+
+Licence
+-------
+
+SCAL/UX is available under the terms of the Mozilla Public Licence version 2.0.
 
 To-dos
 ------

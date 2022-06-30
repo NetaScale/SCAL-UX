@@ -26,6 +26,7 @@
 			__asm__("hlt"); \
 		}                       \
 	}
+#define unimplemented(...) fatal( "%s: unimplemented\n", __PRETTY_FUNCTION__)
 
 void limterm_putc(int, void *);
 

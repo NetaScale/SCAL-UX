@@ -2,6 +2,7 @@
 #define AMD64_H_
 
 #include <stdint.h>
+#include "limine.h"
 
 #define REG_FUNCS(type, regname)                                    \
 	static inline type read_##regname()                         \
@@ -36,6 +37,34 @@ inb(uint16_t port)
 {
 	uint8_t data;
 	asm volatile("inb %1, %0" : "=a"(data) : "Nd"(port));
+	return data;
+}
+
+static inline void
+outw(uint16_t port, uint16_t data)
+{
+	asm volatile("outw %0, %1" ::"a"(data), "Nd"(port));
+}
+
+static inline uint16_t
+inw(uint16_t port)
+{
+	uint16_t data;
+	asm volatile("inw %1, %0" : "=a"(data) : "Nd"(port));
+	return data;
+}
+
+static inline void
+outl(uint16_t port, uint32_t data)
+{
+	asm volatile("outl %0, %1" ::"a"(data), "Nd"(port));
+}
+
+static inline uint32_t
+inl(uint16_t port)
+{
+	uint32_t data;
+	asm volatile("inl %1, %0" : "=a"(data) : "Nd"(port));
 	return data;
 }
 
@@ -83,5 +112,7 @@ CURCPU()
 	}
 	return val;
 }
+
+extern volatile struct limine_rsdp_request rsdp_request;
 
 #endif /* AMD64_H_ */

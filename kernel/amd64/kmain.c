@@ -20,6 +20,11 @@ vm_pregion_t *g_last_mem = NULL;
 // the compiler does not optimise them away, so, usually, they should
 // be made volatile or equivalent.
 
+static volatile struct limine_framebuffer_request framebuffer_request = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0
+};
+
 static volatile struct limine_hhdm_request hhdm_request = {
 	.id = LIMINE_HHDM_REQUEST,
 	.revision = 0
@@ -45,13 +50,13 @@ static volatile struct limine_module_request module_request = {
 	.revision = 0
 };
 
-static volatile struct limine_smp_request smp_request = {
-	.id = LIMINE_SMP_REQUEST,
+volatile struct limine_rsdp_request rsdp_request = {
+	.id = LIMINE_RSDP_REQUEST,
 	.revision = 0
 };
 
-static volatile struct limine_framebuffer_request framebuffer_request = {
-	.id = LIMINE_FRAMEBUFFER_REQUEST,
+static volatile struct limine_smp_request smp_request = {
+	.id = LIMINE_SMP_REQUEST,
 	.revision = 0
 };
 

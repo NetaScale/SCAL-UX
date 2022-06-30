@@ -121,6 +121,7 @@ kmod_parsekern(void *addr)
 	}
 
 	assert(kmod->symtab != NULL);
+	kmod->hashtab = NULL;
 }
 
 /* return true if this reloc type doesn't need a symbol resolved */
