@@ -2,7 +2,7 @@
 
 @implementation PS2Keyboard
 
-+ (BOOL)probe
++ (BOOL)probeWithAcpiNode: (lai_nsnode_t *)node
 {
 	return YES;
 }

@@ -1,6 +1,8 @@
+#include <byteswap.h>
 
 #include "AcpiPC.h"
 #include "amd64.h"
+#include "dev/PS2Keyboard.h"
 #include "devicekit/DKDevice.h"
 #include "kern/kern.h"
 #include "kern/vm.h"
@@ -106,6 +108,7 @@ laihost_map(size_t address, size_t count)
 void
 laihost_unmap(void *pointer, size_t count)
 {
+	/* nop */
 }
 
 void *
@@ -241,7 +244,121 @@ laihost_sleep(uint64_t ms)
 	}
 }
 
+char
+i2hex(uint64_t val, uint32_t pos)
+{
+	int digit = (val >> pos) & 0xf;
+	if (digit < 0xa)
+		return '0' + digit;
+	else
+		return 'A' + (digit - 10);
+}
+
+int
+hex2i(char character)
+{
+	if (character <= '9')
+		return character - '0';
+	else if (character >= 'A' && character <= 'F')
+		return character - 'A' + 10;
+	assert(!"unreached.");
+}
+
+static const char *
+eisaid_to_string(uint32_t num)
+{
+	static char out[8];
+
+	num = bswap_32(num);
+
+	out[0] = (char)(0x40 + ((num >> 26) & 0x1F));
+	out[1] = (char)(0x40 + ((num >> 21) & 0x1F));
+	out[2] = (char)(0x40 + ((num >> 16) & 0x1F));
+	out[3] = i2hex((uint64_t)num, 12);
+	out[4] = i2hex((uint64_t)num, 8);
+	out[5] = i2hex((uint64_t)num, 4);
+	out[6] = i2hex((uint64_t)num, 0);
+	out[7] = 0;
+
+	return out;
+}
+
+uint32_t
+string_to_eisaid(const char *id)
+{
+	uint32_t out = 0;
+	out |= ((id[0] - 0x40) << 26);
+	out |= ((id[1] - 0x40) << 21);
+	out |= ((id[2] - 0x40) << 16);
+	out |= hex2i(id[3]) << 12;
+	out |= hex2i(id[4]) << 8;
+	out |= hex2i(id[5]) << 4;
+	out |= hex2i(id[6]);
+
+	return bswap_32(out);
+}
+
 @implementation AcpiPC : DKDevice
+
++ (void)matchDev:(lai_nsnode_t *)node
+{
+	LAI_CLEANUP_STATE lai_state_t state;
+	LAI_CLEANUP_VAR lai_variable_t id = { 0 };
+	lai_nsnode_t *hhid;
+	const char *devid;
+
+	lai_init_state(&state);
+
+	kprintf("name %s type %d\n", node->name, node->type);
+
+	hhid = lai_resolve_path(node, "_HID");
+	if (hhid != NULL) {
+		if (lai_eval(&id, hhid, &state))
+			lai_warn("could not evaluate _HID of device");
+		else
+			LAI_ENSURE(id.type);
+	}
+
+	if (!id.type) {
+		lai_nsnode_t *hcid = lai_resolve_path(node, "_CID");
+		if (hcid != NULL) {
+			if (lai_eval(&id, hcid, &state))
+				lai_warn("could not evaluate _CID of device");
+			else
+				LAI_ENSURE(id.type);
+		}
+	}
+
+	if (!id.type)
+		return;
+
+	if (id.type == LAI_STRING)
+		devid = lai_exec_string_access(&id);
+	else
+		devid = eisaid_to_string(id.integer);
+
+	/* TODO: matching on device classes by a more elegant means */
+	if (strcmp(devid, "PNP0303") == 0)
+		[PS2Keyboard probeWithAcpiNode:node];
+}
+
+/* depth-first traversal of devices within the tree */
++ (void)iterate:(lai_nsnode_t *)obj
+{
+	struct lai_ns_child_iterator iterator =
+	    LAI_NS_CHILD_ITERATOR_INITIALIZER(obj);
+	lai_nsnode_t *node;
+
+	while ((node = lai_ns_child_iterate(&iterator))) {
+		if (node->type != 6)
+			continue; /* not a device */
+
+		[self matchDev:node];
+
+		if (node->children.num_elems)
+			[self iterate:node];
+	}
+}
 
 + (BOOL)probeWithRSDP:(rsdp_desc_t *)rsdp
 {
@@ -253,6 +370,9 @@ laihost_sleep(uint64_t ms)
 	lai_set_acpi_revision(rsdp->Revision);
 	lai_create_namespace();
 	lai_enable_acpi(1);
+
+	[self iterate:lai_resolve_path(NULL, "_SB_")];
+
 	return YES;
 }
 
