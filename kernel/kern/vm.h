@@ -248,6 +248,9 @@ void pmap_free(pmap_t *pmap);
 void pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size,
     vm_prot_t prot);
 
+/** unmap a section of \p size bytes */
+void pmap_unmap(pmap_t *pmap, vaddr_t virt, size_t size);
+
 /* invalidate tlb entry for address */
 void pmap_invlpg(vaddr_t addr);
 

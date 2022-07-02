@@ -115,7 +115,9 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysPSelect: {
-		RET = sys_pselect(proc, ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, &err);
+		RET = sys_pselect(proc, ARG1, (fd_set *)ARG2, (fd_set *)ARG3,
+		    (fd_set *)ARG4, (struct timespec *)ARG5, (sigset_t *)ARG6,
+		    &err);
 		break;
 	}
 
@@ -137,7 +139,6 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	ERR = err;
-
 
 cleanup:
 	thread->in_syscall = false;

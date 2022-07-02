@@ -135,6 +135,8 @@ vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 			break; /* finished */
 		else if (entry->vaddr >= start && ENTRY_END(entry) <= end) {
 			vm_object_release(entry->obj);
+			pmap_unmap(map->pmap, entry->vaddr, entry->size);
+
 			TAILQ_REMOVE(&map->entries, entry, entries);
 		} else {
 			fatal("unhandled case partial vm_deallocate");

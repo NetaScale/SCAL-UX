@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#include "event.h"
 #include "kern/kern.h"
 #include "kern/waitq.h"
 #include "termios.h"
@@ -26,6 +27,8 @@ isttyisig(tty_t *tty)
 static int
 enqueue(tty_t *tty, int c)
 {
+	knote_t *knote;
+
 	if (tty->buflen == sizeof(tty->buf))
 		return -1;
 
@@ -37,10 +40,19 @@ enqueue(tty_t *tty, int c)
 		tty->writehead = 0;
 	tty->buflen++;
 
+	kprintf("BUFLEN: %d\n", tty->buflen);
+
+	SLIST_FOREACH(knote, &tty->knotes, list) {
+		knote->status = 1;
+		knote_notify(knote);
+	}
+
+#if 0
 	if (!isttycanon(tty))
 		waitq_wake_one(&tty->wq_noncanon, 0);
 	else if (c == '\n')
 		waitq_wake_one(&tty->wq_canon, 0);
+#endif
 
 	return 0;
 }
@@ -139,24 +151,25 @@ int
 tty_read(dev_t dev, void *buf, size_t nbyte, off_t off)
 {
 	size_t nread = 0;
-	tty_t *tty = NULL;
+	tty_t *tty = sctty;
 
-	assert(off == 0);
+	//assert(off == 0);
 
 	kprintf("tty_read\n");
-	for (;;)
-		;
 
 	if (tty->buflen < nbyte)
 		nbyte = tty->buflen;
 
-	if (isttycanon(tty) && !tty->nlines) {
-		waitq_await(&tty->wq_canon, 1, 25000);
-	}
+	//if (isttycanon(tty) && !tty->nlines) {
+	//	waitq_await(&tty->wq_canon, 1, 25000);
+	//}
+
+	kprintf("tty_reading %d bytes\n", nbyte);
 
 	while (nread < nbyte) {
 		int c = dequeue(tty);
 		((char *)buf)[nread++] = c;
+		kprintf("read <%c>\n", c);
 		if (c == '\n' || c == tty->termios.c_cc[VEOL])
 			break;
 	}
@@ -167,7 +180,7 @@ tty_read(dev_t dev, void *buf, size_t nbyte, off_t off)
 int
 tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 {
-	tty_t *tty = NULL;
+	tty_t *tty = sctty;
 	for (int i = 0; i < nbyte; i++) {
 		sysconputc(((char *)buf)[i]);
 #if 0
@@ -180,11 +193,9 @@ tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 }
 
 int
-tty_select(dev_t dev, waitq_t *wq)
+tty_kqfilter(dev_t dev, struct knote *kn)
 {
 	tty_t *tty = sctty;
-
-	kprintf("tty select\n");
-
+	SLIST_INSERT_HEAD(&tty->knotes, kn, list);
 	return 0;
 }

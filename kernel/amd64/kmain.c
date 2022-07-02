@@ -50,10 +50,8 @@ static volatile struct limine_module_request module_request = {
 	.revision = 0
 };
 
-volatile struct limine_rsdp_request rsdp_request = {
-	.id = LIMINE_RSDP_REQUEST,
-	.revision = 0
-};
+volatile struct limine_rsdp_request rsdp_request = { .id = LIMINE_RSDP_REQUEST,
+	.revision = 0 };
 
 static volatile struct limine_smp_request smp_request = {
 	.id = LIMINE_SMP_REQUEST,

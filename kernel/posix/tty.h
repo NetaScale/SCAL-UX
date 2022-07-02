@@ -8,7 +8,7 @@
 
 #include "kern/waitq.h"
 
-struct file;
+struct knote;
 struct posix_proc;
 
 typedef struct tty {
@@ -18,6 +18,8 @@ typedef struct tty {
 	off_t readhead;		/* input buffer read head */
 	off_t writehead;	/* input buffer write head */
 	size_t nlines; /* number of lines available to read in input buffer */
+
+	SLIST_HEAD(, knote) knotes; /* knotes observing the tty */
 
 	waitq_t wq_noncanon; /* waitq for noncanonical (byte received) */
 	waitq_t wq_canon;    /* waitq for canonical ('\n' received) */
@@ -38,7 +40,7 @@ int tty_open(dev_t dev, int mode, struct posix_proc *proc);
 /* used in the cdev switch */
 int tty_read(dev_t, void *buf, size_t nbyte, off_t off);
 int tty_write(dev_t, void *buf, size_t nbyte, off_t off);
-int tty_select(dev_t, waitq_t *wq);
+int tty_kqfilter(dev_t, struct knote *kn);
 
 /** Supply input to a TTY. */
 void tty_input(tty_t *tty, int ch);

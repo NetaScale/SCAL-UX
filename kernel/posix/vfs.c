@@ -8,6 +8,7 @@
 #include "kern/liballoc.h"
 #include "posix_proc.h"
 #include "vfs.h"
+#include "event.h"
 
 vnode_t *root_vnode = NULL;
 vnode_t *root_dev = NULL;
@@ -291,19 +292,27 @@ sys_pselect(struct posix_proc *proc, int nfds, fd_set *readfds,
     fd_set *writefds, fd_set *exceptfds, const struct timespec *timeout,
     const sigset_t *sigmask, uintptr_t *errp)
 {
-	waitq_t wq;
-
-	waitq_init(&wq);
+	kqueue_t *kq = kqueue_new();
 
 	for (int i = 0; i < nfds; i++) {
-		if (FD_ISSET(i, readfds)) {
-			file_t *file = proc->files[i];
-			file->vn->ops->select(file->vn, &wq);
-		}
+		int filt = 0;
+		struct kevent kev;
+
+		if (FD_ISSET(i, readfds))
+			filt = EVFILT_READ;
+
+		if (filt == 0)
+			continue;
+
+		EV_SET(&kev, i, filt, EV_ADD, 0, 0, NULL);
+		kqueue_register(kq, &kev);
 	}
 
-	for (;;)
-		asm("Pause");
+
+	int x = kqueue_wait(kq);
+	kprintf("X: %d\n", x);
+
+	return 1;
 }
 
 int

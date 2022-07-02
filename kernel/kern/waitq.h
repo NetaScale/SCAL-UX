@@ -37,6 +37,7 @@ typedef struct waitq_entry {
 typedef struct waitq {
         spinlock_t lock;
         TAILQ_HEAD(, waitq_entry) waiters;
+        waitq_entry_t subent;
         spl_t oldspl;
 } waitq_t;
 
@@ -69,6 +70,11 @@ void waitq_init(waitq_t *wq);
  * \pre SPL < soft (to allow rescheduling)
  */
 uint64_t waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t msecs);
+
+/**
+ * Add a subqueue to a given waitq.
+ */
+uint64_t waitq_add_subqueue(waitq_t *wq, waitq_t *subq);
 
 /**
  * Clear waiting early for a given thread.

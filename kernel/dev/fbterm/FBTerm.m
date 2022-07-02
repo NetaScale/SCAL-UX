@@ -77,8 +77,9 @@ static int fbtputch(void *data, int ch);
 		cdev.is_tty = true;
 		cdev.private = self;
 		cdev.open = fbtopen;
+		cdev.read = tty_read;
 		cdev.write = tty_write;
-		cdev.select = tty_select;
+		cdev.kqfilter = tty_kqfilter;
 		maj = cdevsw_attach(&cdev);
 		assert(root_dev->ops->mknod(root_dev, &node, "console",
 			   makedev(maj, 0)) == 0);
@@ -128,7 +129,8 @@ fbtopen(dev_t dev, int mode, struct posix_proc *proc)
 static int
 fbtputch(void *data, int c)
 {
-	[(FBTerm *)data putc:c];
+	limterm_putc(c, NULL);
+	//[(FBTerm *)data putc:c];
 	[(FBTerm *)data flush];
 	return 0;
 }

@@ -13,8 +13,8 @@ waitq_timeout(void *arg)
 	waitq_lock(thread->wq);
 	waitq_clear_locked(thread, kWaitQResultTimeout);
 	waitq_unlock(thread->wq);
-        unlock(&thread->lock);
-        thread_run(thread);
+	unlock(&thread->lock);
+	thread_run(thread);
 }
 
 void
@@ -24,7 +24,8 @@ waitq_init(waitq_t *wq)
 	TAILQ_INIT(&wq->waiters);
 }
 
-void waitq_clear_locked(struct thread * thread, waitq_result_t res)
+void
+waitq_clear_locked(struct thread *thread, waitq_result_t res)
 {
 	TAILQ_REMOVE(&thread->wq->waiters, &thread->wqent, entries);
 	thread->wq = NULL;
@@ -38,8 +39,11 @@ waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t msecs)
 	spl_t spl;
 	thread_t *thread = CURCPU()->curthread;
 
+	kprintf("GOING TO SLEEP\n");
+
 	splassertle(kSPL0);
 
+	thread->wqent.type = kWaitQEntryThread;
 	thread->wqent.thread = thread;
 	thread->wqtimeout.fun = waitq_timeout;
 	thread->wqtimeout.arg = thread;
@@ -58,6 +62,12 @@ waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t msecs)
 	return thread_block_locked();
 }
 
+uint64_t
+waitq_add_subqueue(waitq_t *wq, waitq_t *subq)
+{
+	unimplemented();
+}
+
 /**
  * @returns a locked thread or NULL
  * \pre wq locked; SPL soft
@@ -70,6 +80,7 @@ waitq_get_first(waitq_t *wq, waitq_event_t ev)
 
 	TAILQ_FOREACH (ent, &wq->waiters, entries) {
 		if (ent->type == kWaitQEntrySubqueue) {
+			assert(ent->subqueue != wq);
 			waitq_lock(ent->subqueue);
 			thrd = waitq_get_first(ent->subqueue, ev);
 			waitq_unlock(ent->subqueue);

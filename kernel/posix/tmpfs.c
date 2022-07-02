@@ -279,15 +279,21 @@ tmp_spec_open(vnode_t *vn, int mode, struct posix_proc *proc)
 }
 
 int
+tmp_spec_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
+{
+	return cdevsw[major(vn->dev)].read(vn->dev, buf, nbyte, off);
+}
+
+int
 tmp_spec_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
 	return cdevsw[major(vn->dev)].write(vn->dev, buf, nbyte, off);
 }
 
 int
-tmp_spec_select(vnode_t *vn, waitq_t *wq)
+tmp_spec_kqfilter(vnode_t *vn, struct knote *kn)
 {
-	return cdevsw[major(vn->dev)].select(vn->dev, wq);
+	return cdevsw[major(vn->dev)].kqfilter(vn->dev, kn);
 }
 
 struct vnops tmpfs_vnops = {
@@ -303,6 +309,7 @@ struct vnops tmpfs_vnops = {
 
 struct vnops tmpfs_spec_vnops = {
 	.open = tmp_spec_open,
+	.read = tmp_spec_read,
 	.write = tmp_spec_write,
-	.select = tmp_spec_select,
+	.kqfilter = tmp_spec_kqfilter,
 };

@@ -7,8 +7,8 @@
 
 #include "kern/vm.h"
 
+struct knote;
 struct posix_proc;
-struct waitq;
 typedef enum vtype { VNON, VREG, VDIR, VCHR } vtype_t;
 typedef struct vnode vnode_t;
 typedef struct file file_t;
@@ -83,7 +83,7 @@ struct vnops {
 
 	int (*write)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
-	int (*select)(vnode_t *vn, struct waitq *wq);
+	int (*kqfilter)(vnode_t *vn, struct knote *kn);
 };
 
 typedef struct vattr {

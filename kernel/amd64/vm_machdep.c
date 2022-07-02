@@ -99,6 +99,8 @@ void
 pmap_free(pmap_t *pmap)
 {
 	pmap_free_sub(pmap->pml4, 4);
+	for (int i = 0; i < 255; i++)
+		((uint64_t*)P2V(pmap->pml4))[i] = 0x0;
 }
 
 void
@@ -290,6 +292,11 @@ pmap_map(pmap_t *pmap, paddr_t phys, vaddr_t virt, size_t size, vm_prot_t prot)
 	for (int i = 0; i < npages; i++, virt += PGSIZE, phys += PGSIZE) {
 		pmap_enter(pmap->pml4, phys, virt, prot);
 	}
+}
+
+void pmap_unmap(pmap_t *pmap, vaddr_t virt, size_t size)
+{
+	/* TODO */
 }
 
 void
