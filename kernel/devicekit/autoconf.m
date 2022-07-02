@@ -15,8 +15,5 @@ autoconf(struct limine_framebuffer_response *limfb)
 	[FBTerm probeWithFB:sysfb];
 	[AcpiPC probeWithRSDP:rsdp_request.response->address];
 
-	for (;;)
-		;
-
 	return 0;
 }

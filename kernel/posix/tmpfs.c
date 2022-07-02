@@ -8,6 +8,7 @@
 #include "kern/kern.h"
 #include "kern/liballoc.h"
 #include "kern/vm.h"
+#include "kern/waitq.h"
 #include "posix/vfs.h"
 #include "tmpfs.h"
 
@@ -84,6 +85,7 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
 	td->node = n;
 	n->type = type;
 	n->size = 0;
+	n->vn = NULL;
 
 	switch (type) {
 	case VREG:
@@ -282,6 +284,12 @@ tmp_spec_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	return cdevsw[major(vn->dev)].write(vn->dev, buf, nbyte, off);
 }
 
+int
+tmp_spec_select(vnode_t *vn, waitq_t *wq)
+{
+	return cdevsw[major(vn->dev)].select(vn->dev, wq);
+}
+
 struct vnops tmpfs_vnops = {
 	.create = tmp_create,
 	.fallocate = tmp_fallocate,
@@ -296,4 +304,5 @@ struct vnops tmpfs_vnops = {
 struct vnops tmpfs_spec_vnops = {
 	.open = tmp_spec_open,
 	.write = tmp_spec_write,
+	.select = tmp_spec_select,
 };

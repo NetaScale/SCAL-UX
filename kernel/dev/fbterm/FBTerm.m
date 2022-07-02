@@ -11,6 +11,8 @@ extern char sun12x22[], nbsdbold[];
 
 FBTerm *syscon = nil;
 static int termnum = 0;
+/* FIXME temporary hack, remove */
+tty_t *sctty;
 
 static int fbtopen(dev_t dev, int mode, struct posix_proc *proc);
 static int fbtputch(void *data, int ch);
@@ -56,6 +58,10 @@ static int fbtputch(void *data, int ch);
 	tty.termios.c_lflag = TTYDEF_LFLAG;
 	tty.termios.c_oflag = TTYDEF_OFLAG;
 	tty.termios.ibaud = tty.termios.obaud = TTYDEF_SPEED;
+
+	waitq_init(&tty.wq_canon);
+	waitq_init(&tty.wq_noncanon);
+
 	tty.putch = fbtputch;
 	tty.data = self;
 
@@ -72,9 +78,11 @@ static int fbtputch(void *data, int ch);
 		cdev.private = self;
 		cdev.open = fbtopen;
 		cdev.write = tty_write;
+		cdev.select = tty_select;
 		maj = cdevsw_attach(&cdev);
 		assert(root_dev->ops->mknod(root_dev, &node, "console",
 			   makedev(maj, 0)) == 0);
+		sctty = &tty;
 	}
 
 	[self registerDevice];

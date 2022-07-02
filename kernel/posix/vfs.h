@@ -3,9 +3,12 @@
 
 #include <sys/types.h>
 
+#include <signal.h>
+
 #include "kern/vm.h"
 
 struct posix_proc;
+struct waitq;
 typedef enum vtype { VNON, VREG, VDIR, VCHR } vtype_t;
 typedef struct vnode vnode_t;
 typedef struct file file_t;
@@ -79,6 +82,8 @@ struct vnops {
 	int (*read)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
 	int (*write)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
+
+	int (*select)(vnode_t *vn, struct waitq *wq);
 };
 
 typedef struct vattr {
@@ -123,11 +128,10 @@ typedef struct file {
 	size_t pos;
 } file_t;
 
-
 enum lookup_flags {
 	kLookupCreat = 1,
-	kLookupMkdir =2,
-	kLookupMknod =4,
+	kLookupMkdir = 2,
+	kLookupMknod = 4,
 	kLookupMustDir = 8,
 };
 
@@ -156,6 +160,9 @@ int sys_close(struct posix_proc *proc, int fd, uintptr_t *errp);
 int sys_read(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
 int sys_write(struct posix_proc *proc, int fd, void *buf, size_t nbyte);
 int sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence);
+int sys_pselect(struct posix_proc *proc, int nfds, fd_set *readfds,
+    fd_set *writefds, fd_set *exceptfds, const struct timespec *timeout,
+    const sigset_t *sigmask, uintptr_t *errp);
 int sys_isatty(struct posix_proc *proc, int fd, uintptr_t *errp);
 
 extern vnode_t *root_vnode;

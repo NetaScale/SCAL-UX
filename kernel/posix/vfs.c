@@ -1,3 +1,5 @@
+#include <sys/select.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -19,6 +21,27 @@ vnode_t *root_dev = NULL;
 #define VOP_MKDIR(vnode, out, name) vnode->ops->mkdir(vnode, out, name)
 
 #define countof(ARRAY) (sizeof(ARRAY) / sizeof(ARRAY[0]))
+
+void
+FD_CLR(int fd, fd_set *set)
+{
+	set->__mlibc_elems[fd / 8] &= ~(1 << (fd % 8));
+}
+int
+FD_ISSET(int fd, fd_set *set)
+{
+	return set->__mlibc_elems[fd / 8] & (1 << (fd % 8));
+}
+void
+FD_SET(int fd, fd_set *set)
+{
+	set->__mlibc_elems[fd / 8] |= 1 << (fd % 8);
+}
+void
+FD_ZERO(fd_set *set)
+{
+	memset(set->__mlibc_elems, 0, sizeof(fd_set));
+}
 
 static void
 file_unref(file_t *file)
@@ -89,12 +112,12 @@ loop:
 
 	prevvn = vn;
 
-	if (!last || (!(flags & kLookupMkdir) && !(flags & kLookupCreat) &&
-	    !(flags & kLookupMknod))) {
-		//kprintf("lookup %s in %p\n", sub, vn);
+	if (!last ||
+	    (!(flags & kLookupMkdir) && !(flags & kLookupCreat) &&
+		!(flags & kLookupMknod))) {
+		// kprintf("lookup %s in %p\n", sub, vn);
 		r = VOP_LOOKUP(vn, &vn, sub);
-	    }
-	else if (flags & kLookupMkdir)
+	} else if (flags & kLookupMkdir)
 		r = VOP_MKDIR(vn, &vn, sub);
 	else if (flags & kLookupCreat)
 		r = VOP_CREAT(vn, &vn, sub);
@@ -111,8 +134,7 @@ next:
 	if (last)
 		goto out;
 
-
-	//kprintf("sub %s => %p\n", sub, vn);
+	// kprintf("sub %s => %p\n", sub, vn);
 
 	sub += sublen + 1;
 	goto loop;
@@ -262,6 +284,26 @@ sys_seek(struct posix_proc *proc, int fd, off_t offset, int whence)
 
 	file->pos = offset;
 	return offset;
+}
+
+int
+sys_pselect(struct posix_proc *proc, int nfds, fd_set *readfds,
+    fd_set *writefds, fd_set *exceptfds, const struct timespec *timeout,
+    const sigset_t *sigmask, uintptr_t *errp)
+{
+	waitq_t wq;
+
+	waitq_init(&wq);
+
+	for (int i = 0; i < nfds; i++) {
+		if (FD_ISSET(i, readfds)) {
+			file_t *file = proc->files[i];
+			file->vn->ops->select(file->vn, &wq);
+		}
+	}
+
+	for (;;)
+		asm("Pause");
 }
 
 int

@@ -2,10 +2,14 @@
 #include <stdbool.h>
 
 #include "kern/kern.h"
+#include "kern/waitq.h"
 #include "termios.h"
 #include "tty.h"
 
 #define ISSET(FIELD, VAL) ((FIELD)&VAL)
+
+/* FIXME: remove */
+extern tty_t *sctty;
 
 static bool
 isttycanon(tty_t *tty)
@@ -32,6 +36,11 @@ enqueue(tty_t *tty, int c)
 	if (tty->writehead == sizeof(tty->buf))
 		tty->writehead = 0;
 	tty->buflen++;
+
+	if (!isttycanon(tty))
+		waitq_wake_one(&tty->wq_noncanon, 0);
+	else if (c == '\n')
+		waitq_wake_one(&tty->wq_canon, 0);
 
 	return 0;
 }
@@ -134,12 +143,15 @@ tty_read(dev_t dev, void *buf, size_t nbyte, off_t off)
 
 	assert(off == 0);
 
+	kprintf("tty_read\n");
+	for (;;)
+		;
+
 	if (tty->buflen < nbyte)
 		nbyte = tty->buflen;
 
 	if (isttycanon(tty) && !tty->nlines) {
-		kprintf("TODO block on canonical tty no input");
-		return 0; /* TODO block */
+		waitq_await(&tty->wq_canon, 1, 25000);
 	}
 
 	while (nread < nbyte) {
@@ -165,4 +177,14 @@ tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 	}
 	sysconflush();
 	return nbyte;
+}
+
+int
+tty_select(dev_t dev, waitq_t *wq)
+{
+	tty_t *tty = sctty;
+
+	kprintf("tty select\n");
+
+	return 0;
 }

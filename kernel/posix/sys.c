@@ -114,6 +114,11 @@ posix_syscall(intr_frame_t *frame)
 		break;
 	}
 
+	case kPXSysPSelect: {
+		RET = sys_pselect(proc, ARG1, ARG2, ARG3, ARG4, ARG5, ARG6, &err);
+		break;
+	}
+
 	case kPXSysIsATTY: {
 		RET = sys_isatty(proc, ARG1, &err);
 		break;
