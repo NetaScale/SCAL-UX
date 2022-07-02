@@ -112,6 +112,13 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	case 32: /* reschedule */
 		break;
 
+	case 33: {
+		void ps2_intr();
+		ps2_intr();
+		lapic_eoi();
+		break;
+	}
+
 	case kIntNumLAPICTimer:
 		tick();
 		lapic_eoi();
@@ -160,6 +167,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	X(13, TRAP) \
 	X(14, TRAP) \
 	X(32, INT)  \
+	X(33, INT)  \
 	X(48, INT)  \
 	X(128, INT_USER)
 

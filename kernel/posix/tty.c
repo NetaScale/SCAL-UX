@@ -121,9 +121,9 @@ tty_input(tty_t *tty, int c)
 	}
 
 	enqueue(tty, c);
-	if (tty->termios.c_lflag & ECHO)
+	if (tty->termios.c_lflag & ECHO /* and is the code printable? */)
 		/* print to the underlying tty too... */
-		;
+		tty->putch(tty->data, c);
 }
 
 int

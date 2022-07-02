@@ -87,6 +87,11 @@ static int fbtputch(void *data, int ch);
 	return &tty;
 }
 
+- (void)input:(int)c
+{
+	tty_input(&tty, c);
+}
+
 - (void)write:(void *)buf len:(size_t)len
 {
 	term_write(&term, (uint64_t)buf, len);
@@ -116,6 +121,7 @@ static int
 fbtputch(void *data, int c)
 {
 	[(FBTerm *)data putc:c];
+	[(FBTerm *)data flush];
 	return 0;
 }
 

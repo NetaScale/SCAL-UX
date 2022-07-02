@@ -2,12 +2,33 @@
 
 #include "AcpiPC.h"
 #include "amd64.h"
+#include "dev/IOApic.h"
 #include "dev/PS2Keyboard.h"
 #include "devicekit/DKDevice.h"
 #include "kern/kern.h"
 #include "kern/vm.h"
 #include "lai/core.h"
 #include "lai/helpers/sci.h"
+
+typedef struct {
+	acpi_header_t header;
+	uint32_t lapic_addr;
+	uint32_t flags;
+	uint8_t entries[0];
+} __attribute__((packed)) acpi_madt_t;
+
+typedef struct {
+	uint8_t type;
+	uint8_t length;
+} __attribute__((packed)) acpi_madt_entry_header_t;
+
+typedef struct {
+	acpi_madt_entry_header_t header;
+	uint8_t ioapic_id;
+	uint8_t reserved;
+	uint32_t ioapic_addr;
+	uint32_t gsi_base;
+} __attribute__((packed)) acpi_madt_ioapic_t;
 
 acpi_rsdt_t *rsdt = NULL;
 acpi_xsdt_t *xsdt = NULL;
@@ -300,7 +321,7 @@ string_to_eisaid(const char *id)
 
 @implementation AcpiPC : DKDevice
 
-+ (void)matchDev:(lai_nsnode_t *)node
+- (void)matchDev:(lai_nsnode_t *)node
 {
 	LAI_CLEANUP_STATE lai_state_t state;
 	LAI_CLEANUP_VAR lai_variable_t id = { 0 };
@@ -308,8 +329,6 @@ string_to_eisaid(const char *id)
 	const char *devid;
 
 	lai_init_state(&state);
-
-	kprintf("name %s type %d\n", node->name, node->type);
 
 	hhid = lai_resolve_path(node, "_HID");
 	if (hhid != NULL) {
@@ -343,7 +362,7 @@ string_to_eisaid(const char *id)
 }
 
 /* depth-first traversal of devices within the tree */
-+ (void)iterate:(lai_nsnode_t *)obj
+- (void)iterate:(lai_nsnode_t *)obj
 {
 	struct lai_ns_child_iterator iterator =
 	    LAI_NS_CHILD_ITERATOR_INITIALIZER(obj);
@@ -371,9 +390,39 @@ string_to_eisaid(const char *id)
 	lai_create_namespace();
 	lai_enable_acpi(1);
 
-	[self iterate:lai_resolve_path(NULL, "_SB_")];
+	[[self alloc] init];
 
 	return YES;
+}
+
+- init
+{
+	acpi_madt_t *madt;
+
+	self = [super init];
+
+	ksnprintf(name, sizeof name, "AcpiPC0");
+	[self registerDevice];
+
+	madt = laihost_scan("APIC", 0);
+
+	for (acpi_madt_entry_header_t *item =
+		 (acpi_madt_entry_header_t *)&madt->entries[0];
+	     (uint8_t *)item <
+	     (madt->entries + (madt->header.length - sizeof(acpi_madt_t)));
+	     item += item->length) {
+		if (item->type == 1) /* I/O APIC */ {
+			acpi_madt_ioapic_t *ioapic = (acpi_madt_ioapic_t *)item;
+			[[IOApic alloc]
+			    initWithID:ioapic->ioapic_id
+			       address:(void *)(uintptr_t)ioapic->ioapic_addr
+			       gsiBase:ioapic->gsi_base];
+		}
+	}
+
+	[self iterate:lai_resolve_path(NULL, "_SB_")];
+
+	return self;
 }
 
 @end

@@ -24,6 +24,8 @@
 
 - (void)flush;
 - (void)putc:(int)c;
+/* accept a character */
+- (void)input:(int)c;
 
 @end
 #endif

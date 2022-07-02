@@ -25,6 +25,8 @@ typedef struct   {
 
 + (BOOL)probeWithRSDP: (rsdp_desc_t*) rsdp;
 
+-init;
+
 @end
 
 #endif /* ACPIPC_H_ */
