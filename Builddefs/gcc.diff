@@ -1,0 +1,163 @@
+diff -ruN gcc-12.1.0/fixincludes/mkfixinc.sh gcc-12.1.0-sc/fixincludes/mkfixinc.sh
+--- gcc-12.1.0/fixincludes/mkfixinc.sh	2022-05-06 08:30:56.000000000 +0100
++++ gcc-12.1.0-sc/fixincludes/mkfixinc.sh	2022-06-16 15:00:53.323570040 +0100
+@@ -19,6 +19,7 @@
+     powerpc-*-rtems*   | \
+     powerpcle-*-eabisim* | \
+     powerpcle-*-eabi* | \
++    *-scalux* | \
+     *-*-vxworks7* | \
+     *-musl* )
+ 	#  IF there is no include fixing,
+diff -ruN gcc-12.1.0/gcc/config/scalux.h gcc-12.1.0-sc/gcc/config/scalux.h
+--- gcc-12.1.0/gcc/config/scalux.h	1970-01-01 01:00:00.000000000 +0100
++++ gcc-12.1.0-sc/gcc/config/scalux.h	2022-06-16 14:58:48.418970793 +0100
+@@ -0,0 +1,29 @@
++#undef TARGET_scalux
++#define TARGET_scalux 1
++
++#undef LIB_SPEC
++#define LIB_SPEC "-lc"
++
++#undef STARTFILE_SPEC
++#define STARTFILE_SPEC "%{!shared:crt0.o%s} crti.o%s %{shared:crtbeginS.o%s;:crtbegin.o%s}"
++
++#undef ENDFILE_SPEC
++#define ENDFILE_SPEC "%{shared:crtendS.o%s;:crtend.o%s} crtn.o%s"
++
++#define GNU_USER_LINK_EMULATION32 "elf_i386"
++#define GNU_USER_LINK_EMULATION64 "elf_x86_64"
++#define GNU_USER_LINK_EMULATIONX32 "elf32_x86_64"
++
++#define GNU_USER_DYNAMIC_LINKER32 "/usr/lib/ld_i386.so"
++#define GNU_USER_DYNAMIC_LINKER64 "/usr/lib/ld.so"
++#define GNU_USER_DYNAMIC_LINKERX32 "/usr/lib/ld32.so"
++
++#undef TARGET_OS_CPP_BUILTINS
++#define TARGET_OS_CPP_BUILTINS()         \
++  do {                                   \
++    builtin_define ("__scalux__");    \
++    builtin_define ("__unix__");         \
++    builtin_assert ("system=scalux"); \
++    builtin_assert ("system=unix");      \
++    builtin_assert ("system=posix");     \
++  } while (0);
+diff -ruN gcc-12.1.0/gcc/config.gcc gcc-12.1.0-sc/gcc/config.gcc
+--- gcc-12.1.0/gcc/config.gcc	2022-05-06 08:30:56.000000000 +0100
++++ gcc-12.1.0-sc/gcc/config.gcc	2022-06-16 16:06:53.174290532 +0100
+@@ -961,6 +961,15 @@
+ *-*-rdos*)
+   use_gcc_stdint=wrap
+   ;;
++*-*-scalux*)
++  extra_options="$extra_options gnu-user.opt"
++  gas=yes
++  gnu_ld=yes
++  default_use_cxa_atexit=yes
++  use_gcc_stdint=wrap
++  tmake_file="${tmake_file} t-slibgcc"
++  thread_file='posix'
++  ;;
+ *-*-solaris2*)
+   # i?86-*-solaris2* needs to insert headers between cpu default and
+   # Solaris 2 specific ones.
+@@ -2246,6 +2255,9 @@
+ 	tmake_file="${tmake_file} i386/t-x86_64-elf"
+ 	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h fuchsia.h"
+ 	;;
++x86_64-*-scalux*)
++	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h gnu-user.h glibc-stdint.h i386/x86-64.h i386/gnu-user-common.h i386/gnu-user64.h scalux.h"
++	;;
+ ia64*-*-elf*)
+ 	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h ia64/sysv4.h ia64/elf.h"
+ 	tmake_file="ia64/t-ia64"
+diff -ruN gcc-12.1.0/libgcc/config.host gcc-12.1.0-sc/libgcc/config.host
+--- gcc-12.1.0/libgcc/config.host	2022-05-06 08:30:59.000000000 +0100
++++ gcc-12.1.0-sc/libgcc/config.host	2022-06-16 15:01:27.209279362 +0100
+@@ -300,6 +300,11 @@
+   tmake_file="$tmake_file t-rtems"
+   extra_parts="crtbegin.o crtend.o"
+   ;;
++*-*-scalux*)
++  extra_parts="$extra_parts crti.o crtbegin.o crtbeginS.o crtend.o crtendS.o crtn.o"
++  tmake_file="$tmake_file t-crtstuff-pic"
++  tmake_file="$tmake_file t-slibgcc t-slibgcc-gld t-slibgcc-elf-ver t-libgcc-pic"
++  ;;
+ *-*-solaris2*)
+   # Unless linker support and dl_iterate_phdr are present,
+   # unwind-dw2-fde-dip.c automatically falls back to unwind-dw2-fde.c.
+@@ -791,6 +796,10 @@
+ 	tmake_file="$tmake_file i386/t-crtstuff t-softfp-sfdftf i386/32/t-softfp i386/t-softfp t-softfp"
+ 	extra_parts="$extra_parts crti.o crtn.o"
+ 	;;
++x86_64-*-scalux*)
++	extra_parts="$extra_parts crtprec32.o crtprec64.o crtprec80.o crtfastmath.o"
++	tmake_file="$tmake_file i386/t-crtpc t-crtfm i386/t-crtstuff t-dfprules"
++	;;
+ i[34567]86-*-solaris2* | x86_64-*-solaris2*)
+ 	tmake_file="$tmake_file i386/t-crtpc t-crtfm i386/t-msabi"
+ 	extra_parts="$extra_parts crtprec32.o crtprec64.o crtprec80.o crtfastmath.o"
+diff -ruN gcc-12.1.0/libgcc/libgcov.h gcc-12.1.0-sc/libgcc/libgcov.h
+--- gcc-12.1.0/libgcc/libgcov.h	2022-05-06 08:30:59.000000000 +0100
++++ gcc-12.1.0-sc/libgcc/libgcov.h	2022-06-16 14:58:48.420970835 +0100
+@@ -37,6 +37,8 @@
+ /* About the target.  */
+ /* This path will be used by libgcov runtime.  */
+ 
++#include <stdint.h>
++
+ #include "tconfig.h"
+ #include "auto-target.h"
+ #include "tsystem.h"
+diff -ruN gcc-12.1.0/libstdc++-v3/crossconfig.m4 gcc-12.1.0-sc/libstdc++-v3/crossconfig.m4
+--- gcc-12.1.0/libstdc++-v3/crossconfig.m4	2022-05-06 08:31:00.000000000 +0100
++++ gcc-12.1.0-sc/libstdc++-v3/crossconfig.m4	2022-06-16 15:01:53.917838441 +0100
+@@ -250,6 +250,17 @@
+     GLIBCXX_CHECK_MATH_SUPPORT
+     GLIBCXX_CHECK_STDLIB_SUPPORT
+     ;;
++  *-scalux*)
++    GLIBCXX_CHECK_COMPILER_FEATURES
++    GLIBCXX_CHECK_LINKER_FEATURES
++    GLIBCXX_CHECK_MATH_SUPPORT
++    GLIBCXX_CHECK_STDLIB_SUPPORT
++    AC_DEFINE(_GLIBCXX_USE_DEV_RANDOM)
++    AC_DEFINE(_GLIBCXX_USE_RANDOM_TR1)
++    GCC_CHECK_TLS
++    AC_CHECK_FUNCS(aligned_alloc posix_memalign memalign _aligned_malloc)
++    AC_CHECK_FUNCS(timespec_get)
++    ;;
+   *-tpf)
+     SECTION_FLAGS='-ffunction-sections -fdata-sections'
+     SECTION_LDFLAGS='-Wl,--gc-sections $SECTION_LDFLAGS'
+diff -ruN gcc-12.1.0/libtool.m4 gcc-12.1.0-sc/libtool.m4
+--- gcc-12.1.0/libtool.m4	2022-05-06 08:31:01.000000000 +0100
++++ gcc-12.1.0-sc/libtool.m4	2022-06-16 15:02:41.723839146 +0100
+@@ -2578,6 +2578,16 @@
+   dynamic_linker=no
+   ;;
+ 
++scalux*)
++  version_type=linux
++  need_lib_prefix=no
++  need_version=no
++  library_names_spec='${libname}${release}${shared_ext}$versuffix ${libname}${release}${shared_ext}${major} ${libname}${shared_ext}'
++  soname_spec='${libname}${release}${shared_ext}$major'
++  shlibpath_var=LD_LIBRARY_PATH
++  hardcode_into_libs=yes
++  ;;
++
+ solaris*)
+   version_type=linux
+   need_lib_prefix=no
+@@ -3124,6 +3134,10 @@
+   lt_cv_deplibs_check_method=pass_all
+   ;;
+ 
++scalux*)
++  lt_cv_deplibs_check_method=pass_all
++  ;;
++
+ solaris*)
+   lt_cv_deplibs_check_method=pass_all
+   ;;

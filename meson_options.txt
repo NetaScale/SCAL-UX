@@ -1,0 +1,1 @@
+option('arch', type: 'combo', choices: [ 'amd64', 'hosted' ], value: 'amd64')

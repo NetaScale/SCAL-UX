@@ -1,0 +1,51 @@
+diff -ruN binutils-2.38/bfd/config.bfd binutils-2.38-sc/bfd/config.bfd
+--- binutils-2.38/bfd/config.bfd	2022-01-22 12:14:07.000000000 +0000
++++ binutils-2.38-sc/bfd/config.bfd	2022-06-16 16:12:04.915946365 +0100
+@@ -721,6 +721,11 @@
+     targ_selvecs=i386_elf32_vec
+     want64=true
+     ;;
++  x86_64-*-scalux*)
++    targ_defvec=x86_64_elf64_vec
++    targ_selvecs=i386_elf32_vec
++    want64=true
++    ;;
+ #endif
+   i[3-7]86-*-lynxos*)
+     targ_defvec=i386_elf32_vec
+diff -ruN binutils-2.38/config.sub binutils-2.38-sc/config.sub
+--- binutils-2.38/config.sub	2022-01-22 12:14:07.000000000 +0000
++++ binutils-2.38-sc/config.sub	2022-06-16 15:08:28.260060581 +0100
+@@ -1754,7 +1754,7 @@
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* )
++	     | fiwix* | scalux* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN binutils-2.38/gas/configure.tgt binutils-2.38-sc/gas/configure.tgt
+--- binutils-2.38/gas/configure.tgt	2022-01-22 12:14:08.000000000 +0000
++++ binutils-2.38-sc/gas/configure.tgt	2022-06-16 14:47:16.423403744 +0100
+@@ -239,6 +239,7 @@
+     esac ;;
+   i386-*-lynxos*)			fmt=elf em=lynx ;;
+   i386-*-redox*)			fmt=elf ;;
++  i386-*-scalux*)			fmt=elf em=linux ;;
+   i386-*-solaris*)			fmt=elf em=solaris ;;
+   i386-*-freebsd* \
+   | i386-*-kfreebsd*-gnu)		fmt=elf em=freebsd ;;
+diff -ruN binutils-2.38/ld/configure.tgt binutils-2.38-sc/ld/configure.tgt
+--- binutils-2.38/ld/configure.tgt	2022-01-22 14:19:36.000000000 +0000
++++ binutils-2.38-sc/ld/configure.tgt	2022-06-16 14:50:15.788184675 +0100
+@@ -970,6 +970,9 @@
+ x86_64-*-redox*)	targ_emul=elf_x86_64
+ 			targ_extra_emuls=elf_i386
+ 			;;
++x86_64-*-scalux*)	targ_emul=elf_x86_64
++			targ_extra_emuls=elf_i386
++			;;
+ x86_64-*-solaris2*)	targ_emul=elf_x86_64_sol2
+ 			targ_extra_emuls="elf_x86_64 elf_i386_sol2 elf_i386_ldso elf_i386 elf_iamcu elf_l1om elf_k1om"
+ 			targ_extra_libpath=$targ_extra_emuls

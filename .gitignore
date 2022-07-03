@@ -1,0 +1,10 @@
+build
+.vscode/
+vendor/limine/limine-deploy
+barebones.iso
+compile_commands.json
+.cache/
+.gdbinit
+mine/
+subprojects/cxxshim*
+subprojects/frigg*
