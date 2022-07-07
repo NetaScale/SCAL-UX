@@ -5,3 +5,6 @@
 	path = Limine
 	url = https://github.com/limine-bootloader/limine.git
 	branch = v3.0-branch-binary
+[submodule "ObjFW"]
+	path = ObjFW
+	url = ../ObjFW

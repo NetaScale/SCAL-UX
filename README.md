@@ -25,19 +25,31 @@ The VMM is modeled mostly after NetBSD's UVM with some reference to Mach VMM
 
 Allocators:
 
-Several allocators are planned, resembling those in NetBSD. Bonwick's Slab,
-VMEM, and Magazine as described in his 2001 paper are the desing basis.
+Several allocators are planned, resembling those in NetBSD. The design basis is
+Bonwick and Adams' (2001) paper "Magazines and Vmem: Extending the Slab
+Allocator to Many CPUs and Arbitrary Resources."
 
-- [ ] VMEM: Despite its name, not limited to allocation of virtual address
+- [ ] VMem: Despite its name, not limited to allocation of virtual address
   space. It should deal in any sort of interval scale (for example, PIDs.) To
   have support for several strategies (instant fit, best fit, and next fit).
   Instant fit runs in constant time. Next fit doesn't use the power-of-2
   freelists, but instead looks for the next free segment after the last one
   allocated; useful for e.g. PID allocation to prevent excessive reuse.
-- [ ] KMEM: Extended slab allocator. To use VMEM to acquire its backing virtual
+- [ ] KMem: Extended slab allocator. To use VMem to acquire its backing virtual
   address space. SMP scalability is achieved by per-CPU caches (called
   magazines; the technique is similar to that of the Ravenbrook Memory Pool
   System's allocation points.)
+- [x] kmalloc: General-purpose for odd sizes. Currently provided by liballoc.
+  VMem itself could possibly replace it?
+
+VMem, KMem, and the virtual memory manager itself have an interesting mutual
+dependency on one-another; VMem must get boundary tag structures allocated by
+KMem, which gets VMem to dole out memory which must be backed with pages by the
+virtual memory manager. To eliminate the endless recursion, nested calls into
+VMem set a flag which instructs VMem to use a local cache of free boundary tag
+structures; this cache must be filled with extra structures (enough to satisfy
+the entire operation) before any non-nested operation to ensure that no infinite
+loop can occur.
 
 Third-party components
 ----------------------
