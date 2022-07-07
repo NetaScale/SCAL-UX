@@ -1,5 +1,7 @@
+#include <amd64/amd64.h>
+
 #include <kern/vm.h>
-#include <libkern/klib.h>>
+#include <libkern/klib.h>
 #include <limine.h>
 #include <stddef.h>
 
@@ -41,6 +43,14 @@ static volatile struct limine_smp_request smp_request = {
 	.revision = 0
 };
 
+void
+limterm_putc(int ch, void *ctx)
+{
+	struct limine_terminal *terminal =
+	    terminal_request.response->terminals[0];
+	terminal_request.response->write(terminal, (char *)&ch, 1);
+}
+
 static void
 done(void)
 {
@@ -50,7 +60,7 @@ done(void)
 }
 
 static void
-setup_mmap()
+mem_init()
 {
 	if (hhdm_request.response->offset != 0xffff800000000000) {
 		/* we expect HHDM begins there for now for simplicity */
@@ -74,6 +84,7 @@ setup_mmap()
 		kprintf("%lx - %lx: %lu\n", entries[i]->base,
 		    entries[i]->base + entries[i]->length, entries[i]->type);
 #endif
+
 		if (entries[i]->type == 0 && entries[i]->base >= 0x100000) {
 			vm_pregion_t *bm = P2V((void *)entries[i]->base);
 			size_t	      used; /* n bytes used by bitmap struct */
@@ -95,15 +106,20 @@ setup_mmap()
 			    entries[i]->length / (1024 * 1024),
 			    entries[i]->length / PGSIZE);
 
+			/* attach physical address to pages */
+			for (b = 0; b < bm->npages; b++)
+				bm->pages[b].paddr = bm->paddr + PGSIZE * b;
+
 			/* mark off the pages used */
 			for (b = 0; b < used / PGSIZE; b++)
 				bm->pages[b].free = false;
 
 			/* now zero the remainder */
 			for (; b < bm->npages; b++) {
-                TAILQ_INSERT_TAIL(&pg_freeq, &bm->pages[b], queue);
+				TAILQ_INSERT_TAIL(&pg_freeq, &bm->pages[b],
+				    queue);
 				bm->pages[b].free = 1;
-            }
+			}
 
 			TAILQ_INSERT_TAIL(&vm_pregion_queue, bm, queue);
 		}
@@ -122,11 +138,11 @@ _start(void)
 		done();
 	}
 
-	// We should now be able to call the Limine terminal to print out
-	// a simple "Hello World" to screen.
-	struct limine_terminal *terminal =
-	    terminal_request.response->terminals[0];
-	terminal_request.response->write(terminal, "Hello World", 11);
+	kprintf("The SCAL/UX Operating System\n");
+
+	idt_init();
+	mem_init();
+	vm_kernel_init();
 
 	// We're done, just hang...
 	done();

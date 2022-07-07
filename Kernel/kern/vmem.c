@@ -76,17 +76,28 @@
  *
  */
 
-#include <sys/errno.h>
+#include <errno.h>
 
+#include "sys/queue.h"
+
+#ifdef _KERNEL
+#include <libkern/klib.h>
+#else
 #include <assert.h>
-#include <limits.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../sys/queue.h"
+#define kmalloc malloc
+#define kprintf printf
+#define fatal(...)                              \
+	{                                       \
+		kprintf("fatal: " __VA_ARGS__); \
+		exit(EXIT_FAILURE);             \
+	}
+#endif
+
+#include "vmem_impl.h"
 
 #define ELEMENTSOF(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 
@@ -94,79 +105,15 @@
 #define ERESOURCEEXHAUSTED 1200
 #endif
 
-#define FATAL(...)                             \
-	{                                      \
-		printf("fatal: " __VA_ARGS__); \
-		exit(EXIT_FAILURE);            \
-	}
-
-typedef int	    spl_t;
-typedef uintptr_t   vmem_addr_t;
-typedef size_t	    vmem_size_t;
-typedef struct vmem vmem_t;
-
-typedef enum vmem_flag {
-	kVMemSleep = 0x0,
-	kVMemNoSleep = 0x1,
-} vmem_flag_t;
-
-// clang-format off
-typedef vmem_addr_t (*vmem_alloc_t)(vmem_t *vmem, vmem_size_t size,
-    vmem_flag_t flags);
-typedef void (*vmem_free_t)(vmem_t *vmem, vmem_addr_t addr);
-// clang-format on
-
-enum { kNFreeLists = sizeof(vmem_addr_t) * CHAR_BIT, kNHashBuckets = 16 };
-
-/**
- * A segment is either a free area, an allocated area, or a span marker (either
- * a span explicitly given to an arena, which must be manually freed, or one
- * retrieved from the backing arena.)
- */
-typedef struct vmem_seg {
-	enum {
-		kVMemSegFree,
-		kVMemSegAllocated,
-		kVMemSegSpan,
-		kVMemSegSpanImported,
-	} type;
-	vmem_addr_t base;
-	vmem_size_t size;
-
-	TAILQ_ENTRY(vmem_seg) segqueue; /** links vmem_t::segqueue */
-	LIST_ENTRY(vmem_seg)  seglist;	/** links a vmem_t::freelist[n] if free;
-					 * a vmem_t::hashtab bucket if allocated
-					 * otherwise vmem_t::spanlist
-					 */
-} vmem_seg_t;
-
-const char *vmem_seg_type_str[] = {
+static const char *vmem_seg_type_str[] = {
 	[kVMemSegFree] = " free",
 	[kVMemSegAllocated] = "alloc",
 	[kVMemSegSpan] = " span",
 	[kVMemSegSpanImported] = "spani",
 };
 
-typedef TAILQ_HEAD(vmem_segqueue, vmem_seg) vmem_segqueue_t;
-typedef LIST_HEAD(vmem_seglist, vmem_seg)   vmem_seglist_t;
-
-typedef struct vmem {
-	char	    name[64]; /** identifier for debugging */
-	vmem_addr_t base;     /** base address */
-	vmem_size_t size;     /** size in bytes */
-	vmem_size_t quantum;  /** minimum allocation size */
-
-	vmem_flag_t flags;
-
-	vmem_alloc_t allocfn; /** allocate from ::source */
-	vmem_free_t  freefn;  /** release to :: source */
-	vmem_t      *source;  /** backing arena to allocate from */
-
-	vmem_segqueue_t segqueue;		/** all segments */
-	vmem_seglist_t	freelist[kNFreeLists];	/** power of 2 freelist */
-	vmem_seglist_t	hashtab[kNHashBuckets]; /** allocated segs */
-	vmem_seglist_t	spanlist;		/** span marker segs */
-} vmem_t;
+static vmem_seg_t     static_segs[128];
+static vmem_seglist_t free_segs = LIST_HEAD_INITIALIZER(free_segs);
 
 static vmem_size_t
 freelist(vmem_size_t size)
@@ -199,14 +146,19 @@ freelist_insert(vmem_t *vmem, vmem_seg_t *freeseg)
 static vmem_seg_t *
 seg_alloc(vmem_t *vmem, vmem_flag_t flags)
 {
-	return malloc(sizeof(vmem_seg_t));
+	kprintf("seg_alloc for %s\n", vmem->name);
+	vmem_seg_t *seg;
+	assert(!LIST_EMPTY(&free_segs));
+	seg = LIST_FIRST(&free_segs);
+	LIST_REMOVE(seg, seglist);
+	return seg;
 }
 
 /** Free a segment structure. */
 static void
 seg_free(vmem_t *vmem, vmem_seg_t *seg)
 {
-	return free(seg);
+	LIST_INSERT_HEAD(&free_segs, seg, seglist);
 }
 
 uint64_t
@@ -233,30 +185,9 @@ hashtab_insert(vmem_t *vmem, vmem_seg_t *seg)
 	LIST_INSERT_HEAD(hashbucket_for_addr(vmem, seg->base), seg, seglist);
 }
 
-vmem_t *
-vmem_init(vmem_t *vmem, const char *name, vmem_addr_t base, vmem_size_t size,
-    vmem_size_t quantum, vmem_alloc_t allocfn, vmem_free_t freefn,
-    vmem_t *source, size_t qcache_max, vmem_flag_t flags, spl_t spl)
-{
-	strcpy(vmem->name, name);
-	vmem->base = base;
-	vmem->size = size;
-	vmem->quantum = quantum;
-	vmem->flags = flags;
-	vmem->allocfn = allocfn;
-	vmem->freefn = freefn;
-	vmem->source = source;
-
-	TAILQ_INIT(&vmem->segqueue);
-	LIST_INIT(&vmem->spanlist);
-	for (int i = 0; i < kNFreeLists; i++)
-		LIST_INIT(&vmem->freelist[i]);
-	for (int i = 0; i < kNHashBuckets; i++)
-		LIST_INIT(&vmem->hashtab[i]);
-}
-
-int
-vmem_add(vmem_t *vmem, vmem_addr_t base, vmem_size_t size, vmem_flag_t flags)
+static int
+vmem_add_internal(vmem_t *vmem, int spantype, vmem_addr_t base,
+    vmem_size_t size, vmem_flag_t flags, vmem_seg_t **freeseg_out)
 {
 	vmem_seg_t *afterspan = NULL, *iter = NULL;
 	vmem_seg_t *newspan, *newfree;
@@ -271,7 +202,7 @@ vmem_add(vmem_t *vmem, vmem_addr_t base, vmem_size_t size, vmem_flag_t flags)
 	newspan = seg_alloc(vmem, flags);
 	newspan->base = base;
 	newspan->size = size;
-	newspan->type = kVMemSegSpan;
+	newspan->type = spantype;
 
 	newfree = seg_alloc(vmem, flags);
 	newfree->base = base;
@@ -296,7 +227,43 @@ vmem_add(vmem_t *vmem, vmem_addr_t base, vmem_size_t size, vmem_flag_t flags)
 	TAILQ_INSERT_AFTER(&vmem->segqueue, newspan, newfree, segqueue);
 	freelist_insert(vmem, newfree);
 
+	if (freeseg_out)
+		*freeseg_out = newfree;
+
 	return 0;
+}
+
+vmem_t *
+vmem_init(vmem_t *vmem, const char *name, vmem_addr_t base, vmem_size_t size,
+    vmem_size_t quantum, vmem_alloc_t allocfn, vmem_free_t freefn,
+    vmem_t *source, size_t qcache_max, vmem_flag_t flags, spl_t spl)
+{
+	strcpy(vmem->name, name);
+	vmem->base = base;
+	vmem->size = size;
+	vmem->quantum = quantum;
+	vmem->flags = flags;
+	vmem->allocfn = allocfn;
+	vmem->freefn = freefn;
+	vmem->source = source;
+
+	TAILQ_INIT(&vmem->segqueue);
+	LIST_INIT(&vmem->spanlist);
+	for (int i = 0; i < kNFreeLists; i++)
+		LIST_INIT(&vmem->freelist[i]);
+	for (int i = 0; i < kNHashBuckets; i++)
+		LIST_INIT(&vmem->hashtab[i]);
+
+	if (size != 0 && !source)
+		vmem_add_internal(vmem, kVMemSegSpan, base, size, flags, NULL);
+
+	return vmem;
+}
+
+int
+vmem_add(vmem_t *vmem, vmem_addr_t base, vmem_size_t size, vmem_flag_t flags)
+{
+	return vmem_add_internal(vmem, kVMemSegSpan, base, size, flags, NULL);
 }
 
 /**
@@ -356,6 +323,27 @@ next_seg(vmem_seg_t *seg)
 	return TAILQ_NEXT(seg, segqueue);
 }
 
+static int
+try_import(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags, vmem_seg_t **out)
+{
+	vmem_addr_t addr;
+	int	    r;
+
+	if (!vmem->allocfn)
+		return -ERESOURCEEXHAUSTED;
+
+	r = vmem->allocfn(vmem->source, size, flags, &addr);
+	if (r < 0)
+		return r;
+
+	r = vmem_add_internal(vmem, kVMemSegSpanImported, addr, size, flags,
+	    out);
+	if (r < 0)
+		vmem->freefn(vmem->source, addr);
+
+	return r;
+}
+
 int
 vmem_xalloc(vmem_t *vmem, vmem_size_t size, vmem_size_t align,
     vmem_size_t phase, vmem_size_t nocross, vmem_addr_t min, vmem_addr_t max,
@@ -365,6 +353,7 @@ vmem_xalloc(vmem_t *vmem, vmem_size_t size, vmem_size_t align,
 	vmem_seglist_t *list;
 	vmem_seg_t	   *freeseg, *newlseg, *newrseg;
 	vmem_addr_t	addr;
+	bool		tried_import = false;
 
 	assert(align == 0 && "not supported yet\n");
 	assert(phase == 0 && "not supported yet\n");
@@ -377,8 +366,19 @@ vmem_xalloc(vmem_t *vmem, vmem_size_t size, vmem_size_t align,
 
 search:
 	/* TODO: strategies other than this one... */
-	if (++freelist_idx >= ELEMENTSOF(vmem->freelist))
-		return ERESOURCEEXHAUSTED;
+	if (++freelist_idx >= ELEMENTSOF(vmem->freelist)) {
+		if (tried_import)
+			return ERESOURCEEXHAUSTED;
+		else {
+			int r;
+			tried_import = true;
+			r = try_import(vmem, size, flags, &freeseg);
+			if (r < 0)
+				return r;
+			addr = freeseg->base;
+			goto split_seg;
+		}
+	}
 
 	list = &vmem->freelist[freelist_idx];
 	LIST_FOREACH (freeseg, list, seglist) {
@@ -427,12 +427,13 @@ vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 			goto free;
 	}
 
-	printf("vmem_xfree: segment at address %p\n", addr);
+	kprintf("vmem_xfree: segment at address 0x%lx\n", addr);
 	return ENOENT;
 
 free:
 	if (seg->size != size)
-		FATAL("vmem_xfree: mismatched size (given %p, actual %p)\n",
+		fatal(
+		    "vmem_xfree: mismatched size (given 0x%lx, actual 0x%lx)\n",
 		    size, seg->size);
 
 	/* remove from hashtable */
@@ -463,12 +464,34 @@ free:
 	return 0;
 }
 
+void
+vmem_earlyinit()
+{
+	for (int i = 0; i < ELEMENTSOF(static_segs); i++)
+		seg_free(NULL, &static_segs[i]);
+}
+
+void
+vmem_dump(const vmem_t *vmem)
+{
+	vmem_seg_t *span;
+
+	kprintf("VMem arena %s segments:\n", vmem->name);
+	TAILQ_FOREACH (span, &vmem->segqueue, segqueue) {
+		kprintf("[%s:0x%lx-0x%lx]\n", vmem_seg_type_str[span->type],
+		    span->base, span->base + span->size);
+	}
+}
+
+#ifndef _KERNEL
 int
 main()
 {
 	vmem_t     *vmem = malloc(sizeof *vmem);
 	vmem_seg_t *span;
 	vmem_addr_t addr = -1ul;
+
+	vmem_earlyinit();
 
 	vmem_init(vmem, "hello", 0x0, 0x1000000, 0x1000, NULL, NULL, NULL, 0, 0,
 	    0);
@@ -478,30 +501,27 @@ main()
 	vmem_add(vmem, 0x2000, 0x1000, 0);
 	vmem_add(vmem, 0x10000, 0x5000, 0);
 
-	printf("spans:\n");
+	kprintf("spans:\n");
 	LIST_FOREACH (span, &vmem->spanlist, seglist) {
-		printf("[%p-%p]\n", span->base, span->base + span->size);
+		kprintf("[%p-%p]\n", span->base, span->base + span->size);
 	}
-	printf("\nsegs\n");
+	kprintf("\nsegs\n");
 	TAILQ_FOREACH (span, &vmem->segqueue, segqueue) {
-		printf("[%s:%p-%p]\n", vmem_seg_type_str[span->type],
+		kprintf("[%s:%p-%p]\n", vmem_seg_type_str[span->type],
 		    span->base, span->base + span->size);
 	}
 
 	vmem_xalloc(vmem, 0x2000, 0, 0, 0, 0, 0, 0, &addr);
 
-	printf("\nsegs\n");
+	kprintf("\nsegs\n");
 	TAILQ_FOREACH (span, &vmem->segqueue, segqueue) {
-		printf("[%s:%p-%p]\n", vmem_seg_type_str[span->type],
+		kprintf("[%s:%p-%p]\n", vmem_seg_type_str[span->type],
 		    span->base, span->base + span->size);
 	}
 
-	printf("FREEING\n");
+	kprintf("FREEING\n");
 	vmem_xfree(vmem, addr, 0x2000);
 
-	printf("\nsegs\n");
-	TAILQ_FOREACH (span, &vmem->segqueue, segqueue) {
-		printf("[%s:%p-%p]\n", vmem_seg_type_str[span->type],
-		    span->base, span->base + span->size);
-	}
+	kprintf("\nsegs\n");
 }
+#endif

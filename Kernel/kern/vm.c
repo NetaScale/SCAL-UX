@@ -8,18 +8,15 @@
  * All rights reserved.
  */
 
+#include "sys/queue.h"
 #include "vm.h"
 
-struct vm_page_queue pg_freeq, pg_activeq, pg_inactiveq;
+struct vm_page_queue pg_freeq = TAILQ_HEAD_INITIALIZER(pg_freeq), pg_activeq = TAILQ_HEAD_INITIALIZER(pg_activeq), pg_inactiveq = TAILQ_HEAD_INITIALIZER(pg_inactiveq);
 vm_map_t kmap;
 
 int
 pagedaemon()
 {
 	// sleep(1);
-}
-
-vaddr_t vm_kern_allocate(size_t npages, bool wait)
-{
-	
+	return 0;
 }

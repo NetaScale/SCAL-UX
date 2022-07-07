@@ -56,7 +56,7 @@
 
 //#define FLUSH()		fflush( stdout )
 
-#include "kern/kern.h"
+#include <libkern/klib.h>
 #define printf kprintf
 #define atexit(...)
 #define FLUSH(...)
@@ -833,6 +833,3 @@ void*   PREFIX(realloc)(void *p, size_t size)
 
 	return ptr;
 }
-
-
-
