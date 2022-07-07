@@ -8,5 +8,6 @@ vxkern = executable('vxkern', kern_srcs,
     link_args : [ '-nostdlib', '-static',
 	  '-Wl,-z,max-page-size=0x1000', '-Wl,--build-id=none',
 	  '-Wl,-T' + ldscript ],
-	include_directories: [ kernel_includes, libc_includes ]
+	include_directories: [ kernel_includes, libc_includes ],
+	dependencies: [ libkobjc_dep ]
 )

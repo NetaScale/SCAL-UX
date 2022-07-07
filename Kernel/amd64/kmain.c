@@ -144,6 +144,9 @@ _start(void)
 	mem_init();
 	vm_kernel_init();
 
+	extern void autoconf();
+	autoconf();
+
 	// We're done, just hang...
 	done();
 }

@@ -37,7 +37,7 @@ internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
 	if (r < 0)
 		return r;
 
-	for (int i = 0; i < size / PGSIZE; i += PGSIZE) {
+	for (int i = 0; i < size; i += PGSIZE) {
 		vm_page_t *page = vm_allocpage(flags & kVMemSleep);
 		pmap_enter(kmap.pmap, page->paddr, (vaddr_t)*out + i, kVMAll);
 	}
