@@ -8,3 +8,6 @@
 [submodule "ObjFW"]
 	path = ObjFW
 	url = ../ObjFW
+[submodule "Kernel/dev/acpi/lai"]
+	path = Kernel/dev/acpi/lai
+	url = ../lai
