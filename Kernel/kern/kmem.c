@@ -7,3 +7,5 @@
  * Copyright 2020-2022 NetaScale Systems Ltd.
  * All rights reserved.
  */
+
+#include "vmem.h"

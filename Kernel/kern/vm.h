@@ -61,7 +61,7 @@ typedef struct vm_page {
 
 	bool free : 1;
 
-	struct vm_anon   *anon; /** if belonging to an anon, its anon */
+	struct vm_anon	 *anon; /** if belonging to an anon, its anon */
 	struct vm_object *obj;	/** if belonging to an object, its object */
 
 	paddr_t paddr; /** physical address of page */
@@ -131,7 +131,7 @@ typedef struct vm_map_entry {
 	vaddr_t			  start, end;
 	union {
 		vm_object_t *obj;
-		vm_amap_t	  *amap;
+		vm_amap_t   *amap;
 	};
 } vm_map_entry_t;
 
@@ -149,8 +149,7 @@ typedef struct pmap pmap_t;
 /**
  * Allocate a single page; optionally sleep to wait for one to become available.
  */
-vm_page_t *
-vm_allocpage(bool sleep);
+vm_page_t *vm_allocpage(bool sleep);
 
 /**
  * Allocate anonymous memory and map it into the given map.
@@ -171,8 +170,7 @@ vaddr_t vm_allocate(vm_map_t *map, vm_amap_t **out, vaddr_t *vaddrp,
  * @{
  */
 
-void
-pmap_enter(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
+void pmap_enter(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
 void arch_vm_init(paddr_t kphys);
 
 /** @} */
@@ -182,9 +180,16 @@ void vm_kernel_init();
 /**
  * Allocate pages of kernel heap.
  *
- * @param wait whether it is permitted to wait for pages to become available
+ * @param wait whether it is permitted to wait for pages to become available; if
+ * bit 0 is set, then waiting is permitted. If bit 1 is set, then the VMem
+ * allocation is done with kVMBootstrap passed.
  */
-vaddr_t vm_kalloc(size_t npages, bool wait);
+vaddr_t vm_kalloc(size_t npages, int wait);
+
+/**
+ * Free pages of kernel heap.
+ */
+void vm_kfree(vaddr_t addr, size_t pages);
 
 extern struct vm_page_queue    pg_freeq, pg_activeq, pg_inactiveq;
 extern struct vm_pregion_queue vm_pregion_queue;

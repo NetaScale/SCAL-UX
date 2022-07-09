@@ -30,6 +30,6 @@ liballoc_alloc(size_t pages)
 int
 liballoc_free(void *ptr, size_t pages)
 {
-	kprintf("unimplemented liballoc_free\n");
+	vm_kfree(ptr, pages);
 	return 0;
 }

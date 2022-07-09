@@ -1,12 +1,13 @@
+#include <amd64/boot.h>
+
 #include "LimineFB.h"
-#include "amd64/limine.h"
 
 @implementation LimineFB
 
 @synthesize width, height, pitch, bpp, base;
 
 static int fbNum = 0;
-LimineFB *sysfb = NULL;
+LimineFB  *sysfb = NULL;
 
 + (BOOL)probeWithLimineFBResponse:(struct limine_framebuffer_response *)resp
 {

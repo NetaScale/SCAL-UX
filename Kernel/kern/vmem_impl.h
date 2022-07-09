@@ -57,7 +57,7 @@ typedef struct vmem {
 
 	vmem_alloc_t allocfn; /** allocate from ::source */
 	vmem_free_t  freefn;  /** release to :: source */
-	vmem_t      *source;  /** backing arena to allocate from */
+	vmem_t	    *source;  /** backing arena to allocate from */
 
 	vmem_segqueue_t segqueue;		/** all segments */
 	vmem_seglist_t	freelist[kNFreeLists];	/** power of 2 freelist */

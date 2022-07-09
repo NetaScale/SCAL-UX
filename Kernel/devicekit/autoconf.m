@@ -1,5 +1,5 @@
 
-#include <amd64/amd64.h>
+#include <amd64/boot.h>
 
 #include <libkern/klib.h>
 
@@ -24,15 +24,13 @@ autoconf()
 {
 	setup_objc();
 	kprintf("DeviceKit version 0\n");
-
-
 #if 0
 	if (limfb != NULL)
 		[LimineFB probeWithLimineFBResponse:limfb];
 
 	[FBTerm probeWithFB:sysfb];
-	[AcpiPC probeWithRSDP:rsdp_request.response->address];
 #endif
+	[AcpiPC probeWithRSDP:rsdp_request.response->address];
 
 	return 0;
 }
