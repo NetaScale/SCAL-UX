@@ -10,7 +10,7 @@
 		asm volatile("mov %%" #regname ", %0" : "=r"(val)); \
 		return val;                                         \
 	}                                                           \
-	static void write_##regname(type val)                       \
+	static inline void write_##regname(type val)                \
 	{                                                           \
 		asm volatile("mov %0, %%" #regname ::"a"(val));     \
 	}
@@ -84,12 +84,10 @@ rdmsr(uint32_t msr)
 	return ((uint64_t)high << 32) | low;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
 REG_FUNCS(uint64_t, cr2);
 REG_FUNCS(uint64_t, cr3);
 REG_FUNCS(uint64_t, cr4)
-#pragma GCC diagnostic pop
 
+void idt_init();
 
 #endif /* AMD64_H_ */

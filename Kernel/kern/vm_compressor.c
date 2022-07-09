@@ -28,7 +28,7 @@ typedef struct vm_compressor {
 drumslot_t
 swapout(char *data)
 {
-	swappedpage_t *page;
+	swappedpage_t *page = NULL;
 	char   buf[4096];
 	size_t size;
 
@@ -36,7 +36,7 @@ swapout(char *data)
 	if (size == 0)
 		return kDrumSlotInvalid;
 	
-	page = kmalloc(sizeof *page + size);
+	//page = kmalloc(sizeof *page + size);
 	assert (page != NULL);
 
 	page->slot = lastslot++;

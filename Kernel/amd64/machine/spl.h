@@ -7,12 +7,12 @@
 
 #include <stdint.h>
 
-
 typedef enum {
 	kSPLHigh = 15, /* all interrupts blocked, including hardclock */
 	kSPLHard = 3,  /* hard interrupts blocked */
-	kSPLSoft = 2,  /* soft interrupts blocked */
-	kSPL0 = 0,     /* blocks none */
+	kSPLVM = kSPLHard,
+	kSPLSoft = 2, /* soft interrupts blocked */
+	kSPL0 = 0,    /* blocks none */
 	_kSPLForceLong = INT64_MAX,
 } spl_t;
 
@@ -57,7 +57,6 @@ splhard()
 {
 	return splraise(kSPLHard);
 }
-
 
 /* raise SPL to soft if this is higher than current */
 static inline spl_t

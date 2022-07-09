@@ -19,6 +19,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
+#define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
+
+#define PTRROUNDUP(addr) ROUNDUP(addr, (sizeof(uintptr_t)))
+/** Round a value up to pointer alignment. */
+#define PTRROUNDDOWN(addr) ROUNDDOWN(addr, (sizeof(uintptr_t)))
+
+#define PGROUNDUP(addr) ROUNDUP(addr, PGSIZE)
+#define PGROUNDDOWN(addr) ROUNDDOWN(addr, PGSIZE)
+
 /** virtual/physical address */
 typedef void *vaddr_t, *paddr_t;
 /** virtual/physical address offset */
@@ -32,15 +42,12 @@ typedef uintptr_t drumslot_t;
 
 enum { kDrumSlotInvalid = -1 };
 
-#define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
-#define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
-
-#define PTRROUNDUP(addr) ROUNDUP(addr, (sizeof(uintptr_t)))
-/** Round a value up to pointer alignment. */
-#define PTRROUNDDOWN(addr) ROUNDDOWN(addr, (sizeof(uintptr_t)))
-
-#define PGROUNDUP(addr) ROUNDUP(addr, PGSIZE)
-#define PGROUNDDOWN(addr) ROUNDDOWN(addr, PGSIZE)
+typedef enum vm_prot {
+	kVMRead = 0x1,
+	kVMWrite = 0x2,
+	kVMExecute = 0x4,
+	kVMAll = kVMRead | kVMWrite | kVMExecute,
+} vm_prot_t;
 
 /**
  * Represents a physical page of useable general-purpose memory.
@@ -140,6 +147,12 @@ typedef struct vm_map {
 typedef struct pmap pmap_t;
 
 /**
+ * Allocate a single page; optionally sleep to wait for one to become available.
+ */
+vm_page_t *
+vm_allocpage(bool sleep);
+
+/**
  * Allocate anonymous memory and map it into the given map.
  *
  * @param[in,out] vaddrp pointer to a vaddr specifying where to map at. If the
@@ -154,19 +167,24 @@ vaddr_t vm_allocate(vm_map_t *map, vm_amap_t **out, vaddr_t *vaddrp,
     size_t size);
 
 /**
- * Allocate kernel heap memory.
- *
- * @param wait whether it is permitted to wait for pages to become available
- */
-vaddr_t vm_kern_allocate(size_t npages, bool wait);
-
-/**
  * @name Arch-specific
+ * @{
  */
 
+void
+pmap_enter(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
 void arch_vm_init(paddr_t kphys);
 
 /** @} */
+
+void vm_kernel_init();
+
+/**
+ * Allocate pages of kernel heap.
+ *
+ * @param wait whether it is permitted to wait for pages to become available
+ */
+vaddr_t vm_kalloc(size_t npages, bool wait);
 
 extern struct vm_page_queue    pg_freeq, pg_activeq, pg_inactiveq;
 extern struct vm_pregion_queue vm_pregion_queue;

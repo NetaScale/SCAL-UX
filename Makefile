@@ -4,7 +4,7 @@ all:
 	tar -cf build/initrd.tar -C /tmp/scalux ./
 
 
-iso:
+iso: all
 	rm -rf build/iso_root
 	mkdir -p build/iso_root
 	cp build/Kernel/amd64/vxkern Kernel/amd64/limine.cfg \
