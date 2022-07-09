@@ -16,13 +16,15 @@ elif (arch == 'hosted')
 endif
 
 kernel_objc_args = kernel_c_args
-kernel_includes = include_directories('Kernel/' + arch, 'Limine', 'Kernel')
+kernel_includes = [ include_directories('Kernel/' + arch, 'Limine', 'Kernel') ]
 
 if (arch != 'hosted')
     mlibc = subproject('mlibc')
     libc_includes = mlibc.get_variable('libc_include_dirs')
 else
-    libc_include = [ '' ]
+    libc_includes = [ '' ]
 endif
 
+subdir('Tools')
+subdir('ObjFW/src')
 subdir('Kernel')
