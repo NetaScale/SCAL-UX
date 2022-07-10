@@ -1,14 +1,14 @@
-#include <amd64/amd64.h>
-
-#include <kern/vm.h>
 #include <libkern/klib.h>
 #include <limine.h>
 #include <stddef.h>
 
-static volatile struct limine_terminal_request terminal_request = {
-	.id = LIMINE_TERMINAL_REQUEST,
-	.revision = 0
-};
+#include "amd64/amd64.h"
+#include "kern/liballoc.h"
+#include "kern/task.h"
+#include "kern/vm.h"
+
+void	 lapic_enable();
+uint32_t lapic_timer_calibrate();
 
 static volatile struct limine_hhdm_request hhdm_request = {
 	.id = LIMINE_HHDM_REQUEST,
@@ -42,6 +42,14 @@ static volatile struct limine_smp_request smp_request = {
 	.id = LIMINE_SMP_REQUEST,
 	.revision = 0
 };
+
+static volatile struct limine_terminal_request terminal_request = {
+	.id = LIMINE_TERMINAL_REQUEST,
+	.revision = 0
+};
+
+static uint64_t	    bsp_lapic_id;
+static volatile int cpus_up = 0;
 
 void
 limterm_putc(int ch, void *ctx)
@@ -128,10 +136,92 @@ mem_init()
 	arch_vm_init((paddr_t)kernel_address_request.response->physical_base);
 }
 
+void
+common_init(struct limine_smp_info *smpi)
+{
+	cpu_t    *cpu = (cpu_t *)smpi->extra_argument;
+	thread_t *thread = kmalloc(sizeof *thread);
+
+	kprintf("setup cpu %d\n", smpi->processor_id);
+
+	write_cr4(read_cr4() | (1 << 9));
+
+	wrmsr(kAMD64MSRGSBase, (uint64_t)&smpi->extra_argument);
+
+	cpu->num = smpi->processor_id;
+	cpu->arch_cpu.lapic_id = smpi->lapic_id;
+	TAILQ_INIT(&cpu->runqueue);
+	TAILQ_INIT(&cpu->dpcqueue);
+	TAILQ_INIT(&cpu->pendingcallouts);
+	TAILQ_INIT(&cpu->waitqueue);
+
+	idt_load();
+	lapic_enable(0xff);
+
+	/* measure thrice and average it */
+	for (int i = 0; i < 3; i++)
+		cpu->arch_cpu.lapic_tps += lapic_timer_calibrate() / 3;
+
+	// setup_cpu_gdt(cpu);
+
+	thread->cpu = cpu;
+	thread->kernel = true;
+	thread->kstack = 0x0;
+	thread->proc = &task0;
+	thread->state = kRunning;
+	cpu->curthread = thread;
+	TAILQ_INIT(&cpu->runqueue);
+	lock(&sched_lock);
+	LIST_INSERT_HEAD(&task0.threads, thread, threads);
+	unlock(&sched_lock);
+
+	asm("sti");
+	spl0();
+
+	vm_activate(&kmap);
+
+	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
+}
+
+void
+ap_init(struct limine_smp_info *smpi)
+{
+	common_init(smpi);
+	done(); /* idle */
+}
+
+static void
+setup_cpus()
+{
+	struct limine_smp_response *smpr = smp_request.response;
+
+	cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
+	ncpus = smpr->cpu_count;
+
+	kprintf("%lu cpus present\n", smpr->cpu_count);
+
+	bsp_lapic_id = smpr->bsp_lapic_id;
+
+	for (size_t i = 0; i < smpr->cpu_count; i++) {
+		struct limine_smp_info *smpi = smpr->cpus[i];
+		smpi->extra_argument = (uint64_t)&cpus[i];
+		if (smpi->lapic_id == bsp_lapic_id)
+			common_init(smpi);
+		else
+			smpi->goto_address = ap_init;
+	}
+
+	while (cpus_up != smpr->cpu_count)
+		__asm__("pause");
+
+	kprintf("all CPUs up\n");
+}
+
 // The following will be our kernel's entry point.
 void
 _start(void)
 {
+
 	// Ensure we got a terminal
 	if (terminal_request.response == NULL ||
 	    terminal_request.response->terminal_count < 1) {
@@ -143,6 +233,7 @@ _start(void)
 	idt_init();
 	mem_init();
 	vm_kernel_init();
+	setup_cpus();
 
 	extern void autoconf();
 	autoconf();

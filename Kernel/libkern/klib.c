@@ -9,14 +9,15 @@
  */
 
 #include <machine/spl.h>
-#include <kern/lock.h>
+
+#include "kern/liballoc.h"
+#include "kern/lock.h"
 
 spinlock_t lock_msgbuf = 0;
 
 #define NANOPRINTF_IMPLEMENTATION
-#include "nanoprintf.h"
-
 #include "klib.h"
+#include "nanoprintf.h"
 
 #ifndef ARCH_HOSTED
 
@@ -38,7 +39,7 @@ memcmp(const void *str1, const void *str2, size_t count)
 void *
 memcpy(void *restrict dstv, const void *restrict srcv, size_t len)
 {
-	unsigned char *dst = (unsigned char *)dstv;
+	unsigned char	      *dst = (unsigned char *)dstv;
 	const unsigned char *src = (const unsigned char *)srcv;
 	for (size_t i = 0; i < len; i++)
 		dst[i] = src[i];
@@ -49,7 +50,7 @@ void *
 memmove(void *dst, const void *src, size_t n)
 {
 	const char *f = src;
-	char *t = dst;
+	char	     *t = dst;
 
 	if (f < t) {
 		f += n;
@@ -84,7 +85,7 @@ char *
 strdup(const char *src)
 {
 	size_t size = strlen(src) + 1;
-	char *str = kmalloc(size);
+	char  *str = kmalloc(size);
 	memcpy(str, src, size);
 	return str;
 }

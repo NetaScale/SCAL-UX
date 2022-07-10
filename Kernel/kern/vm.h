@@ -146,6 +146,9 @@ typedef struct vm_map {
 
 typedef struct pmap pmap_t;
 
+/** Activate a map. */
+void vm_activate(vm_map_t *map);
+
 /**
  * Allocate a single page; optionally sleep to wait for one to become available.
  */

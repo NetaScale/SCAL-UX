@@ -1,0 +1,189 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+/*
+ * Copyright 2022 NetaScale Systems Ltd.
+ * All rights reserved.
+ */
+
+/**
+ * @file task.h
+ * @brief Scheduler, CPU description, task, thread, etc.
+ */
+
+#ifndef TASK_H_
+#define TASK_H_
+
+#include <sys/queue.h>
+
+#include <machine/pcb.h>
+#include <machine/spl.h>
+
+#include <stdbool.h>
+
+#include "lock.h"
+#include "vm.h"
+
+/** A particular event identifier within a wait queue. */
+typedef uintptr_t waitq_event_t;
+
+/** Result of a wait operation on a wait queue. */
+typedef enum waitq_result {
+	kWaitQResultWaiting = -1,
+	kWaitQResultTimeout,
+	kWaitQResultInterrupted,
+	kWaitQResultEvent,
+} waitq_result_t;
+
+/**
+ * A wait queue. Embedded in an object which may be waited on.
+ */
+typedef struct waitq {
+	spinlock_t lock;
+	TAILQ_HEAD(, thread) waiters;
+} waitq_t;
+
+/*
+ * Deferred Procedure Calls, inspired by those of Windows NT and playing a
+ * similar role to NetBSD's softints. They are run when SPL drops to low; SPL
+ * is raised to soft to run them.
+ */
+typedef struct dpc {
+	/* for cpu_t::dpcqueue */
+	TAILQ_ENTRY(dpc) dpcqueue;
+
+	void (*fun)(void *arg);
+	void *arg;
+	bool  bound; /** whether it's enqueued to be run */
+} dpc_t;
+
+/**
+ * A callout is the most fundamental sort of timer available. They are processed
+ * by a DPC.
+ */
+typedef struct callout {
+	/** links cpu_t::pendingcallouts or cpu_t::elapsedcallouts */
+	TAILQ_ENTRY(callout) entries;
+	/** dpc to be enqueued on elapsing */
+	dpc_t dpc;
+	/**
+	 * time (relative to now if this is the head of the callout queue,
+	 * otherwise relative to previous callout) in nanoseconds till expiry
+	 */
+	uint64_t nanosecs;
+	enum {
+		kCalloutDisabled, /**< not enqueued */
+		kCalloutPending,  /**< pending timeout */
+		kCalloutElapsed,  /**< timeout elapsed */
+	} state;
+} callout_t;
+
+typedef struct cpu {
+	uint64_t       num;	  /** unique CPU id */
+	struct thread *curthread; /** currently-running thread */
+
+	/** Arch-specific CPU description. */
+	arch_cpu_t arch_cpu;
+
+	/** CPU's idle thread. */
+	struct thread *idle;
+
+	/** Rescheduling timer. */
+	callout_t resched;
+
+	/**
+	 * Queue of runnable threads. Needs SPL soft and process_lock.
+	 */
+	TAILQ_HEAD(, thread) runqueue;
+
+	/**
+	 * Queue of waiting threads. Needs SPL soft and process_lock.
+	 */
+	TAILQ_HEAD(, thread) waitqueue;
+
+	/**
+	 * Queue of pending DPCs. Needs SPL sched.
+	 */
+	TAILQ_HEAD(, dpc) dpcqueue;
+
+	/**
+	 * Queue of pending callouts. Needs SPL sched. Emptied by the clock ISR.
+	 */
+	TAILQ_HEAD(, callout) pendingcallouts;
+
+} cpu_t;
+
+typedef struct thread {
+	/** For cpu_t::runqueues/waitqueue or ::exited_threads. */
+	TAILQ_ENTRY(thread) runqueue;
+	/** For waitq_t::waiters */
+	TAILQ_ENTRY(thread) waitqueue;
+	/** For process::threads. */
+	LIST_ENTRY(thread) threads;
+
+	enum {
+		kRunnable = 0,
+		kRunning,
+		kWaiting,
+		/** destruction will be enqueued on next reschedule */
+		kExiting,
+	} state;
+
+	/** whether the thread should exit asap */
+	bool should_exit : 1;
+	/** whether the thread is in a system call */
+	bool in_syscall : 1;
+
+	/** CPU to which thread is bound */
+	cpu_t *cpu;
+
+	/* per-arch process control block */
+	arch_pcb_t arch_pcb;
+	/* kernel thread or user? */
+	bool kernel;
+	/* if a user process, its kernel stack base address */
+	vaddr_t kstack;
+	/* if a user process, its stack base address */
+	vaddr_t stack;
+	/* task to which it belongs */
+	struct task *proc;
+
+	/* waitq on which the thread is currently waiting */
+	waitq_t *wq;
+	/* event on which the thread is waiting from the waitq */
+	waitq_event_t wqev;
+	/* result of the wait */
+	waitq_result_t wqres;
+	/* timeout for wq wait */
+	callout_t wqtimeout;
+} thread_t;
+
+typedef struct task {
+	/* For ::alltasks. */
+	TAILQ_ENTRY(task) allprocs;
+
+	char	  name[31];
+	int	  pid;
+	vm_map_t *map;
+
+	/* Posix subsystem process, may be NULL if task not Posixy */
+	struct proc *pxproc;
+
+	/* Threads belonging to this task. */
+	LIST_HEAD(, thread) threads;
+} task_t;
+
+void callout_enqueue(callout_t *callout);
+void callout_dequeue(callout_t *callout);
+
+TAILQ_HEAD(task_queue, task);
+
+extern spinlock_t	 sched_lock;
+extern struct task_queue alltasks;
+extern task_t		 task0;
+extern cpu_t	     *cpus;
+extern size_t		 ncpus;
+
+#endif /* TASK_H_ */

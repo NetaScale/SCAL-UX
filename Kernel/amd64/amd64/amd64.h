@@ -89,5 +89,6 @@ REG_FUNCS(uint64_t, cr3);
 REG_FUNCS(uint64_t, cr4)
 
 void idt_init();
+void idt_load();
 
 #endif /* AMD64_H_ */

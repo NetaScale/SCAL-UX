@@ -118,9 +118,9 @@ pmap_free(pmap_t *pmap)
 }
 
 void
-vm_activate(pmap_t *pmap)
+vm_activate(vm_map_t *map)
 {
-	uint64_t val = (uint64_t)pmap->pml4;
+	uint64_t val = (uint64_t)map->pmap->pml4;
 	write_cr3(val);
 }
 

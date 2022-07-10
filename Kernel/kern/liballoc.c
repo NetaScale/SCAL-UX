@@ -154,11 +154,11 @@ static void liballoc_dump()
 #endif
 
 	printf( "liballoc: ------ Memory data ---------------\n");
-	printf( "liballoc: System memory allocated: %i bytes\n", l_allocated );
-	printf( "liballoc: Memory in used (malloc'ed): %i bytes\n", l_inuse );
-	printf( "liballoc: Warning count: %i\n", l_warningCount );
-	printf( "liballoc: Error count: %i\n", l_errorCount );
-	printf( "liballoc: Possible overruns: %i\n", l_possibleOverruns );
+	printf( "liballoc: System memory allocated: %llu bytes\n", l_allocated );
+	printf( "liballoc: Memory in used (malloc'ed): %llu bytes\n", l_inuse );
+	printf( "liballoc: Warning count: %lli\n", l_warningCount );
+	printf( "liballoc: Error count: %lli\n", l_errorCount );
+	printf( "liballoc: Possible overruns: %lli\n", l_possibleOverruns );
 
 #ifdef DEBUG
 		while ( maj != NULL )
@@ -583,7 +583,7 @@ void *PREFIX(malloc)(size_t req_size)
 	FLUSH();
 	#endif
 	#if defined DEBUG || defined INFO
-	printf( "liballoc: WARNING: PREFIX(malloc)( %i ) returning NULL.\n", size);
+	printf( "liballoc: WARNING: PREFIX(malloc)( %lu ) returning NULL.\n", size);
 	liballoc_dump();
 	FLUSH();
 	#endif
@@ -635,7 +635,7 @@ void PREFIX(free)(void *ptr)
 		{
 			l_possibleOverruns += 1;
 			#if defined DEBUG || defined INFO
-			printf( "liballoc: ERROR: Possible 1-3 byte overrun for magic %lu != %lu\n",
+			printf( "liballoc: ERROR: Possible 1-3 byte overrun for magic %u != %u\n",
 								min->magic,
 								LIBALLOC_MAGIC );
 			FLUSH();
