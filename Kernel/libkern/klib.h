@@ -52,4 +52,20 @@ extern spinlock_t lock_msgbuf;
 	}
 #define unimplemented(...) fatal("%s: unimplemented\n", __PRETTY_FUNCTION__)
 
+/* assert SPL less than or equal to \p spl */
+static inline void
+splassertle(spl_t spl)
+{
+	if (splget() > spl)
+		fatal("SPL_NOT_LESS_OR_EQUAL %lx\n", spl);
+}
+
+/* assert SPL less than or equal to \p spl */
+static inline void
+splassertge(spl_t spl)
+{
+	if (splget() > spl)
+		fatal("SPL_NOT_GREATER_OR_EQUAL %lx\n", spl);
+}
+
 #endif /* KLIB_H_ */

@@ -131,6 +131,8 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		if (CURCPU()->resched.state == kCalloutPending)
 			callout_dequeue(&CURCPU()->resched);
 		dpc_enqueue(&CURCPU()->resched_dpc);
+		lapic_eoi(); /* may have been an IPI; TODO seperate vec for ipi
+				resched... */
 		break;
 	}
 
@@ -148,7 +150,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 unhandled:
 	kprintf("unhandled interrupt %lu\n", num);
 	kprintf("cr2: 0x%lx\n", read_cr2());
-	// trace(frame);
+	trace(frame);
 
 	for (;;) {
 		asm("hlt");
@@ -241,6 +243,12 @@ lapic_timer_calibrate()
 }
 
 void
+arch_yield()
+{
+	asm("int $254"); /* 254 == kIntNumLocalReschedule */
+}
+
+void
 arch_ipi_resched(cpu_t *cpu)
 {
 	lapic_write(kLAPICRegICR1, (uint32_t)cpu->arch_cpu.lapic_id << 24);
@@ -260,20 +268,40 @@ arch_resched(void *arg)
 	cpu = (cpu_t *)arg;
 	curthr = cpu->curthread;
 
+	if (curthr->state == kWaiting) {
+		if (curthr->wqtimeout.nanosecs != 0)
+			callout_enqueue(&curthr->wqtimeout);
+	} else {
+		TAILQ_INSERT_TAIL(&CURCPU()->runqueue, curthr, runqueue);
+	}
+
 	next = TAILQ_FIRST(&cpu->runqueue);
-	if (!next && curthr != cpu->idlethread)
+
+	if (next) {
+		TAILQ_REMOVE(&cpu->runqueue, next, runqueue);
+	}
+
+	kprintf("curthr %p idle %p next %p\n", curthr, cpu->idlethread, next);
+
+	if (!next && curthr != cpu->idlethread) {
+		kprintf("SWITCHING TO IDLE!!!\n");
 		next = cpu->idlethread;
-	else if (!next || next == curthr) {
+	} else if (!next || next == curthr) {
 		kprintf("on CPU %lu: Nothing for to switch to\n", cpu->num);
 		goto cont;
 	}
 
+	cpu->curthread = next;
 	cpu->arch_cpu.tss->rsp0 = (uint64_t)next->kstack;
 
 	if (!next->kernel)
 		wrmsr(kAMD64MSRFSBase, next->pcb.fs);
 
+	asm("cli");
+	unlock(&sched_lock);
+	spl0();
 	swtch(&next->pcb.frame);
+	asm("sti");
 
 cont:
 	splx(spl);

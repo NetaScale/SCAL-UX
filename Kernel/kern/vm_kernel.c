@@ -81,10 +81,12 @@ vm_kernel_init()
 	vm_kernel_va.flags = 0;
 	vm_kernel_wired.flags = 0;
 
+#if 0
 	test = kmalloc(64);
 	strcpy(test, "hello\n");
 	kprintf(test);
 	kfree(test);
+#endif
 }
 
 vaddr_t

@@ -198,6 +198,25 @@ void thread_goto(thread_t *thr, void (*fun)(void *), void *arg);
 /** Mark a thread runnable; it may preempt the currently running. */
 void thread_run(thread_t *thread);
 
+/** Await an event on a waitq. */
+waitq_result_t waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t nanosecs);
+/** Initialise a waitq. */
+void waitq_init(waitq_t *wq);
+
+/**
+ * Clear wait-state on a thread with a particular result. ~~Both the thread
+ * and~~ the waitq should be locked.
+ *
+ * The thread may be scheduled for an immediate switch.
+ */
+void thread_clearwait_locked(struct thread *thread, waitq_result_t res);
+
+/**
+ * Wake one waiter on a waitqueue.
+ * \pre SPL soft
+ */
+void waitq_wake_one(waitq_t *wq, waitq_event_t ev);
+
 extern spinlock_t	 sched_lock;
 extern struct task_queue alltasks;
 extern task_t		 task0;

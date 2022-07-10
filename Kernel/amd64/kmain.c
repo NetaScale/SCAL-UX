@@ -153,7 +153,6 @@ common_init(struct limine_smp_info *smpi)
 
 	wrmsr(kAMD64MSRGSBase, (uint64_t)&smpi->extra_argument);
 
-	kprintf("cpu %u: lapic id %u\n", smpi->processor_id, smpi->lapic_id);
 	cpu->num = smpi->processor_id;
 	cpu->arch_cpu.lapic_id = smpi->lapic_id;
 	TAILQ_INIT(&cpu->runqueue);
@@ -211,7 +210,7 @@ setup_cpus()
 	cpus = kmalloc(sizeof *cpus * smpr->cpu_count);
 	ncpus = smpr->cpu_count;
 
-	kprintf("%lu cpus present\n", smpr->cpu_count);
+	kprintf("bringing up %lu cpus...", smpr->cpu_count);
 
 	bsp_lapic_id = smpr->bsp_lapic_id;
 
@@ -227,7 +226,7 @@ setup_cpus()
 	while (cpus_up != smpr->cpu_count)
 		__asm__("pause");
 
-	kprintf("all CPUs up\n");
+	kprintf("done\n");
 }
 
 // The following will be our kernel's entry point.
@@ -251,6 +250,13 @@ _start(void)
 
 	extern void autoconf();
 	autoconf();
+
+#if 0
+	callout_t testco;
+	testco.nanosecs = 2000000000;
+	testco.dpc.fun = testfun;
+	callout_enqueue(&testco);
+#endif
 
 	swapthr = thread_new(&task0, true);
 	thread_goto(swapthr, swapper, NULL);

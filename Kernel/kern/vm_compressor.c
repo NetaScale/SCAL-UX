@@ -11,6 +11,7 @@
 #include <libkern/klib.h>
 #include <libkern/lz4.h>
 
+#include "kern/task.h"
 #include "vm.h"
 
 drumslot_t lastslot = 0;
@@ -44,9 +45,17 @@ swapout(char *data)
 	return page->slot;
 }
 
+waitq_t swq;
+
 void
 swapper(void *unused)
 {
+	waitq_init(&swq);
+	while (1) {
+		kprintf("We wait\n");
+		waitq_await(&swq, 0x0, 2000000000);
+		kprintf("Our wait is over\n");
+	}
 	for (;;)
 		asm("hlt");
 }

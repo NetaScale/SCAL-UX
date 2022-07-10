@@ -157,9 +157,9 @@ dpcs_run()
 		void (*fun)(void *) = NULL;
 		void  *arg;
 		dpc_t *first;
-		spl_t  spl;
+		spl_t  spl2;
 
-		spl = splhigh();
+		spl2 = splhigh();
 		first = TAILQ_FIRST(queue);
 		if (first != NULL) {
 			first->bound = false;
@@ -167,7 +167,7 @@ dpcs_run()
 			arg = first->arg;
 			TAILQ_REMOVE(queue, first, dpcqueue);
 		}
-		splx(spl);
+		splx(spl2);
 
 		if (!fun)
 			break;
@@ -240,6 +240,7 @@ thread_goto(thread_t *thr, void (*fun)(void *), void *arg)
 	thr->pcb.frame.rdi = (uintptr_t)arg;
 }
 
+void arch_yield();
 void arch_ipi_resched(cpu_t *cpu);
 
 void
@@ -250,20 +251,101 @@ thread_run(thread_t *thread)
 	lock(&sched_lock);
 	thread->state = kRunnable;
 	TAILQ_INSERT_TAIL(&thread->cpu->runqueue, thread, runqueue);
-	if (thread->cpu->curthread != thread->cpu->idlethread)
-		goto next;
 	unlock(&sched_lock);
 	splx(spl);
+
+#if 0
+	if (thread->cpu->curthread != thread->cpu->idlethread)
+		return;
+#endif
 
 	kprintf("(curcpu %lu) let thread %p run on cpu %lu\n", CURCPU()->num,
 	    thread, thread->cpu->num);
 
 	/* thread should preempt the currently running thread */
-	if (thread->cpu == CURCPU()) {
-		asm("int $254"); /* 254 == kIntNumLocalReschedule */
-	} else {
+	if (thread->cpu == CURCPU())
+		arch_yield();
+	else
 		arch_ipi_resched(thread->cpu);
+}
+
+/* callout callback for timeout of a waitqueue */
+static void
+waitq_timeout(void *arg)
+{
+	thread_t *thread = (thread_t *)arg;
+	lock(&thread->wq->lock);
+	thread_clearwait_locked(thread, kWaitQResultTimeout);
+	thread_run(thread);
+}
+
+void
+waitq_init(waitq_t *wq)
+{
+	wq->lock = 0;
+	TAILQ_INIT(&wq->waiters);
+}
+
+/**
+ * \pre ~~thread locked,~~ thread->wq locked
+ * \post thread->wq unlocked (and set to NULL)
+ */
+void
+thread_clearwait_locked(struct thread *thread, waitq_result_t res)
+{
+	callout_dequeue(&thread->wqtimeout);
+	TAILQ_REMOVE(&thread->wq->waiters, thread, waitqueue);
+	unlock(&thread->wq->lock);
+	thread->wq = NULL;
+	thread->wqev = 0x0;
+	thread->wqres = kWaitQResultTimeout;
+}
+
+waitq_result_t
+waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t nanosecs)
+{
+	thread_t	 *thread = CURCPU()->curthread;
+	waitq_result_t res;
+
+	splassertle(kSPL0);
+
+	thread->wqtimeout.dpc.fun = waitq_timeout;
+	thread->wqtimeout.dpc.arg = thread;
+	thread->wqtimeout.nanosecs = nanosecs;
+
+	asm("cli");
+	lock(&wq->lock);
+	TAILQ_INSERT_TAIL(&wq->waiters, thread, waitqueue);
+	thread->wq = wq;
+	thread->wqev = ev;
+	thread->wqres = kWaitQResultWaiting;
+	thread->state = kWaiting;
+	unlock(&wq->lock);
+
+	arch_yield();
+	res = thread->wqres;
+	asm("sti");
+
+	return res;
+}
+void
+waitq_wake_one(waitq_t *wq, waitq_event_t ev)
+{
+	thread_t *thrd;
+	spl_t	  spl = splsoft();
+
+	lock(&wq->lock);
+	thrd = TAILQ_FIRST(&wq->waiters);
+	TAILQ_REMOVE(&wq->waiters, thrd, waitqueue);
+	unlock(&wq->lock);
+	splx(spl);
+
+	if (!thrd) {
+		kprintf("warning: waitq %p sent event %lu with no waiters\n",
+		    wq, ev);
+		return;
 	}
 
-next:
+	thrd->wqres = kWaitQResultEvent;
+	thread_run(thrd);
 }
