@@ -83,3 +83,29 @@ MAKE_ISR_THUNK ._intNoCode, 32 # reschedule
 MAKE_ISR_THUNK ._intNoCode, 33 # irq1
 MAKE_ISR_THUNK ._intNoCode, 128 # posix syscalls
 MAKE_ISR_THUNK ._intNoCode, 223 # lapic timer
+MAKE_ISR_THUNK ._intNoCode, 254 # reschedule
+
+.global swtch
+swtch:
+	mov %rdi, %rsp
+
+	pop %rax
+	pop %rbx
+	pop %rcx
+	pop %rdx
+	pop %rdi
+	pop %rsi
+	pop %r8
+	pop %r9
+	pop %r10
+	pop %r11
+	pop %r12
+	pop %r13
+	pop %r14
+	pop %r15
+	pop %rbp
+
+	# drop the error code
+	add $8, %rsp
+
+	iretq

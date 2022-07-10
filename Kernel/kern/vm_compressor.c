@@ -8,8 +8,8 @@
  * All rights reserved.
  */
 
-#include <libkern/lz4.h>
 #include <libkern/klib.h>
+#include <libkern/lz4.h>
 
 #include "vm.h"
 
@@ -29,17 +29,24 @@ drumslot_t
 swapout(char *data)
 {
 	swappedpage_t *page = NULL;
-	char   buf[4096];
-	size_t size;
+	char	       buf[4096];
+	size_t	       size;
 
 	size = LZ4_compress_default(data, buf, 4096, 4096);
 	if (size == 0)
 		return kDrumSlotInvalid;
-	
-	//page = kmalloc(sizeof *page + size);
-	assert (page != NULL);
+
+	// page = kmalloc(sizeof *page + size);
+	assert(page != NULL);
 
 	page->slot = lastslot++;
 
 	return page->slot;
+}
+
+void
+swapper(void *unused)
+{
+	for (;;)
+		asm("hlt");
 }

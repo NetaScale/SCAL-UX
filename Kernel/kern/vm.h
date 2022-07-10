@@ -19,6 +19,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define VADDR_MAX (vaddr_t)UINT64_MAX
+
 #define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
 #define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
 
@@ -145,6 +147,9 @@ typedef struct vm_map {
 } vm_map_t;
 
 typedef struct pmap pmap_t;
+
+/** The swapper thread loop. */
+void swapper(void *unused);
 
 /** Activate a map. */
 void vm_activate(vm_map_t *map);

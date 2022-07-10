@@ -29,6 +29,9 @@ struct pmap {
 	paddr_t pml4;
 };
 
+static uint64_t *pte_get_addr(uint64_t pte);
+static void	 pte_set(uint64_t *pte, paddr_t addr, uint64_t flags);
+
 struct vm_pregion_queue vm_pregion_queue = TAILQ_HEAD_INITIALIZER(
     vm_pregion_queue);
 static vm_map_entry_t hhdm_entry, kernel_entry, kheap_entry;
@@ -70,6 +73,15 @@ arch_vm_init(paddr_t kphys)
 
 	kmap.pmap = &kpmap;
 	kpmap.pml4 = (paddr_t)read_cr3();
+
+	/* pre-allocate the top 256. they are globally shared. */
+	for (int i = 255; i < 511; i++) {
+		uint64_t *pml4 = P2V(kpmap.pml4);
+		if (pte_get_addr(pml4[i]) == NULL) {
+			pte_set(&pml4[i], vm_allocpage(0),
+			    0x0);
+		}
+	}
 }
 
 /* get the flags of a pte */
@@ -80,14 +92,14 @@ pte_get_flags(uint64_t pte)
 }
 
 /* get the physical address to which a pte points */
-uint64_t *
+static uint64_t *
 pte_get_addr(uint64_t pte)
 {
 	return (uint64_t *)(pte & kMMUFrame);
 }
 
 /* reset a pte to a given addy and flags. pte must be a virt addr. */
-void
+static void
 pte_set(uint64_t *pte, paddr_t addr, uint64_t flags)
 {
 	uintptr_t a = (uintptr_t)addr;

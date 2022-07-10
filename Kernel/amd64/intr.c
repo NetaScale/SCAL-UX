@@ -6,11 +6,14 @@
 #include <kern/vm.h>
 #include <libkern/klib.h>
 #include <stdint.h>
+
 #include "machine/spl.h"
 
 enum {
 	kLAPICRegEOI = 0xb0,
 	kLAPICRegSpurious = 0xf0,
+	kLAPICRegICR0 = 0x300,
+	kLAPICRegICR1 = 0x310,
 	kLAPICRegTimer = 0x320,
 	kLAPICRegTimerInitial = 0x380,
 	kLAPICRegTimerCurrentCount = 0x390,
@@ -24,6 +27,7 @@ enum {
 enum {
 	/* set below 224, so that we can filter it out with CR8 */
 	kIntNumLAPICTimer = 223,
+	kIntNumLocalReschedule = 254,
 };
 
 typedef struct {
@@ -74,7 +78,8 @@ void lapic_eoi();
 	X(32, INT)       \
 	X(33, INT)       \
 	X(128, INT_USER) \
-	X(223, INT)
+	X(223, INT)      \
+	X(254, INT)
 
 #define EXTERN_ISR_THUNK(VAL, GATE) extern void *isr_thunk_##VAL;
 
@@ -114,25 +119,36 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	kprintf("interrupt %lu\n", num);
 #endif
 
+	/* interrupts remain disabled at this point */
+
 	switch (num) {
 	case kIntNumLAPICTimer:
 		callout_interrupt();
 		lapic_eoi();
 		break;
 
+	case kIntNumLocalReschedule: {
+		if (CURCPU()->resched.state == kCalloutPending)
+			callout_dequeue(&CURCPU()->resched);
+		dpc_enqueue(&CURCPU()->resched_dpc);
+		break;
+	}
+
 	default:
 		goto unhandled;
 	}
 
-	if (splget() <= kSPLSoft)
+	if (splget() < kSPLSoft) {
+		CURCPU()->curthread->pcb.frame = *frame;
 		dpcs_run();
+	}
 
 	return;
 
 unhandled:
 	kprintf("unhandled interrupt %lu\n", num);
 	kprintf("cr2: 0x%lx\n", read_cr2());
-	trace(frame);
+	// trace(frame);
 
 	for (;;) {
 		asm("hlt");
@@ -222,6 +238,45 @@ lapic_timer_calibrate()
 	unlock(&calib);
 
 	return (initial - apic_after) * hz;
+}
+
+void
+arch_ipi_resched(cpu_t *cpu)
+{
+	lapic_write(kLAPICRegICR1, (uint32_t)cpu->arch_cpu.lapic_id << 24);
+	lapic_write(kLAPICRegICR0, kIntNumLocalReschedule);
+}
+
+extern void swtch(void *ctx);
+
+void
+arch_resched(void *arg)
+{
+	cpu_t    *cpu;
+	thread_t *curthr, *next;
+	spl_t	  spl = splsched();
+
+	lock(&sched_lock);
+	cpu = (cpu_t *)arg;
+	curthr = cpu->curthread;
+
+	next = TAILQ_FIRST(&cpu->runqueue);
+	if (!next && curthr != cpu->idlethread)
+		next = cpu->idlethread;
+	else if (!next || next == curthr) {
+		kprintf("on CPU %lu: Nothing for to switch to\n", cpu->num);
+		goto cont;
+	}
+
+	cpu->arch_cpu.tss->rsp0 = (uint64_t)next->kstack;
+
+	if (!next->kernel)
+		wrmsr(kAMD64MSRFSBase, next->pcb.fs);
+
+	swtch(&next->pcb.frame);
+
+cont:
+	splx(spl);
 }
 
 void

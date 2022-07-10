@@ -26,6 +26,9 @@
 #include "lock.h"
 #include "vm.h"
 
+#define KERNEL_STACK_SIZE 4096 * 8
+#define USER_STACK_SIZE 4096 * 8
+
 /** A particular event identifier within a wait queue. */
 typedef uintptr_t waitq_event_t;
 
@@ -88,10 +91,13 @@ typedef struct cpu {
 	arch_cpu_t arch_cpu;
 
 	/** CPU's idle thread. */
-	struct thread *idle;
+	struct thread *idlethread;
 
 	/** Rescheduling timer. */
 	callout_t resched;
+
+	/** Reschedule DPC. */
+	dpc_t resched_dpc;
 
 	/**
 	 * Queue of runnable threads. Needs SPL soft and process_lock.
@@ -140,7 +146,7 @@ typedef struct thread {
 	cpu_t *cpu;
 
 	/* per-arch process control block */
-	arch_pcb_t arch_pcb;
+	arch_pcb_t pcb;
 	/* kernel thread or user? */
 	bool kernel;
 	/* if a user process, its kernel stack base address */
@@ -175,10 +181,22 @@ typedef struct task {
 	LIST_HEAD(, thread) threads;
 } task_t;
 
+TAILQ_HEAD(task_queue, task);
+
+/** Enqueue a DPC for running. */
+void dpc_enqueue(dpc_t *dpc);
+
+/** Enqueue a callout for running. */
 void callout_enqueue(callout_t *callout);
+/** Dequeue and disable a callout. */
 void callout_dequeue(callout_t *callout);
 
-TAILQ_HEAD(task_queue, task);
+/** Create a new thread; it is assigned a CPU but not enqueued for running. */
+thread_t *thread_new(task_t *proc, bool iskernel);
+/** Set a thread to run a function with an argument. */
+void thread_goto(thread_t *thr, void (*fun)(void *), void *arg);
+/** Mark a thread runnable; it may preempt the currently running. */
+void thread_run(thread_t *thread);
 
 extern spinlock_t	 sched_lock;
 extern struct task_queue alltasks;

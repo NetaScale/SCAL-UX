@@ -11,7 +11,7 @@
 #define KHEAP_SIZE 0x100000000 /* 4GiB */
 #define KERN_SIZE 0x10000000   /* 256MiB */
 
-#define P2V(addr) (((void *)addr) + HHDM_BASE)
-#define V2P(addr) (((void *)addr) - HHDM_BASE)
+#define P2V(addr) (((void *)(addr)) + HHDM_BASE)
+#define V2P(addr) (((void *)(addr)) - HHDM_BASE)
 
 #endif /* VM_MACHDEP_H_ */

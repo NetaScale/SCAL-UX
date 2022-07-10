@@ -136,24 +136,36 @@ mem_init()
 	arch_vm_init((paddr_t)kernel_address_request.response->physical_base);
 }
 
+void arch_resched(void *arg);
+void setup_cpu_gdt(cpu_t *cpu);
+
+static spinlock_t cpulock;
+
 void
 common_init(struct limine_smp_info *smpi)
 {
 	cpu_t    *cpu = (cpu_t *)smpi->extra_argument;
 	thread_t *thread = kmalloc(sizeof *thread);
 
-	kprintf("setup cpu %d\n", smpi->processor_id);
+	lock(&cpulock);
 
 	write_cr4(read_cr4() | (1 << 9));
 
 	wrmsr(kAMD64MSRGSBase, (uint64_t)&smpi->extra_argument);
 
+	kprintf("cpu %u: lapic id %u\n", smpi->processor_id, smpi->lapic_id);
 	cpu->num = smpi->processor_id;
 	cpu->arch_cpu.lapic_id = smpi->lapic_id;
 	TAILQ_INIT(&cpu->runqueue);
 	TAILQ_INIT(&cpu->dpcqueue);
 	TAILQ_INIT(&cpu->pendingcallouts);
 	TAILQ_INIT(&cpu->waitqueue);
+
+	cpu->resched_dpc.bound = false;
+	cpu->resched_dpc.fun = arch_resched;
+	cpu->resched_dpc.arg = cpu;
+
+	unlock(&cpulock);
 
 	idt_load();
 	lapic_enable(0xff);
@@ -162,7 +174,7 @@ common_init(struct limine_smp_info *smpi)
 	for (int i = 0; i < 3; i++)
 		cpu->arch_cpu.lapic_tps += lapic_timer_calibrate() / 3;
 
-	// setup_cpu_gdt(cpu);
+	setup_cpu_gdt(cpu);
 
 	thread->cpu = cpu;
 	thread->kernel = true;
@@ -170,6 +182,7 @@ common_init(struct limine_smp_info *smpi)
 	thread->proc = &task0;
 	thread->state = kRunning;
 	cpu->curthread = thread;
+	cpu->idlethread = thread;
 	TAILQ_INIT(&cpu->runqueue);
 	lock(&sched_lock);
 	LIST_INSERT_HEAD(&task0.threads, thread, threads);
@@ -221,6 +234,7 @@ setup_cpus()
 void
 _start(void)
 {
+	thread_t *swapthr;
 
 	// Ensure we got a terminal
 	if (terminal_request.response == NULL ||
@@ -237,6 +251,10 @@ _start(void)
 
 	extern void autoconf();
 	autoconf();
+
+	swapthr = thread_new(&task0, true);
+	thread_goto(swapthr, swapper, NULL);
+	thread_run(swapthr);
 
 	// We're done, just hang...
 	done();
