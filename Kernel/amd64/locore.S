@@ -105,6 +105,9 @@ swtch:
 	pop %r15
 	pop %rbp
 
+	cli # ensure no nonsense here
+	SWAPGS_IF_NEEDED
+
 	# drop the error code
 	add $8, %rsp
 

@@ -128,6 +128,8 @@ typedef struct thread {
 	/** For process::threads. */
 	LIST_ENTRY(thread) threads;
 
+	spinlock_t lock;
+
 	enum {
 		kRunnable = 0,
 		kRunning,
@@ -136,8 +138,8 @@ typedef struct thread {
 		kExiting,
 	} state;
 
-	/** whether the thread should exit asap */
-	bool should_exit : 1;
+	/** whether the thread has a signal to process */
+	bool signalled : 1;
 	/** whether the thread is in a system call */
 	bool in_syscall : 1;
 
