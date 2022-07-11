@@ -19,6 +19,9 @@ iso: all
 	build/limine-deploy build/barebones.iso
 	rm -rf build/iso_root
 
+configure:
+	meson --cross-file=Builddefs/amd64.ini build
+
 run:
 	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm
 

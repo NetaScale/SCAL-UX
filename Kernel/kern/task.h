@@ -29,6 +29,8 @@
 #define KERNEL_STACK_SIZE 4096 * 8
 #define USER_STACK_SIZE 4096 * 8
 
+#define NS_PER_MS 1000000
+
 /** A particular event identifier within a wait queue. */
 typedef uintptr_t waitq_event_t;
 
@@ -93,11 +95,8 @@ typedef struct cpu {
 	/** CPU's idle thread. */
 	struct thread *idlethread;
 
-	/** Rescheduling timer. */
+	/** Rescheduling timer, incorporating the DPC. */
 	callout_t resched;
-
-	/** Reschedule DPC. */
-	dpc_t resched_dpc;
 
 	/**
 	 * Queue of runnable threads. Needs SPL soft and process_lock.
@@ -205,11 +204,10 @@ void waitq_init(waitq_t *wq);
 
 /**
  * Clear wait-state on a thread with a particular result. ~~Both the thread
- * and~~ the waitq should be locked.
- *
- * The thread may be scheduled for an immediate switch.
+ * and~~ the waitq should be locked. The thread is neither rescheduled nor set
+ * runnable.
  */
-void thread_clearwait_locked(struct thread *thread, waitq_result_t res);
+void thread_clearwait_locked(struct thread *thread, waitq_event_t ev, waitq_result_t res);
 
 /**
  * Wake one waiter on a waitqueue.

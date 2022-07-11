@@ -15,8 +15,6 @@
 #include "sys/time.h"
 #include "task.h"
 
-#define NS_PER_MS 1000000
-
 spinlock_t	  sched_lock;
 struct task_queue alltasks = TAILQ_HEAD_INITIALIZER(alltasks);
 task_t		  task0 = { .pid = 0, .name = "[kernel]" };
@@ -37,9 +35,13 @@ uint64_t arch_timer_get_remaining();
 static cpu_t *
 nextcpu()
 {
+#if 1
 	if (++lastcpu >= ncpus)
 		lastcpu = 0;
 	return &cpus[lastcpu];
+#else
+	return &cpus[1];
+#endif
 }
 
 void
@@ -94,8 +96,9 @@ callout_enqueue(callout_t *callout)
 	}
 
 	TAILQ_INSERT_AFTER(queue, co, callout, entries);
-	callout->state = kCalloutPending;
+
 next:
+	callout->state = kCalloutPending;
 	splx(spl);
 }
 
@@ -139,8 +142,8 @@ callout_interrupt()
 	co = TAILQ_FIRST(queue);
 	assert(co != NULL);
 	TAILQ_REMOVE(queue, co, entries);
+	co->state = kCalloutElapsed;
 	TAILQ_INSERT_TAIL(&CURCPU()->dpcqueue, &co->dpc, dpcqueue);
-	co->state = kCalloutPending;
 	co = TAILQ_FIRST(queue);
 	if (co != NULL)
 		arch_timer_set(co->nanosecs / 1000);
@@ -210,7 +213,7 @@ thread_new(task_t *proc, bool iskernel)
 		thread->pcb.frame.cs = 0x28;
 		thread->pcb.frame.ss = 0x30;
 		thread->pcb.frame.rsp = (uintptr_t)thread->stack;
-		thread->pcb.frame.rflags = 0x82;
+		thread->pcb.frame.rflags = 0x202;
 	} else {
 		thread->kernel = false;
 		thread->kstack = kmalloc(16384) + 16384; /* TODO KSTACK_SIZE */
@@ -259,8 +262,10 @@ thread_run(thread_t *thread)
 		return;
 #endif
 
+#ifdef DEBUG_SCHED
 	kprintf("(curcpu %lu) let thread %p run on cpu %lu\n", CURCPU()->num,
 	    thread, thread->cpu->num);
+#endif
 
 	/* thread should preempt the currently running thread */
 	if (thread->cpu == CURCPU())
@@ -275,7 +280,7 @@ waitq_timeout(void *arg)
 {
 	thread_t *thread = (thread_t *)arg;
 	lock(&thread->wq->lock);
-	thread_clearwait_locked(thread, kWaitQResultTimeout);
+	thread_clearwait_locked(thread, 0x0, kWaitQResultTimeout);
 	thread_run(thread);
 }
 
@@ -286,19 +291,21 @@ waitq_init(waitq_t *wq)
 	TAILQ_INIT(&wq->waiters);
 }
 
+/* XXX this probably should be refactored to let it make thread runnable etc. */
 /**
  * \pre ~~thread locked,~~ thread->wq locked
  * \post thread->wq unlocked (and set to NULL)
  */
 void
-thread_clearwait_locked(struct thread *thread, waitq_result_t res)
+thread_clearwait_locked(struct thread *thread, waitq_event_t ev,
+    waitq_result_t res)
 {
 	callout_dequeue(&thread->wqtimeout);
 	TAILQ_REMOVE(&thread->wq->waiters, thread, waitqueue);
 	unlock(&thread->wq->lock);
 	thread->wq = NULL;
-	thread->wqev = 0x0;
-	thread->wqres = kWaitQResultTimeout;
+	thread->wqev = ev;
+	thread->wqres = res;
 }
 
 waitq_result_t
@@ -346,6 +353,6 @@ waitq_wake_one(waitq_t *wq, waitq_event_t ev)
 		return;
 	}
 
-	thrd->wqres = kWaitQResultEvent;
+	thread_clearwait_locked(thrd, ev, kWaitQResultEvent);
 	thread_run(thrd);
 }

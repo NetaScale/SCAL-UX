@@ -53,8 +53,8 @@ swapper(void *unused)
 	waitq_init(&swq);
 	while (1) {
 		kprintf("We wait\n");
-		waitq_await(&swq, 0x0, 2000000000);
-		kprintf("Our wait is over\n");
+		__auto_type r = waitq_await(&swq, 0x0, 3000000000);
+		kprintf("Our wait is over, we got %d\n",r);
 	}
 	for (;;)
 		asm("hlt");

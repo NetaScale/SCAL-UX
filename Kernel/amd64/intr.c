@@ -130,7 +130,7 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	case kIntNumLocalReschedule: {
 		if (CURCPU()->resched.state == kCalloutPending)
 			callout_dequeue(&CURCPU()->resched);
-		dpc_enqueue(&CURCPU()->resched_dpc);
+		dpc_enqueue(&CURCPU()->resched.dpc);
 		lapic_eoi(); /* may have been an IPI; TODO seperate vec for ipi
 				resched... */
 		break;
@@ -271,28 +271,33 @@ arch_resched(void *arg)
 	if (curthr->state == kWaiting) {
 		if (curthr->wqtimeout.nanosecs != 0)
 			callout_enqueue(&curthr->wqtimeout);
-	} else {
+	} else if (curthr != cpu->idlethread) {
 		TAILQ_INSERT_TAIL(&CURCPU()->runqueue, curthr, runqueue);
 	}
 
 	next = TAILQ_FIRST(&cpu->runqueue);
-
-	if (next) {
+	if (next)
 		TAILQ_REMOVE(&cpu->runqueue, next, runqueue);
-	}
 
+#ifdef DEBUG_SCHED
 	kprintf("curthr %p idle %p next %p\n", curthr, cpu->idlethread, next);
+#endif
 
-	if (!next && curthr != cpu->idlethread) {
-		kprintf("SWITCHING TO IDLE!!!\n");
+	if (!next && curthr != cpu->idlethread)
 		next = cpu->idlethread;
-	} else if (!next || next == curthr) {
-		kprintf("on CPU %lu: Nothing for to switch to\n", cpu->num);
+	else if (!next || next == curthr)
 		goto cont;
-	}
-
 	cpu->curthread = next;
 	cpu->arch_cpu.tss->rsp0 = (uint64_t)next->kstack;
+
+	if (!TAILQ_EMPTY(&cpu->runqueue)) {
+#ifdef DEBUG_SCHED
+		kprintf("eligible for timeslicing\n");
+#endif
+		cpu->resched.nanosecs = 50 * NS_PER_MS;
+		assert(cpu->resched.state != kCalloutPending);
+		callout_enqueue(&cpu->resched);
+	}
 
 	if (!next->kernel)
 		wrmsr(kAMD64MSRFSBase, next->pcb.fs);
@@ -310,6 +315,9 @@ cont:
 void
 arch_timer_set(uint64_t micros)
 {
+#ifdef DEBUG_SCHED
+	kprintf("ARCH_TIMER_SET %luus\n", micros);
+#endif
 	uint64_t ticks = CURCPU()->arch_cpu.lapic_tps * micros / 1000000;
 	assert(ticks < UINT32_MAX);
 	lapic_write(kLAPICRegTimerInitial, ticks);
