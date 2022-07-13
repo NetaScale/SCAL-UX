@@ -45,7 +45,6 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		vn->attr.size = node->size;
 		if (node->type == VREG) {
 			vn->vmobj = node->reg.vmobj;
-			node->reg.vmobj->anon.vnode = vn;
 		} else if (node->type == VCHR)
 			vn->dev = node->chr.dev;
 		vn->data = node;
@@ -98,8 +97,7 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
 	switch (type) {
 	case VREG:
 		/* vnode object is associated as soon as needed */
-		vm_object_new_anon(&n->reg.vmobj, INT32_MAX, &vm_vnode_pagerops,
-		    NULL);
+		n->reg.vmobj = vm_aobj_new(UINT32_MAX);
 		break;
 
 	case VDIR:

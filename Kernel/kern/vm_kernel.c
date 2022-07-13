@@ -21,9 +21,6 @@
 #include "vm.h"
 #include "vmem_impl.h"
 
-/** Kernel's virtual address space. */
-vmem_t vm_kernel_va;
-
 /** Kernel wired memory. */
 vmem_t vm_kernel_wired;
 
@@ -33,7 +30,7 @@ internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
 {
 	int r;
 
-	assert(vmem == &vm_kernel_va);
+	assert(vmem == &kmap.vmem);
 
 	r = vmem_xalloc(vmem, size, 0, 0, 0, 0, 0, flags, out);
 	if (r < 0)
@@ -41,7 +38,8 @@ internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
 
 	for (int i = 0; i < size - 1; i += PGSIZE) {
 		vm_page_t *page = vm_allocpage(flags & kVMemSleep);
-		pmap_enter(kmap.pmap, page->paddr, (vaddr_t)*out + i, kVMAll);
+		pmap_enter_kern(kmap.pmap, page->paddr, (vaddr_t)*out + i,
+		    kVMAll);
 	}
 
 	return 0;
@@ -52,7 +50,7 @@ internal_freewired(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 {
 	int r;
 
-	assert(vmem == &vm_kernel_va);
+	assert(vmem == &kmap.vmem);
 
 	r = vmem_xfree(vmem, addr, size);
 	if (r < 0) {
@@ -69,16 +67,16 @@ internal_freewired(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 void
 vm_kernel_init()
 {
-	char *test;
+	//char *test;
 
 	vmem_earlyinit();
-	vmem_init(&vm_kernel_va, "kernel-va", KHEAP_BASE, KHEAP_SIZE, PGSIZE,
-	    NULL, NULL, NULL, 0, kVMemBootstrap, kSPLVM);
+	vmem_init(&kmap.vmem, "kernel-va", KHEAP_BASE, KHEAP_SIZE, PGSIZE, NULL,
+	    NULL, NULL, 0, kVMemBootstrap, kSPLVM);
 	vmem_init(&vm_kernel_wired, "kernel-wired", 0, 0, PGSIZE,
-	    internal_allocwired, internal_freewired, &vm_kernel_va, 0,
+	    internal_allocwired, internal_freewired, &kmap.vmem, 0,
 	    kVMemBootstrap, kSPLVM);
 
-	vm_kernel_va.flags = 0;
+	kmap.vmem.flags = 0;
 	vm_kernel_wired.flags = 0;
 
 #if 0

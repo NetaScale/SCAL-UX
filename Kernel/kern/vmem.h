@@ -17,8 +17,9 @@ typedef struct vmem vmem_t;
 typedef enum vmem_flag {
 	kVMemSleep = 0x0,
 	kVMemNoSleep = 0x1,
+    kVMemExact = 0x2,
 	/** @private */
-	kVMemBootstrap = 0x2,
+	kVMemBootstrap = 0x4,
 } vmem_flag_t;
 
 // clang-format off

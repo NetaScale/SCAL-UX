@@ -2,6 +2,16 @@
 
 ---
 
+**SCAL/UX**™ - the operating system for those who take scalability seriously
+
+Welcome to the homepage of SCAL/UX™ operating system, a high-performance,
+low-cost operating system providing a complete solution for enterprise-level
+applications. SCAL/UX provides a complete UNIX®-like environment with a full set
+of industry-standard tools and applications on the basis of its object-oriented
+kernel.
+
+That concludes the facetious part of the readme.
+
 This is SCAL/UX - an operating system currently targeting amd64 PCs. It is
 designed with the goal of eventually accommodating the Valutron virtual machine
 (which implements a Smalltalk-like language) to run atop it.
@@ -51,6 +61,12 @@ structures; this cache must be filled with extra structures (enough to satisfy
 the entire operation) before any non-nested operation to ensure that no infinite
 loop can occur.
 
+Misc todos
+----------
+
+- [ ] Abolish vm_map_t's queue, use VMem instead; VMem to maintain a red-n-black
+  tree of its regions so that lookup can be done easily.
+
 Third-party components
 ----------------------
 
@@ -58,7 +74,7 @@ Several third-party components are used. These are some of them:
 - mlibc: Provides libc.
 - liballoc: Provides one of the in-kernel allocators.
 - nanoprintf: used for `kprintf`.
-- NetBSD: (`kernel/kern/queue.h`): NetBSD's `sys/queue.h`.
+- NetBSD: (`kernel/sys/queue.h`): NetBSD's `sys/queue.h`.
   - (`kernel/dev/fbterm/nbsdbold.psfu`): Bold8x16 font used for FBTerm.
 - Solaris (`kernel/dev/fbterm/sun12x22.psfu`): Sun Demi Gallant font available
   for FBTerm

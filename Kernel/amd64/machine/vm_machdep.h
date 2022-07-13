@@ -1,6 +1,8 @@
 #ifndef VM_MACHDEP_H_
 #define VM_MACHDEP_H_
 
+#include "sys/queue.h"
+
 #define PGSIZE 4096
 
 #define HHDM_BASE 0xffff800000000000
@@ -13,5 +15,12 @@
 
 #define P2V(addr) (((void *)(addr)) + HHDM_BASE)
 #define V2P(addr) (((void *)(addr)) - HHDM_BASE)
+
+/** entry for vm_page::pv_table's map of virtual mappings per physical page */
+typedef struct pv_entry {
+	LIST_ENTRY(pv_entry) pv_entries;
+	struct vm_map	      *map;
+	void		*vaddr;
+} pv_entry_t;
 
 #endif /* VM_MACHDEP_H_ */

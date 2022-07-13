@@ -16,7 +16,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../sys/queue.h"
+#include "sys/queue.h"
 #include "vmem.h"
 
 enum { kNFreeLists = sizeof(vmem_addr_t) * CHAR_BIT, kNHashBuckets = 16 };

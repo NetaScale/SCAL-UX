@@ -126,7 +126,7 @@ typedef struct seg_block {
 static vmem_seg_t     static_segs[128];
 static vmem_seglist_t free_segs = LIST_HEAD_INITIALIZER(free_segs);
 static int	      nfreesegs = 0;
-static LIST_HEAD(, seg_block) seg_blocks = LIST_HEAD_INITIALIZER(seg_blocks);
+//static LIST_HEAD(, seg_block) seg_blocks = LIST_HEAD_INITIALIZER(seg_blocks);
 
 static const char *vmem_seg_type_str[] = {
 	[kVMemSegFree] = " free",
@@ -387,13 +387,13 @@ vmem_xalloc(vmem_t *vmem, vmem_size_t size, vmem_size_t align,
 {
 	size_t		freelist_idx = freelist(size) - 1;
 	vmem_seglist_t *list;
-	vmem_seg_t     *freeseg, *newlseg, *newrseg;
+	vmem_seg_t	   *freeseg, *newlseg, *newrseg;
 	vmem_addr_t	addr;
 	bool		tried_import = false;
 
 	assert(align == 0 && "not supported yet\n");
 	assert(phase == 0 && "not supported yet\n");
-	assert(min == 0 && " not supported yet\n");
+	assert(min == 0 || ((flags & kVMemExact) && " not supported yet\n"));
 	assert(max == 0 && " not supported yet\n");
 
 	if (!(flags & kVMemBootstrap))
@@ -421,13 +421,21 @@ search:
 
 	list = &vmem->freelist[freelist_idx];
 	LIST_FOREACH (freeseg, list, seglist) {
-		if (size == freeseg->size) {
+
+		if (freeseg->base <= min) {
+			addr = min;
+		} else if (flags & kVMemExact && freeseg->base > min) {
+			continue;
+		} else {
 			addr = freeseg->base;
-			goto split_seg;
-		} else if (size < freeseg->size) {
-			addr = freeseg->base;
-			goto split_seg;
 		}
+
+		if (addr + size > freeseg->base + freeseg->size) {
+			continue;
+		}
+
+		addr = freeseg->base;
+		goto split_seg;
 	}
 
 	goto search;
@@ -459,7 +467,7 @@ int
 vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 {
 	vmem_seglist_t *bucket = hashbucket_for_addr(vmem, addr);
-	vmem_seg_t     *seg, *left, *right;
+	vmem_seg_t	   *seg, *left, *right;
 
 	LIST_FOREACH (seg, bucket, seglist) {
 		if (seg->base == addr)
@@ -532,7 +540,7 @@ vmem_dump(const vmem_t *vmem)
 int
 main()
 {
-	vmem_t	   *vmem = malloc(sizeof *vmem);
+	vmem_t     *vmem = malloc(sizeof *vmem);
 	vmem_seg_t *span;
 	vmem_addr_t addr = -1ul;
 

@@ -77,3 +77,15 @@ Adaptations for map-local trimming
 - `vm_amap_entry_t` would have to carry a bool "is this page actually mapped into
   the address space"
 - on those counts reaching zero, the page may be locked and paged out
+
+
+11 July 2022
+------------
+
+Some principles:
+
+ - vm_object_t always has its own tree of vm_page_t's (?). Those deal with the
+   resident pages. Let's call it respages.
+    - if there is an entry in respages for some offset, then it's in memory and
+    mapped right now.
+    - 

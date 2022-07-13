@@ -19,7 +19,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VADDR_MAX (vaddr_t)UINT64_MAX
+#include "kern/lock.h"
+#include "kern/vmem_impl.h"
+
+#define VADDR_MAX (vaddr_t) UINT64_MAX
 
 #define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
 #define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
@@ -58,13 +61,15 @@ typedef enum vm_prot {
  * In the case of tmpfs, both may be set.
  */
 typedef struct vm_page {
-	/** Links to freelist, inactive, or active queue. */
+	/** Links to freelist, wired, inactive, or active queue. */
 	TAILQ_ENTRY(vm_page) queue;
 
 	bool free : 1;
 
-	struct vm_anon	 *anon; /** if belonging to an anon, its anon */
+	struct vm_anon   *anon; /** if belonging to an anon, its anon */
 	struct vm_object *obj;	/** if belonging to an object, its object */
+
+	LIST_HEAD(, pv_entry) pv_table; /* physical page -> virtual mappings */
 
 	paddr_t paddr; /** physical address of page */
 } vm_page_t;
@@ -83,24 +88,31 @@ typedef struct vm_pregion {
  * Represents a logical page of pageable memory. May be resident or not.
  */
 typedef struct vm_anon {
-	int refcnt; /** number of amaps referencing it; if >1, must COW. */
-	vm_page_t *physpage; /** physical page if resident */
+	TAILQ_HEAD(, vm_map_entry) entries;
+
+	spinlock_t lock;
+	int refcnt : 24, /** number of amaps referencing it; if >1, must COW. */
+	    resident : 1; /** whether currently resident in memory */
+
+	size_t offs; /** offset in bytes into amap */
+	union {
+		vm_page_t *physpage; /** physical page if resident */
+		drumslot_t drumslot;
+	};
 } vm_anon_t;
 
-/**
- * A group of 32 vm_anon pointers; amaps operate with these, forming a two-level
- * table, to reduce overhead for sparse amaps.
- */
-typedef struct vm_anon_group {
-	vm_anon_t *anons[32];
-} vm_anon_group_t;
+/* Entry in a vm_amap_t. Locked by the vm_amap's lock */
+typedef struct vm_amap_entry {
+	TAILQ_ENTRY(vm_amap_entry) entries; /** vm_anon::entries */
+	vm_anon_t		  *anon;
+} vm_amap_entry_t;
 
 /**
  * An anonymous map - map of anons. These are always paged by the default pager
  * (vm_compressor).
  */
 typedef struct vm_amap {
-	vm_anon_group_t *agroup;
+	TAILQ_HEAD(, vm_amap_entry) anons;
 } vm_amap_t;
 
 TAILQ_HEAD(vm_page_queue, vm_page);
@@ -110,10 +122,15 @@ TAILQ_HEAD(vm_pregion_queue, vm_pregion);
  * Represents a pager-backed virtual memory object.
  */
 typedef struct vm_object {
+	int	   refcnt;
+	spinlock_t lock;
+
 	enum {
 		kDirectMap,
 		kKHeap,
+		kVMObjAnon,
 	} type;
+	size_t size; /**< size in bytes */
 
 	union {
 		struct {
@@ -122,6 +139,10 @@ typedef struct vm_object {
 		struct {
 			struct vm_page_queue pgs;
 		} kheap;
+		struct {
+			vm_amap_t	  *amap;
+			struct vm_object *parent;
+		} anon;
 	};
 } vm_object_t;
 
@@ -131,10 +152,7 @@ typedef struct vm_object {
 typedef struct vm_map_entry {
 	TAILQ_ENTRY(vm_map_entry) queue;
 	vaddr_t			  start, end;
-	union {
-		vm_object_t *obj;
-		vm_amap_t   *amap;
-	};
+	vm_object_t		    *obj;
 } vm_map_entry_t;
 
 /**
@@ -143,6 +161,7 @@ typedef struct vm_map_entry {
  */
 typedef struct vm_map {
 	TAILQ_HEAD(, vm_map_entry) entries;
+	vmem_t	     vmem;
 	struct pmap *pmap;
 } vm_map_t;
 
@@ -165,21 +184,60 @@ vm_page_t *vm_allocpage(bool sleep);
  * @param[in,out] vaddrp pointer to a vaddr specifying where to map at. If the
  * pointed-to value is VADDR_MAX, then first fit is chosen. The address at which
  * the object was mapped, if not explicitly specified, is written out.
- * @param[out] out if non-null, the created vm_amap_t is written out.
+ * @param[out] out if non-null, the created vm_object_t is written out.
  * @param size size in bytes to allocate.
  *
  * @returns 0 for success.
  */
-vaddr_t vm_allocate(vm_map_t *map, vm_amap_t **out, vaddr_t *vaddrp,
-    size_t size);
+int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size);
+
+/** Allocate a new anonymous VM object of size \p size bytes. */
+vm_object_t *vm_aobj_new(size_t size);
+
+/**
+ * Map a VM object into an address space either at a given virtual address, or
+ * (if \p vaddr points to vaddr of VADDR_MAX) pick a suitable place to put it.
+ *
+ * @param size is the size of area to be mapped in bytes - it must be a multiple
+ * of the PAGESIZE.
+ * @param[in,out] vaddrp points to a vaddr_t describing the preferred address.
+ * If VADDR_MAX, then anywhere is fine. The result is written to its referent.
+ * @param copy whether to copy \p obj instead of mapping it shared
+ * (copy-on-write optimisation may be employed.)
+ */
+int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
+    bool copy);
 
 /**
  * @name Arch-specific
  * @{
  */
 
-void pmap_enter(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
 void arch_vm_init(paddr_t kphys);
+
+/**
+ * Map a single page at the given virtual address - for non-pageable memory.
+ */
+void pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
+
+/**
+ * Map a single page at the given virtual address. This is for use for pageable
+ * memory (the page is set up for tracking by pagedaemon.)
+ */
+void pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
+
+/**
+ * Unmap a single page of a pageable mapping. CPU local TLB invalidated; not
+ * others. TLB shootdown may therefore be required afterwards. Page's pv_table
+ * updated accordingly.
+ *
+ * @param map from which map to remove the mapping.
+ * @param page which page to unmap from \p map.
+ * @param virt virtual address to be unmapped from \p map.
+ * @param pv optionally specify which pv_entry_t represents this mapping, if
+ * already known, so it does not have to be found again.
+ */
+void pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv);
 
 /** @} */
 

@@ -4,6 +4,8 @@
 #include <kern/vm.h>
 #include <libkern/klib.h>
 
+#include "machine/vm_machdep.h"
+
 enum {
 	kMMUPresent = 0x1,
 	kMMUWrite = 0x2,
@@ -78,10 +80,15 @@ arch_vm_init(paddr_t kphys)
 	for (int i = 255; i < 511; i++) {
 		uint64_t *pml4 = P2V(kpmap.pml4);
 		if (pte_get_addr(pml4[i]) == NULL) {
-			pte_set(&pml4[i], vm_allocpage(0),
-			    0x0);
+			pte_set(&pml4[i], vm_allocpage(0), 0x0);
 		}
 	}
+}
+
+static void
+invlpg(vaddr_t addr)
+{
+	asm volatile("invlpg %0" ::"m"(addr));
 }
 
 /* get the flags of a pte */
@@ -167,6 +174,43 @@ pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 	return addr;
 }
 
+/**
+ * @returns physical address of pte, or NULL if none exists
+ */
+pte_t *
+pmap_fully_descend(pmap_t *pmap, vaddr_t virt)
+{
+	uintptr_t virta = (uintptr_t)virt;
+	pml4e_t	*pml4 = pmap->pml4;
+	int	  pml4i = ((virta >> 39) & 0x1FF);
+	int	  pdpti = ((virta >> 30) & 0x1FF);
+	int	  pdi = ((virta >> 21) & 0x1FF);
+	int	  pti = ((virta >> 12) & 0x1FF);
+	pdpte_t	*pdptes;
+	pde_t    *pdes;
+	pte_t    *ptes;
+
+	pdptes = pmap_descend(pml4, pml4i, false, 0);
+	if (!pdptes) {
+		kprintf("no pml4 entry\n");
+		return 0x0;
+	}
+
+	pdes = pmap_descend(pdptes, pdpti, false, 0);
+	if (!pdes) {
+		kprintf("no pdpt entry\n");
+		return 0x0;
+	}
+
+	ptes = pmap_descend(pdes, pdi, false, 0);
+	if (!ptes) {
+		kprintf("no pte entry\n");
+		return 0x0;
+	}
+
+	return &ptes[pti];
+}
+
 paddr_t
 pmap_trans(pmap_t *pmap, vaddr_t virt)
 {
@@ -208,9 +252,24 @@ pmap_trans(pmap_t *pmap, vaddr_t virt)
 		return pte_get_addr(pte[pti]) + pi;
 }
 
+/**
+ * Map a single page at the given virtual address - for non-pageable memory.
+ */
+void
+pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
+{
+	pv_entry_t *ent = kmalloc(sizeof *ent);
+
+	ent->map = map;
+	ent->vaddr = virt;
+
+	pmap_enter_kern(map->pmap, page->paddr, virt, prot);
+	LIST_INSERT_HEAD(&page->pv_table, ent, pv_entries);
+}
+
 /* map a single given page at a virtual address. pml4 should be a phys addr */
 void
-pmap_enter(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
+pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 {
 	uintptr_t virta = (uintptr_t)virt;
 	int	  pml4i = ((virta >> 39) & 0x1FF);
@@ -228,4 +287,20 @@ pmap_enter(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 	pte = pmap_descend(pde, pdi, true, kMMUDefaultProt);
 
 	pte_set(P2V(&pte[pti]), phys, vm_prot_to_i386(prot));
+}
+
+void
+pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv)
+{
+	/** \todo free no-longer-needed page tables */
+
+	pte_t *pte = pmap_fully_descend(map->pmap, virt);
+
+	assert(pte);
+	*pte = 0x0;
+
+	invlpg(virt);
+
+	assert(pv && "currently must be explicitly specified");
+	LIST_REMOVE(pv, pv_entries);
 }

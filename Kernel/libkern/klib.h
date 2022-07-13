@@ -12,8 +12,9 @@
 #define KLIB_H_
 
 #include <machine/spl.h>
-#include <kern/lock.h>
 
+#include <kern/liballoc.h>
+#include <kern/lock.h>
 #include <string.h>
 
 #include "nanoprintf.h"

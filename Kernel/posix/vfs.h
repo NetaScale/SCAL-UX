@@ -16,6 +16,7 @@
 #include <signal.h>
 
 #include "kern/vm.h"
+#include "kern/lock.h"
 
 struct knote;
 struct proc;
