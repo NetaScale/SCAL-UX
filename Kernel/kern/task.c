@@ -287,7 +287,7 @@ waitq_timeout(void *arg)
 void
 waitq_init(waitq_t *wq)
 {
-	wq->lock = 0;
+	spinlock_init(&wq->lock);
 	TAILQ_INIT(&wq->waiters);
 }
 

@@ -8,6 +8,8 @@
  * All rights reserved.
  */
 
+#include <stdatomic.h>
+
 #include "liballoc.h"
 #include "libkern/klib.h"
 #include "machine/vm_machdep.h"
@@ -19,7 +21,6 @@ struct vm_page_queue pg_freeq = TAILQ_HEAD_INITIALIZER(pg_freeq),
 		     pg_activeq = TAILQ_HEAD_INITIALIZER(pg_activeq),
 		     pg_inactiveq = TAILQ_HEAD_INITIALIZER(pg_inactiveq);
 vm_map_t kmap;
-
 
 /*
  * note: ultimately a vm_object will always have a tree of vm_page_t's. and then
@@ -79,7 +80,7 @@ vm_object_copy(vm_object_t *obj)
 
 	assert(obj->type == kVMObjAnon);
 
-	newobj->lock = 0;
+	spinlock_init(&newobj->lock);
 	newobj->refcnt = 1;
 	newobj->size = obj->size;
 	newobj->type = obj->type;

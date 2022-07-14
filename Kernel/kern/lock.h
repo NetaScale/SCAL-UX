@@ -11,21 +11,28 @@
 #ifndef LOCKS_H_
 #define LOCKS_H_
 
-typedef volatile int spinlock_t;
+#include <stdatomic.h>
+
+typedef volatile atomic_flag spinlock_t;
+
+static inline void
+spinlock_init (spinlock_t *lock)
+{
+	atomic_flag_clear(lock);
+}
 
 static inline void
 lock(spinlock_t *lock)
 {
-	while (!__sync_bool_compare_and_swap(lock, 0, 1)) {
-		while (*lock)
-			__asm__("pause");
+	while (!atomic_flag_test_and_set(lock)) {
+		__asm__("pause");
 	}
 }
 
 static inline void
 unlock(spinlock_t *lock)
 {
-	__sync_lock_release(lock);
+	atomic_flag_clear(lock);
 }
 
 #endif /* LOCKS_H_ */

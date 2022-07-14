@@ -13,7 +13,7 @@
 #include "kern/liballoc.h"
 #include "kern/lock.h"
 
-spinlock_t lock_msgbuf = 0;
+spinlock_t lock_msgbuf = ATOMIC_FLAG_INIT;
 
 #define NANOPRINTF_IMPLEMENTATION
 #include "klib.h"

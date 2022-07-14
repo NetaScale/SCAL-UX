@@ -11,8 +11,6 @@
 #ifndef VM_H_
 #define VM_H_
 
-#include <sys/queue.h>
-
 #include <machine/vm_machdep.h>
 
 #include <stdbool.h>
@@ -21,6 +19,8 @@
 
 #include "kern/lock.h"
 #include "kern/vmem_impl.h"
+#include "sys/queue.h"
+#include "sys/tree.h"
 
 #define VADDR_MAX (vaddr_t) UINT64_MAX
 
@@ -63,11 +63,17 @@ typedef enum vm_prot {
 typedef struct vm_page {
 	/** Links to freelist, wired, inactive, or active queue. */
 	TAILQ_ENTRY(vm_page) queue;
+	/** Links to vm_object_t::pgtree */
+	SPLAY_ENTRY(vm_page) pgtree;
 
+	_Atomic bool lock;
 	bool free : 1;
 
-	struct vm_anon   *anon; /** if belonging to an anon, its anon */
-	struct vm_object *obj;	/** if belonging to an object, its object */
+	/** for pageable mappings */
+	union {
+		struct vm_anon   *anon; /** if belonging to an anon */
+		struct vm_object *obj;	/** if belonging to non-anon object */
+	};
 
 	LIST_HEAD(, pv_entry) pv_table; /* physical page -> virtual mappings */
 
