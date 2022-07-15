@@ -7,20 +7,6 @@
 #include "machine/vm_machdep.h"
 
 enum {
-	kMMUPresent = 0x1,
-	kMMUWrite = 0x2,
-	kMMUUser = 0x4,
-	kMMUWriteThrough = 0x8,
-	kMMUCacheDisable = 0x10,
-	kMMUAccessed = 0x40,
-	kPageGlobal = 0x100,
-
-	kMMUDefaultProt = kMMUPresent | kMMUWrite | kMMUUser,
-
-	kMMUFrame = 0x000FFFFFFFFFF000
-};
-
-enum {
 	kPML4Shift = 0x39,
 	kPDPTShift = 0x30,
 	kPDIShift = 0x21,
@@ -60,11 +46,13 @@ arch_vm_init(paddr_t kphys)
 	hhdm_obj.dmap.base = 0x0;
 	TAILQ_INSERT_TAIL(&kmap.entries, &hhdm_entry, queue);
 
+#if 0
 	kheap_entry.start = (vaddr_t)KHEAP_BASE;
 	kheap_entry.end = (vaddr_t)KHEAP_BASE + KHEAP_SIZE;
 	kheap_entry.obj = &kheap_obj;
 	kheap_obj.type = kKHeap;
 	TAILQ_INSERT_TAIL(&kmap.entries, &kheap_entry, queue);
+#endif
 
 	kernel_entry.start = (vaddr_t)KERN_BASE;
 	kernel_entry.end = (vaddr_t)KERN_BASE + KERN_SIZE;
@@ -252,9 +240,6 @@ pmap_trans(pmap_t *pmap, vaddr_t virt)
 		return pte_get_addr(pte[pti]) + pi;
 }
 
-/**
- * Map a single page at the given virtual address - for non-pageable memory.
- */
 void
 pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
 {
@@ -267,7 +252,12 @@ pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
 	LIST_INSERT_HEAD(&page->pv_table, ent, pv_entries);
 }
 
-/* map a single given page at a virtual address. pml4 should be a phys addr */
+void
+pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
+{
+	pmap_enter_kern(map->pmap, page->paddr, virt, prot);
+}
+
 void
 pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 {
@@ -290,17 +280,28 @@ pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 }
 
 void
-pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv)
+pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 {
 	/** \todo free no-longer-needed page tables */
 
-	pte_t *pte = pmap_fully_descend(map->pmap, virt);
+	pte_t *pte = pmap_fully_descend(map->pmap, vaddr);
 
 	assert(pte);
 	*pte = 0x0;
 
-	invlpg(virt);
+	invlpg(vaddr);
 
-	assert(pv && "currently must be explicitly specified");
+	if (!pv) {
+		LIST_FOREACH (pv, &page->pv_table, pv_entries) {
+			if (pv->map == map && pv->vaddr == vaddr) {
+				goto next;
+			}
+		}
+	}
+
+	fatal("pmap_unenter: no mapping of frame %p at vaddr %p in map %p\n",
+	    page->paddr, vaddr, map);
+
+next:
 	LIST_REMOVE(pv, pv_entries);
 }

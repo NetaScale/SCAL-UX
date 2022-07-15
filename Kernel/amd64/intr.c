@@ -111,6 +111,7 @@ trace(intr_frame_t *frame)
 
 void callout_interrupt();
 void dpcs_run();
+int  vm_fault(vm_map_t *map, vaddr_t addr, vm_fault_flags_t flags);
 
 void
 handle_int(intr_frame_t *frame, uintptr_t num)
@@ -122,6 +123,13 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 	/* interrupts remain disabled at this point */
 
 	switch (num) {
+	case 14: /* page fault */
+		/* vm_fault_flags_t matches amd64 mmu */
+		if (vm_fault(CURTHREAD()->task->map, (vaddr_t)read_cr2(),
+			frame->code) < 0)
+			goto unhandled;
+		break;
+
 	case kIntNumLAPICTimer:
 		callout_interrupt();
 		lapic_eoi();

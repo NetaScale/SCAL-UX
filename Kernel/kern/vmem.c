@@ -107,8 +107,6 @@
 
 #include "vmem_impl.h"
 
-#define ELEMENTSOF(ARR) (sizeof(ARR) / sizeof(ARR[0]))
-
 #ifndef ERESOURCEEXHAUSTED
 #define ERESOURCEEXHAUSTED 1200
 #endif

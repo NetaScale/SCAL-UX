@@ -47,6 +47,12 @@ typedef uintptr_t drumslot_t;
 
 enum { kDrumSlotInvalid = -1 };
 
+typedef enum vm_fault_flags {
+	kVMFaultPresent = 1,
+	kVMFaultWrite = 2,
+	kVMFaultUser = 4,
+} vm_fault_flags_t;
+
 typedef enum vm_prot {
 	kVMRead = 0x1,
 	kVMWrite = 0x2,
@@ -63,11 +69,9 @@ typedef enum vm_prot {
 typedef struct vm_page {
 	/** Links to freelist, wired, inactive, or active queue. */
 	TAILQ_ENTRY(vm_page) queue;
-	/** Links to vm_object_t::pgtree */
-	SPLAY_ENTRY(vm_page) pgtree;
 
-	_Atomic bool lock;
-	bool free : 1;
+	spinlock_t lock;
+	bool	   free : 1;
 
 	/** for pageable mappings */
 	union {
@@ -94,7 +98,9 @@ typedef struct vm_pregion {
  * Represents a logical page of pageable memory. May be resident or not.
  */
 typedef struct vm_anon {
+#if 0 /* let's see if we can do without this? */
 	TAILQ_HEAD(, vm_map_entry) entries;
+#endif
 
 	spinlock_t lock;
 	int refcnt : 24, /** number of amaps referencing it; if >1, must COW. */
@@ -107,19 +113,42 @@ typedef struct vm_anon {
 	};
 } vm_anon_t;
 
+#define kAMapChunkNPages 32
+
 /* Entry in a vm_amap_t. Locked by the vm_amap's lock */
-typedef struct vm_amap_entry {
-	TAILQ_ENTRY(vm_amap_entry) entries; /** vm_anon::entries */
-	vm_anon_t		  *anon;
-} vm_amap_entry_t;
+typedef struct vm_amap_chunk {
+#if 0
+	SPLAY_ENTRY(vm_amap_entry) stree; /** vm_anon::stree */
+#endif
+	vm_anon_t *anon[kAMapChunkNPages];
+} vm_amap_chunk_t;
 
 /**
  * An anonymous map - map of anons. These are always paged by the default pager
  * (vm_compressor).
  */
 typedef struct vm_amap {
-	TAILQ_HEAD(, vm_amap_entry) anons;
+#if 0
+	SPLAY_HEAD(vm_amap_entry_tree, vm_amap_entry) anons;
+#endif
+	vm_amap_chunk_t **chunks;
+	size_t		  curnchunk;
 } vm_amap_t;
+
+#if 0
+static inline int
+vm_amap_entry_compare(vm_amap_entry_t *a, vm_amap_entry_t *b)
+{
+	return ((a->anon->offs > b->anon->offs) ? 1 :
+		(a->anon->offs < b->anon->offs) ? -1 :
+						  0);
+}
+
+#define __unused __attribute__((__unused__))
+
+SPLAY_PROTOTYPE(vm_amap_entry_tree, vm_amap_entry, stree,
+    vm_amap_entry_compare);
+#endif
 
 TAILQ_HEAD(vm_page_queue, vm_page);
 TAILQ_HEAD(vm_pregion_queue, vm_pregion);
@@ -222,13 +251,18 @@ int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 void arch_vm_init(paddr_t kphys);
 
 /**
- * Map a single page at the given virtual address - for non-pageable memory.
+ * Map a single page at the given virtual address. This is for use for pageable
+ * memory (the page is set up for tracking by pagedaemon.)
  */
 void pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
 
 /**
- * Map a single page at the given virtual address. This is for use for pageable
- * memory (the page is set up for tracking by pagedaemon.)
+ * Reset the protection flags for an existing pageable mapping.
+ */
+void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
+
+/**
+ * Map a single page at the given virtual address - for non-pageable memory.
  */
 void pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
 

@@ -19,6 +19,8 @@
 
 #include "nanoprintf.h"
 
+#define ELEMENTSOF(ARR) (sizeof(ARR) / sizeof(ARR[0]))
+
 #ifdef ARCH_HOSTED
 #include <stdio.h>
 #include <stdlib.h>

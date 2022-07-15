@@ -160,9 +160,9 @@ common_init(struct limine_smp_info *smpi)
 	TAILQ_INIT(&cpu->pendingcallouts);
 	TAILQ_INIT(&cpu->waitqueue);
 
-	cpu->resched_dpc.bound = false;
-	cpu->resched_dpc.fun = arch_resched;
-	cpu->resched_dpc.arg = cpu;
+	cpu->resched.dpc.bound = false;
+	cpu->resched.dpc.fun = arch_resched;
+	cpu->resched.dpc.arg = cpu;
 
 	unlock(&cpulock);
 
@@ -178,7 +178,7 @@ common_init(struct limine_smp_info *smpi)
 	thread->cpu = cpu;
 	thread->kernel = true;
 	thread->kstack = 0x0;
-	thread->proc = &task0;
+	thread->task = &task0;
 	thread->state = kRunning;
 	cpu->curthread = thread;
 	cpu->idlethread = thread;
@@ -229,11 +229,33 @@ setup_cpus()
 	kprintf("done\n");
 }
 
+static void
+testfun(void *arg)
+{
+	while (1) {
+		for (int i = 0; i < UINT32_MAX / 512; i++) {
+			asm("pause");
+		}
+		kprintf("Hello\n");
+	}
+}
+
+static void
+testfun2(void *arg)
+{
+	while (1) {
+		for (int i = 0; i < UINT32_MAX / 512; i++) {
+			asm("pause");
+		}
+		kprintf("World\n");
+	}
+}
+
 // The following will be our kernel's entry point.
 void
 _start(void)
 {
-	thread_t *swapthr;
+	thread_t *swapthr, *nothing, *nothing2;
 
 	// Ensure we got a terminal
 	if (terminal_request.response == NULL ||
@@ -252,15 +274,24 @@ _start(void)
 	autoconf();
 
 #if 0
-	callout_t testco;
-	testco.nanosecs = 2000000000;
-	testco.dpc.fun = testfun;
-	callout_enqueue(&testco);
-#endif
-
 	swapthr = thread_new(&task0, true);
 	thread_goto(swapthr, swapper, NULL);
 	thread_run(swapthr);
+
+	nothing = thread_new(&task0, true);
+	thread_goto(nothing, testfun, NULL);
+	thread_run(nothing);
+
+	nothing2 = thread_new(&task0, true);
+	thread_goto(nothing2, testfun2, NULL);
+	thread_run(nothing2);
+#endif
+	vaddr_t anonaddr = VADDR_MAX;
+	vm_allocate(&kmap, NULL, &anonaddr, PGSIZE * 32);
+	kprintf("mapped at %p\n", anonaddr);
+
+	*(char*)anonaddr = 'A';
+
 
 	// We're done, just hang...
 	done();

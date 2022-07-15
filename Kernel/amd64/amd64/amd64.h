@@ -25,6 +25,26 @@ enum {
 	kAMD64MSRFSBase = 0xc0000100
 };
 
+enum {
+	kMMUFaultPresent = 0x1,
+	kMMUFaultWrite = 0x2,
+	kMMUFaultUser = 0x4,
+};
+
+enum {
+	kMMUPresent = 0x1,
+	kMMUWrite = 0x2,
+	kMMUUser = 0x4,
+	kMMUWriteThrough = 0x8,
+	kMMUCacheDisable = 0x10,
+	kMMUAccessed = 0x40,
+	kPageGlobal = 0x100,
+
+	kMMUDefaultProt = kMMUPresent | kMMUWrite | kMMUUser,
+
+	kMMUFrame = 0x000FFFFFFFFFF000
+};
+
 typedef struct tss {
 	uint32_t reserved;
 	uint64_t rsp0;
