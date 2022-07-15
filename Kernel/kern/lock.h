@@ -16,7 +16,7 @@
 typedef volatile atomic_flag spinlock_t;
 
 static inline void
-spinlock_init (spinlock_t *lock)
+spinlock_init(spinlock_t *lock)
 {
 	atomic_flag_clear(lock);
 }
@@ -24,7 +24,7 @@ spinlock_init (spinlock_t *lock)
 static inline void
 lock(spinlock_t *lock)
 {
-	while (!atomic_flag_test_and_set(lock)) {
+	while (atomic_flag_test_and_set(lock)) {
 		__asm__("pause");
 	}
 }
@@ -34,5 +34,7 @@ unlock(spinlock_t *lock)
 {
 	atomic_flag_clear(lock);
 }
+
+#define SPINLOCK_INITIALISER ATOMIC_FLAG_INIT
 
 #endif /* LOCKS_H_ */

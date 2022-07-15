@@ -50,7 +50,7 @@ mapped read-only.
 vm_object 1 from parent also gets updated to become a read-only mapping.
 
 when a read fault occurs - we can just map in the page from the amap's relevant anon entry, ++ anon's refcnt.
-when a write fault occurs - then we check the amap's refcount. 
+when a write fault occurs - then we check the amap's refcount.
 - if >1, we copy a new amap referring to the same anons - amap 2 - and decr amap1
 refcnt. ++refcnt of all anons in amap.
 - if 1, we need not copy.
@@ -88,4 +88,4 @@ Some principles:
    resident pages. Let's call it respages.
     - if there is an entry in respages for some offset, then it's in memory and
     mapped right now.
-    - 
+    -

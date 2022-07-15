@@ -7,7 +7,7 @@
  * Copyright 2022 NetaScale Systems Ltd.
  * All rights reserved.
  */
- 
+
 
 //#include "amd64.h"
 #include "proc.h"

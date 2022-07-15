@@ -155,7 +155,7 @@ typedef struct thread {
 	/* if a user process, its stack base address */
 	vaddr_t stack;
 	/* task to which it belongs */
-	struct task *proc;
+	struct task *task;
 
 	/* waitq on which the thread is currently waiting */
 	waitq_t *wq;
@@ -209,13 +209,25 @@ void waitq_init(waitq_t *wq);
  * and~~ the waitq should be locked. The thread is neither rescheduled nor set
  * runnable.
  */
-void thread_clearwait_locked(struct thread *thread, waitq_event_t ev, waitq_result_t res);
+void thread_clearwait_locked(struct thread *thread, waitq_event_t ev,
+    waitq_result_t res);
 
 /**
  * Wake one waiter on a waitqueue.
  * \pre SPL soft
  */
 void waitq_wake_one(waitq_t *wq, waitq_event_t ev);
+
+static inline task_t *
+CURTASK()
+{
+	return CURCPU()->curthread->task;
+}
+static inline thread_t *
+CURTHREAD()
+{
+	return CURCPU()->curthread;
+}
 
 extern spinlock_t	 sched_lock;
 extern struct task_queue alltasks;

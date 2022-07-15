@@ -14,7 +14,7 @@
 #include "kern/task.h"
 #include "vfs.h"
 
-#define CURPXPROC() CURCPU()->curthread->proc->pxproc
+#define CURPSXPROC() CURCPU()->curthread->proc->pxproc
 
 typedef struct proc {
 	task_t *task; /* VXK process */

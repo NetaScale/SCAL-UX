@@ -23,7 +23,7 @@ int sys_exec(proc_t *proc, const char *path, const char *argp[],
 int
 posix_syscall(intr_frame_t *frame)
 {
-	proc_t   *proc = CURPXPROC();
+	proc_t   *proc = CURPSXPROC();
 	thread_t *thread = CURCPU()->curthread;
 	uintptr_t err = 0;
 

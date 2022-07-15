@@ -17,7 +17,7 @@
 
 spinlock_t	  sched_lock;
 struct task_queue alltasks = TAILQ_HEAD_INITIALIZER(alltasks);
-task_t		  task0 = { .pid = 0, .name = "[kernel]" };
+task_t		  task0 = { .pid = 0, .name = "[kernel]", .map = &kmap };
 cpu_t	    *cpus = NULL;
 size_t		  ncpus = 0;
 size_t		  lastcpu = 0; /* cpu roundrobin */
@@ -193,7 +193,7 @@ thread_switchto(thread_t *thr)
 	cpu_t *cpu = CURCPU();
 
 	cpu->curthread = thr;
-	vm_activate(thr->proc->map);
+	vm_activate(thr->task->map);
 
 	return 0;
 }
@@ -206,7 +206,7 @@ thread_new(task_t *proc, bool iskernel)
 	thread_t *thread = kmalloc(sizeof *thread);
 	spl_t	  spl;
 
-	thread->proc = proc;
+	thread->task = proc;
 	if (iskernel) {
 		thread->kernel = true;
 		thread->stack = kmalloc(USER_STACK_SIZE) + USER_STACK_SIZE;

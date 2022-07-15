@@ -13,7 +13,7 @@ typedef struct  {
 
 typedef struct   {
  rsdp_desc_t firstPart;
- 
+
  uint32_t Length;
  uint64_t XsdtAddress;
  uint8_t ExtendedChecksum;

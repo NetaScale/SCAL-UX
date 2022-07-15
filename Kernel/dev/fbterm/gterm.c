@@ -6,12 +6,12 @@
 typedef struct {
 	unsigned char magic[4];
 	unsigned int version;
-	unsigned int headersize; 
+	unsigned int headersize;
 	unsigned int flags;
-	unsigned int nglyph;     
-	unsigned int nbyteperglyph;  
-	unsigned int height;      
-	unsigned int width;    
+	unsigned int nglyph;
+	unsigned int nbyteperglyph;
+	unsigned int height;
+	unsigned int width;
 }psf_font_header_t;
 
 static uint64_t sqrt(uint64_t a_nInput)

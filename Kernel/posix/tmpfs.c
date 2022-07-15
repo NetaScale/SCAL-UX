@@ -7,7 +7,7 @@
  * Copyright 2022 NetaScale Systems Ltd.
  * All rights reserved.
  */
- 
+
 #include <sys/param.h>
 
 #include <errno.h>

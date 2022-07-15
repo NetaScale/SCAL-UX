@@ -7,7 +7,7 @@
  * Copyright 2022 NetaScale Systems Ltd.
  * All rights reserved.
  */
- 
+
 #include <errno.h>
 
 #include "kern/vm.h"
