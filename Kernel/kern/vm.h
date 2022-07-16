@@ -315,6 +315,11 @@ void pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
  */
 void pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv);
 
+/**
+ * Check whether a page has been accessed. The access bits are reset.
+ */
+bool pmap_page_accessed_reset(vm_page_t *page);
+
 /** @} */
 
 void vm_kernel_init();

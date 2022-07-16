@@ -11,6 +11,7 @@
 #include <libkern/klib.h>
 #include <libkern/lz4.h>
 
+#include "kern/lock.h"
 #include "kern/task.h"
 #include "sys/queue.h"
 #include "vm.h"
@@ -24,15 +25,15 @@ typedef struct vm_compressor {
 	TAILQ_HEAD(, swappedpage) pages;
 } vm_compressor_t;
 
-static void
-page_lock_owner(vm_page_t *page)
+static int
+page_lock_owner(vm_page_t *page, bool spin)
 {
 	assert(page->anon || page->obj);
 
 	if (page->anon)
-		lock(&page->anon->lock);
+		return spinlock_trylock(&page->anon->lock, spin);
 	else
-		lock(&page->obj->lock);
+		return spinlock_trylock(&page->obj->lock, spin);
 }
 
 static void
@@ -95,8 +96,6 @@ page_swapout(vm_page_t *page)
 		fatal("page_swapout: not yet implemented for non-anons\n");
 	}
 
-	page_unlock_owner(page);
-
 	LIST_FOREACH_SAFE (pv, &page->pv_table, pv_entries, tmp_pv) {
 		vaddr_t *vaddr = pv->vaddr;
 		/** pmap unenter removes from the list and frees pv */
@@ -104,46 +103,121 @@ page_swapout(vm_page_t *page)
 		kprintf("tlb shootdown: %p\n", vaddr);
 	}
 
-	unlock(&page->anon->lock);
-
 	return 1;
 }
+
+struct owner {
+	bool is_anon;
+	union {
+		vm_object_t *obj;
+		vm_anon_t	  *anon;
+	};
+};
+
+#if 0
+/**
+ * try to lock a page's owner and then the page. If either step fails, return 0.
+ * Otherwise returns 1.
+ */
+static inline int
+vm_page_lock_and_owner(vm_page_t *page, bool spin)
+{
+	if (page_lock_owner(page, spin) != 0)
+		return 0;
+	if (spinlock_trylock(&page->lock, spin) != 0) {
+		page_unlock_owner(page);
+		return 0;
+	}
+	return 1;
+}
+#endif
 
 void
 swapper(void *unused)
 {
+	vm_page_t	  *page, *_next;
+	waitq_result_t r;
+	spl_t	       spl;
+
+	/* todo: vmstats, ..., ? */
+
 	waitq_init(&swq);
-	while (1) {
-		__auto_type r = waitq_await(&swq, 0x0, 3000000000);
-		spl_t spl = splvm();
 
-		kprintf("VM Compressor: scanning for pages to swap out\n");
-		(void)r;
-		while (1) {
-			vm_page_t *page;
+loop:
+	/*
+	 * the page out loop: every 3s:
+	 *  - unconditionally at the moment) all pages on the inactive
+	 * queue are checked for access; if so, they are moved to the
+	 * active queue; otherwise they are put to backing store.
+	 *  -  the active queue is scanned; mappings' accessed bits are
+	 * checked (and reset to 0); if none are set, the page is moved
+	 * to the inactive queue.
+	 */
+	r = waitq_await(&swq, 0x0, 3000000000);
+	spl = splvm();
 
-			VM_PAGE_QUEUES_LOCK();
-			page = TAILQ_LAST(&pg_activeq, vm_page_queue);
-			if (page) {
-				page_lock_owner(page);
-				lock(&page->lock);
-				TAILQ_REMOVE(&pg_activeq, page, queue);
-			}
-			VM_PAGE_QUEUES_UNLOCK();
+	(void)r;
 
-			if (!page)
-				break;
+	VM_PAGE_QUEUES_LOCK();
 
-			assert(page_swapout(page) == 1);
+	TAILQ_FOREACH_SAFE (page, &pg_inactiveq, queue, _next) {
+		struct owner owner;
+		int	     r;
 
-			VM_PAGE_QUEUES_LOCK();
-			TAILQ_INSERT_HEAD(&pg_freeq, page, queue);
-			unlock(&page->lock);
-			VM_PAGE_QUEUES_UNLOCK();
+		if (page_lock_owner(page, false) == 0)
+			continue;
+
+		owner.is_anon = page->anon != NULL; /* FIXME */
+		owner.anon = page->anon;
+
+		TAILQ_REMOVE(&pg_inactiveq, page, queue);
+
+		if (pmap_page_accessed_reset(page)) {
+			TAILQ_INSERT_TAIL(&pg_activeq, page, queue);
+			goto next;
 		}
 
-		splx(spl);
+		if (spinlock_trylock(&page->lock, false) == 0) {
+			/* page is busy for some reason */
+			goto next;
+		}
+
+		TAILQ_REMOVE(&pg_inactiveq, page, queue);
+
+		/* unlock for I/O */
+		VM_PAGE_QUEUES_UNLOCK();
+		r = page_swapout(page);
+		VM_PAGE_QUEUES_LOCK();
+
+		if (r == -1) {
+			/* todo OOM-kill a process */
+			fatal("swapout failed\n");
+		} else if (r == 0) {
+			kprintf("nonfatal swapout failure\n");
+		} else {
+			page->free = 1;
+			TAILQ_INSERT_TAIL(&pg_freeq, page, queue);
+		}
+
+		unlock(&page->lock);
+
+	next:
+		unlock(&owner.anon->lock); /* FIXME */
 	}
-	for (;;)
-		asm("hlt");
+
+	TAILQ_FOREACH_SAFE (page, &pg_activeq, queue, _next) {
+		if (page_lock_owner(page, false) == 0)
+			continue;
+		if (!pmap_page_accessed_reset(page)) {
+			TAILQ_REMOVE(&pg_activeq, page, queue);
+			TAILQ_INSERT_TAIL(&pg_inactiveq, page, queue);
+		}
+		page_unlock_owner(page);
+	}
+
+	VM_PAGE_QUEUES_UNLOCK();
+
+	splx(spl);
+
+	goto loop;
 }

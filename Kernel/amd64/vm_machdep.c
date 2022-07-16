@@ -324,3 +324,7 @@ next:
 	LIST_REMOVE(pv, pv_entries);
 	kfree(pv);
 }
+
+bool pmap_page_accessed_reset(vm_page_t *page) {
+	return false;
+}

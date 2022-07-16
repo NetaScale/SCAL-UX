@@ -31,7 +31,7 @@
  *	Swapping out of pages to a backing store is possible. The treatment of
  *	pages backed by an actual object (e.g. a memory-mapped file) is
  *	identical to the treatment of pages backed by swap space.
- * - VM Compression (not yet!!):
+ * - VM Compression:
  *	If possible, pages are compressed instead of being swapped out; a part
  *	of system memory is reserved by the VM Compressor to compress pages
  *	into. When this is no longer adequate, the compressed pages can then be
@@ -327,6 +327,9 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 				/** can simply upgrade to write-enabled */
 				pmap_reenter(map, anon->physpage, vaddr,
 				    kVMAll);
+			else {
+				fatal("unhandled case?\n");
+			}
 		}
 
 		unlock(&anon->lock);
