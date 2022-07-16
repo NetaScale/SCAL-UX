@@ -124,7 +124,7 @@ typedef struct seg_block {
 static vmem_seg_t     static_segs[128];
 static vmem_seglist_t free_segs = LIST_HEAD_INITIALIZER(free_segs);
 static int	      nfreesegs = 0;
-//static LIST_HEAD(, seg_block) seg_blocks = LIST_HEAD_INITIALIZER(seg_blocks);
+// static LIST_HEAD(, seg_block) seg_blocks = LIST_HEAD_INITIALIZER(seg_blocks);
 
 static const char *vmem_seg_type_str[] = {
 	[kVMemSegFree] = " free",

@@ -13,6 +13,7 @@
 
 #include "event.h"
 #include "kern/task.h"
+#include "libkern/klib.h"
 #include "termios.h"
 #include "tty.h"
 

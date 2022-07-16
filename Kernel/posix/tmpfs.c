@@ -177,7 +177,9 @@ tmp_mkdir(vnode_t *dvn, vnode_t **out, const char *pathname)
 
 	assert(dvn->type == VDIR);
 
+#ifdef DEBUG_TMPFS_VNOPS
 	kprintf("tmp_mkdir vnode %p path %s\n", dvn, pathname);
+#endif
 
 	n = tmakenode(VNTOTN(dvn), VDIR, pathname, 0);
 	assert(n != NULL);
@@ -199,21 +201,23 @@ tmp_mknod(vnode_t *dvn, vnode_t **out, const char *pathname, dev_t dev)
 }
 
 int
-tmp_getpage(vnode_t *vn, voff_t a_off, vm_anon_t **out, bool needcopy)
-{
-	return vm_anon_pagerops.get(vn->vmobj, a_off, out, needcopy);
-}
-
-int
 tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
-	/* todo move to vfs_read, this is generic pagecache manipulation */
+	vaddr_t vaddr = VADDR_MAX;
+
+	assert(off + nbyte <= vn->attr.size);
+
+	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
+		   false) == 0);
+	memcpy(buf, vaddr + off, nbyte);
+	vm_deallocate(&kmap, vaddr, PGROUNDUP(nbyte + off));
+
+#if 0
+	/* todo move to vfs_cached_read, this is generic pagecache manipulation? */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
 	size_t firstpage = base / PGSIZE;
 	size_t lastpage = firstpage + (pageoff + nbyte) / PGSIZE + 1;
-
-	assert(off + nbyte <= vn->attr.size);
 
 	for (size_t page = firstpage; page < lastpage; page++) {
 		vm_anon_t *anon;
@@ -237,12 +241,26 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	}
 
 	return nbyte;
+
+#endif
 }
 
 int
 tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
-	/* todo move to vfs_write, this is generic pagecache manipulation */
+	vaddr_t vaddr = VADDR_MAX;
+
+	if (off + nbyte > vn->attr.size)
+		vn->attr.size = off + nbyte;
+
+	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
+		   false) == 0);
+	memcpy(buf, vaddr + off, nbyte);
+	vm_deallocate(&kmap, vaddr, PGROUNDUP(nbyte + off));
+
+	return nbyte;
+#if 0
+	/* todo move to vfs_cached_write, this is generic pagecache manipulation? */
 	/* FIXME: fix offset writes after the example of tmp_read */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
@@ -250,6 +268,7 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 
 	if (off + nbyte > vn->attr.size)
 		vn->attr.size = off + nbyte;
+
 
 	for (size_t page = base / PGSIZE; page < npages; page++) {
 		vm_anon_t *anon;
@@ -271,6 +290,7 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		nbyte -= tocopy;
 		pageoff = 0;
 	}
+#endif
 
 	return nbyte /* FIXME: */;
 }
@@ -305,7 +325,6 @@ tmp_spec_kqfilter(vnode_t *vn, struct knote *kn)
 struct vnops tmpfs_vnops = {
 	.create = tmp_create,
 	.fallocate = tmp_fallocate,
-	.getpage = tmp_getpage,
 	.lookup = tmp_lookup,
 	.mkdir = tmp_mkdir,
 	.mknod = tmp_mknod,

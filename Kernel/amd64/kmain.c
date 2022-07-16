@@ -3,12 +3,18 @@
 #include <stddef.h>
 
 #include "amd64/amd64.h"
+#include "dev/fbterm/FBTerm.h"
 #include "kern/liballoc.h"
 #include "kern/task.h"
 #include "kern/vm.h"
 
 void	 lapic_enable();
 uint32_t lapic_timer_calibrate();
+
+volatile struct limine_framebuffer_request framebuffer_request = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0
+};
 
 static volatile struct limine_hhdm_request hhdm_request = {
 	.id = LIMINE_HHDM_REQUEST,
@@ -43,20 +49,25 @@ static volatile struct limine_smp_request smp_request = {
 	.revision = 0
 };
 
-static volatile struct limine_terminal_request terminal_request = {
+volatile struct limine_terminal_request terminal_request = {
 	.id = LIMINE_TERMINAL_REQUEST,
 	.revision = 0
 };
 
 static uint64_t	    bsp_lapic_id;
 static volatile int cpus_up = 0;
+extern void	    *syscon;
 
 void
 limterm_putc(int ch, void *ctx)
 {
-	struct limine_terminal *terminal =
-	    terminal_request.response->terminals[0];
-	terminal_request.response->write(terminal, (char *)&ch, 1);
+	if (!syscon) {
+		struct limine_terminal *terminal =
+		    terminal_request.response->terminals[0];
+		terminal_request.response->write(terminal, (char *)&ch, 1);
+	} else {
+		sysconputc(ch);
+	}
 }
 
 static void
@@ -106,7 +117,8 @@ mem_init()
 				sizeof(vm_page_t) * bm->npages,
 			    PGSIZE);
 
-			kprintf("used %lu KiB for resident pagetable\n", used / 1024);
+			kprintf("used %lu KiB for resident pagetable\n",
+			    used / 1024);
 
 			kprintf("Usable memory area: 0x%lx "
 				"(%lu mb long, %lu pages)\n",
@@ -273,12 +285,11 @@ _start(void)
 	vm_kernel_init();
 	setup_cpus();
 
-	extern void autoconf();
-	autoconf();
-
+#if 0
 	swapthr = thread_new(&task0, true);
 	thread_goto(swapthr, swapper, NULL);
 	thread_run(swapthr);
+#endif
 
 #if 0
 	nothing = thread_new(&task0, true);
@@ -304,14 +315,18 @@ _start(void)
 
 	strcpy(anon2addr + 7, "copy-on-write world!");
 
-	kprintf("Page from Aobj1:\t%s\nPage from Aobj2:\t%s\n", (char *)anonaddr,
-	    (char *)anon2addr);
+	kprintf("Page from Aobj1:\t%s\nPage from Aobj2:\t%s\n",
+	    (char *)anonaddr, (char *)anon2addr);
 
 	kprintf(
 	    "Pages Free: %lu\tPages Special: %lu\tPages Active: %lu\n"
 	    "Pages Wired: %lu\tOf Which Kmem: %lu\tOf Which Pagetables: %lu\n",
 	    vmstat.pgs_free, vmstat.pgs_special, vmstat.pgs_active,
 	    vmstat.pgs_wired, vmstat.pgs_kmem, vmstat.pgs_pgtbl);
+
+	void posix_main(void *initrd, size_t initrd_size);
+	posix_main(module_request.response->modules[0]->address,
+	    module_request.response->modules[0]->size);
 
 	// We're done, just hang...
 	done();

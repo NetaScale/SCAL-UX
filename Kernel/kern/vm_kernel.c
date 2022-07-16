@@ -60,9 +60,10 @@ internal_freewired(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 	}
 
 	for (int i = 0; i < r; i += PGSIZE) {
-		kprintf("unmap 0x%lx\n", addr + i);
-		/* TODO: actually unmap */
-		/* vmstat.pgs_kmem-- */
+		/* FIXME: actually do this properly */
+		// pmap_unenter(&kmap, NULL, (vaddr_t)addr + i, NULL);
+		//  put page on freeq
+		//  vmstat.pgs_kmem--
 	}
 }
 

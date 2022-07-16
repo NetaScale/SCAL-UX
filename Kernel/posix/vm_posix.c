@@ -11,6 +11,7 @@
 #include <errno.h>
 
 #include "kern/vm.h"
+#include "libkern/klib.h"
 #include "proc.h"
 #include "vm_posix.h"
 

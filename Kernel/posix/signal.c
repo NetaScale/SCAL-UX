@@ -44,4 +44,7 @@ process_signal(thread_t *thr)
 	thr->pcb.frame.rsp = (uintptr_t)sp;
 
         /* ... todo */
+
+	fatal("unimplemented\n");
+	return -1;
 }

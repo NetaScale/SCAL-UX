@@ -181,6 +181,24 @@ dpcs_run()
 	splx(spl);
 }
 
+task_t *
+task_fork(task_t *parent)
+{
+	task_t *task = kmalloc(sizeof *task);
+	spl_t	spl;
+
+	task->map = vm_map_fork(parent->map);
+	LIST_INIT(&task->threads);
+
+	spl = splhigh();
+	// lock(&task_lock);
+	TAILQ_INSERT_HEAD(&alltasks, task, alltasks);
+	// unlock(&task_lock);
+	splx(spl);
+
+	return task;
+}
+
 /**
  * Switch to thread \p thr. Previously-running thread should have already been
  * placed on an appropriate queue or otherwise dealt with. sched_lock should be

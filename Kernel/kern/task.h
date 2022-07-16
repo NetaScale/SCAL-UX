@@ -169,7 +169,7 @@ typedef struct thread {
 
 typedef struct task {
 	/* For ::alltasks. */
-	TAILQ_ENTRY(task) allprocs;
+	TAILQ_ENTRY(task) alltasks;
 
 	char	  name[31];
 	int	  pid;
@@ -191,6 +191,9 @@ void dpc_enqueue(dpc_t *dpc);
 void callout_enqueue(callout_t *callout);
 /** Dequeue and disable a callout. */
 void callout_dequeue(callout_t *callout);
+
+/** Create a new task, forking the address space of parent. */
+task_t *task_fork(task_t *parent);
 
 /** Create a new thread; it is assigned a CPU but not enqueued for running. */
 thread_t *thread_new(task_t *proc, bool iskernel);

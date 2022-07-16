@@ -237,6 +237,14 @@ int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size);
 vm_object_t *vm_aobj_new(size_t size);
 
 /**
+ * Deallocate address space from a given map.
+ */
+int vm_deallocate(vm_map_t *map, vaddr_t start, size_t size);
+
+/** Fork a map. */
+vm_map_t *vm_map_fork(vm_map_t *map);
+
+/**
  * Map a VM object into an address space either at a given virtual address, or
  * (if \p vaddr points to vaddr of VADDR_MAX) pick a suitable place to put it.
  *
@@ -293,14 +301,17 @@ void arch_vm_init(paddr_t kphys);
 void pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
 
 /**
- * Reset the protection flags for an existing pageable mapping.
- */
-void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
-
-/**
  * Map a single page at the given virtual address - for non-pageable memory.
  */
 void pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
+
+/** Create a new pmap. */
+pmap_t *pmap_new();
+
+/**
+ * Reset the protection flags for an existing pageable mapping.
+ */
+void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
 
 /**
  * Unmap a single page of a pageable mapping. CPU local TLB invalidated; not

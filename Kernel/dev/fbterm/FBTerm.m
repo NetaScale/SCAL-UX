@@ -1,11 +1,11 @@
 #include "FBTerm.h"
-#include "amd64.h"
-#include "amd64/limine.h"
+#include "limine.h"
 #include "dev/fbterm/term.h"
 #include "kern/vm.h"
 #include "posix/dev.h"
 #include "posix/tty.h"
 #include "posix/vfs.h"
+#include "posix/proc.h"
 
 extern char sun12x22[], nbsdbold[];
 
@@ -14,7 +14,7 @@ static int termnum = 0;
 /* FIXME temporary hack, remove */
 tty_t *sctty;
 
-static int fbtopen(dev_t dev, int mode, struct posix_proc *proc);
+static int fbtopen(dev_t dev, int mode, struct proc *proc);
 static int fbtputch(void *data, int ch);
 
 @implementation FBTerm
@@ -121,7 +121,7 @@ static int fbtputch(void *data, int ch);
 @end
 
 static int
-fbtopen(dev_t dev, int mode, struct posix_proc *proc)
+fbtopen(dev_t dev, int mode, struct proc *proc)
 {
 	return 0;
 }

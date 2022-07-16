@@ -83,10 +83,24 @@ arch_vm_init(paddr_t kphys)
 	for (int i = 255; i < 511; i++) {
 		uint64_t *pml4 = P2V(kpmap.pml4);
 		if (pte_get_addr(pml4[i]) == NULL) {
-			pte_set(&pml4[i], vm_pagealloc(0), 0x0);
+			pte_set(&pml4[i], vm_pagealloc(0)->paddr,
+			    kMMUDefaultProt);
 			vmstat.pgs_pgtbl++;
 		}
 	}
+}
+
+pmap_t *
+pmap_new()
+{
+	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
+	pmap->pml4 = vm_pagealloc(1)->paddr;
+	for (int i = 255; i < 512; i++) {
+		uint64_t *pml4 = P2V(pmap->pml4);
+		uint64_t *kpml4 = P2V(kmap.pmap->pml4);
+		pte_set(&pml4[i], kpml4[i], kMMUDefaultProt);
+	}
+	return pmap;
 }
 
 static void
@@ -301,12 +315,31 @@ pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 {
 	/** \todo free no-longer-needed page tables */
 
-	pte_t *pte = pmap_fully_descend(map->pmap, vaddr);
+	pte_t  *pte = pmap_fully_descend(map->pmap, vaddr);
+	paddr_t paddr;
 
 	assert(pte);
+	paddr = pte_get_addr(*pte);
+	if (*pte == 0)
+		return;
 	*pte = 0x0;
 
 	invlpg(vaddr);
+
+	if (!page) {
+		vm_pregion_t *preg;
+
+		TAILQ_FOREACH (preg, &vm_pregion_queue, queue) {
+			if (preg->paddr <= paddr &&
+			    (preg->paddr + PGSIZE * preg->npages) > paddr) {
+				page = &preg->pages[(paddr - preg->paddr) /
+				    PGSIZE];
+				break;
+			}
+		}
+	}
+
+	assert(page);
 
 	if (!pv) {
 		LIST_FOREACH (pv, &page->pv_table, pv_entries) {
@@ -325,6 +358,8 @@ next:
 	kfree(pv);
 }
 
-bool pmap_page_accessed_reset(vm_page_t *page) {
+bool
+pmap_page_accessed_reset(vm_page_t *page)
+{
 	return false;
 }

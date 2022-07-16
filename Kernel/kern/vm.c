@@ -224,6 +224,29 @@ map_entry_for_addr(vm_map_t *map, vaddr_t addr)
 	return NULL;
 }
 
+int
+vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
+{
+	spl_t		spl = splvm();
+	vm_map_entry_t *entry;
+
+	// lock(&map->lock);
+	entry = map_entry_for_addr(map, start);
+	assert(entry);
+	assert(vmem_xfree(&map->vmem, (vmem_addr_t)start, size) >= 0);
+	// vm_object_release(entry->obj);
+	for (vaddr_t v = entry->start; v < entry->end; v += PGSIZE) {
+		pmap_unenter(map, NULL, v, NULL);
+	}
+	TAILQ_REMOVE(&map->entries, entry, queue);
+	kfree(entry);
+	/* todo: tlb shootdowns if map is used by multiple threads */
+	// unlock(&map->lock);
+	splx(spl);
+
+	return 0;
+}
+
 static void
 copyphyspage(paddr_t dst, paddr_t src)
 {
@@ -379,6 +402,41 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	return fault_aobj(map, ent->obj, vaddr, obj_off, flags);
 }
 
+vm_map_t *
+vm_map_fork(vm_map_t *map)
+{
+	vm_map_t *newmap = kmalloc(sizeof *newmap);
+	// vm_map_entry_t *ent;
+
+	kprintf("vm_map_fork: not implemented properly yet\n");
+
+	newmap->pmap = pmap_new();
+	TAILQ_INIT(&newmap->entries);
+	vmem_init(&newmap->vmem, "task map", USER_BASE, USER_SIZE, PGSIZE, NULL,
+	    NULL, NULL, 0, 0, kSPLVM);
+
+	if (map == &kmap)
+		return newmap; /* nothing to inherit */
+
+#if 0
+        TAILQ_FOREACH(ent, &map->entries, entries) {
+                if(ent->inheritance == kVMMapEntryInheritShared) {
+                        vm_map_entry_t * newent = kmalloc(sizeof *newent);
+
+                        newent->inheritance = kVMMapEntryInheritShared;
+                        newent->obj = ent->obj;
+                        newent->obj->refcnt++;
+                        newent->size = ent->size;
+                        newent->vaddr = ent->vaddr;
+                } else {
+                        kprintf("vm_map_fork: unhandled inheritance\n");
+                }
+        }
+#endif
+
+	return newmap;
+}
+
 int
 vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
     bool copy)
@@ -388,10 +446,11 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	vm_map_entry_t *entry;
 	int		r;
 
+	assert(map);
 	assert(!copy);
 
-	r = vmem_xalloc(&map->vmem, size, 0, 0, 0, 0, 0, exact ? kVMemExact : 0,
-	    &addr);
+	r = vmem_xalloc(&map->vmem, size, 0, 0, 0, exact ? addr : 0, 0,
+	    exact ? kVMemExact : 0, &addr);
 	if (r < 0)
 		return r;
 

@@ -15,8 +15,8 @@
 #include <fcntl.h>
 #include <string.h>
 
-#include "kern/liballoc.h"
 #include "kern/task.h"
+#include "libkern/klib.h"
 #include "machine/spl.h"
 #include "proc.h"
 #include "vfs.h"
@@ -63,33 +63,42 @@ start_init(void *bin)
 	 * init:
 	 *   .string "/init\0"
 	 */
-	static uint16_t initcode[] = { 0xc748, 0x02c0, 0x0000, 0x4800, 0xc7c7,
-		0x0010, 0x0000, 0x80cd, 0x692f, 0x696e, 0x0074, 0x0000 };
-	task_t	       *task1 = process_new(&task0);
+	static uint8_t initcode[] = { 0x48, 0xc7, 0xc0, 0x02, 0x00, 0x00, 0x00,
+		0x48, 0xc7, 0xc7, 0x10, 0x00, 0x40, 0x00, 0xcd, 0x80, 0x2f,
+		0x69, 0x6e, 0x69, 0x74, 0x00, 0x00 };
+	task_t	       *task1 = task_fork(&task0);
 	task1->pxproc = kmalloc(sizeof(proc_t));
 	task1->pxproc->task = task1;
 	memset(task1->pxproc->files, 0x0, sizeof task1->pxproc->files);
 	thread_t *thr1 = thread_new(task1, false);
-	vaddr_t	  vaddr = 0x0;
+	vaddr_t	  vaddr = (vaddr_t)0x400000;
 
 	assert(vm_allocate(task1->map, NULL, &vaddr, 4096) == 0);
+#if 0
 	/* fault it in */
 	vm_fault(task1->map, 0x0, true);
 	memcpy(P2V(pmap_trans(task1->map->pmap, 0x0)), initcode,
 	    sizeof(initcode));
+#else
+	vm_activate(task1->map);
+	/* memcpy it in */
+	vm_activate(&kmap);
+#endif
 
-	// asm("cli");
+#if 0
 	assert(sys_open(task1->pxproc, "/dev/console", O_RDWR) >= 0);
 	assert(sys_open(task1->pxproc, "/dev/console", O_RDWR) >= 0);
 	assert(sys_open(task1->pxproc, "/dev/console", O_RDWR) >= 0);
-	// asm("sti");
 
 	thr1->pcb.frame.rsp = (uintptr_t)kmalloc(4096) + 4096;
-	thr1->pcb.frame.rip = 0x0;
+	thr1->pcb.frame.rip = 0x400000;
 	thr1->pcb.frame.rdi = 0x0;
 	thr1->pcb.frame.rbp = 0x0;
-
 	thread_run(thr1);
+#endif
+	for (;;) {
+		asm("hlt");
+	}
 }
 
 static int
@@ -105,10 +114,9 @@ oct2i(unsigned char *s, int size)
 }
 
 void
-posix_main(struct limine_framebuffer_response *fb, void *initbin, size_t size)
+posix_main(void *initbin, size_t size)
 {
 	kprintf("POSIX subsystem is going up\n");
-	timeslicing_start();
 
 	/* reset system priority level, everything should now be ready to go */
 	spl0();
@@ -118,8 +126,8 @@ posix_main(struct limine_framebuffer_response *fb, void *initbin, size_t size)
 
 	root_vnode->ops->mkdir(root_vnode, &root_dev, "dev");
 
-	int autoconf(struct limine_framebuffer_response * limfb);
-	autoconf(fb);
+	void autoconf();
+	autoconf();
 
 	kprintf("unpacking initrd...\n");
 	for (size_t i = 0; i < size;) {

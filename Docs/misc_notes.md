@@ -1,7 +1,7 @@
 - todo: put cross compiler patch in etc
 - build initcode like:
 ```
-x86_64-scalux-gcc -N -e start -Ttext 0 -o initcode.elf -nostdlib -nostdinc initcode.s
+x86_64-scalux-gcc -N -e start -Ttext 0x400000 -o initcode.elf -nostdlib -nostdinc initcode.s
 x86_64-scalux-objcopy -S -O binary initcode.elf initcode.bin
 xxd -i initcode.bin
 ```

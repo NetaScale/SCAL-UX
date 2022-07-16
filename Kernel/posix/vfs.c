@@ -16,7 +16,7 @@
 
 #include "dev.h"
 #include "event.h"
-#include "kern/liballoc.h"
+#include "libkern/klib.h"
 #include "proc.h"
 #include "vfs.h"
 

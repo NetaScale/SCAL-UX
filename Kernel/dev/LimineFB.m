@@ -7,7 +7,7 @@
 @synthesize width, height, pitch, bpp, base;
 
 static int fbNum = 0;
-LimineFB  *sysfb = NULL;
+LimineFB	 *sysfb = NULL;
 
 + (BOOL)probeWithLimineFBResponse:(struct limine_framebuffer_response *)resp
 {

@@ -71,6 +71,7 @@ struct vnops {
 	 */
 	int (*mknod)(vnode_t *dvn, vnode_t **out, const char *name, dev_t dev);
 
+#if 0
 	/**
 	 * Get a page from a VREG vnode's backing store or cache. Overridable so
 	 * that tmpfs can avoid having two sets of pages around.
@@ -87,6 +88,7 @@ struct vnops {
 	    bool needscopy);
 
 	/* todo: putpages */
+#endif
 
 	int (*open)(vnode_t *vn, int mode, struct proc *proc);
 
