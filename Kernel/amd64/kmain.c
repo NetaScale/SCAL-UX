@@ -119,14 +119,17 @@ mem_init()
 				bm->pages[b].paddr = bm->paddr + PGSIZE * b;
 
 			/* mark off the pages used */
-			for (b = 0; b < used / PGSIZE; b++)
+			for (b = 0; b < used / PGSIZE; b++) {
 				bm->pages[b].free = false;
+				vmstat.pgs_special++;
+			}
 
 			/* now zero the remainder */
 			for (; b < bm->npages; b++) {
 				TAILQ_INSERT_TAIL(&pg_freeq, &bm->pages[b],
 				    queue);
 				bm->pages[b].free = 1;
+				vmstat.pgs_free++;
 			}
 
 			TAILQ_INSERT_TAIL(&vm_pregion_queue, bm, queue);
@@ -273,11 +276,11 @@ _start(void)
 	extern void autoconf();
 	autoconf();
 
-#if 0
 	swapthr = thread_new(&task0, true);
 	thread_goto(swapthr, swapper, NULL);
 	thread_run(swapthr);
 
+#if 0
 	nothing = thread_new(&task0, true);
 	thread_goto(nothing, testfun, NULL);
 	thread_run(nothing);
@@ -286,12 +289,19 @@ _start(void)
 	thread_goto(nothing2, testfun2, NULL);
 	thread_run(nothing2);
 #endif
+
 	vaddr_t anonaddr = VADDR_MAX;
 	vm_allocate(&kmap, NULL, &anonaddr, PGSIZE * 32);
 	kprintf("mapped at %p\n", anonaddr);
 
-	*(char*)anonaddr = 'A';
+	kprintf(
+	    "Pages Free: %lu\tPages Special: %lu\tPages Active: %lu\n"
+	    "Pages Wired: %lu\tOf Which Kmem: %lu\tOf Which Pagetables: %lu\n",
+	    vmstat.pgs_free, vmstat.pgs_special, vmstat.pgs_active,
+	    vmstat.pgs_wired, vmstat.pgs_kmem, vmstat.pgs_pgtbl);
 
+	strcpy(anonaddr, "Hello, world");
+	kprintf("Anon page contents: %s\n", (char *)anonaddr);
 
 	// We're done, just hang...
 	done();

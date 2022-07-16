@@ -60,6 +60,11 @@ typedef enum vm_prot {
 	kVMAll = kVMRead | kVMWrite | kVMExecute,
 } vm_prot_t;
 
+typedef struct vmstat {
+	size_t pgs_free, pgs_special, pgs_wired, pgs_active;
+	size_t pgs_kmem, pgs_pgtbl;
+} vmstat_t;
+
 /**
  * Represents a physical page of useable general-purpose memory.
  *
@@ -71,7 +76,9 @@ typedef struct vm_page {
 	TAILQ_ENTRY(vm_page) queue;
 
 	spinlock_t lock;
-	bool	   free : 1;
+	/** number of wirings */
+	uint8_t wirecnt;
+	bool	free : 1;
 
 	/** for pageable mappings */
 	union {
@@ -209,11 +216,6 @@ void swapper(void *unused);
 void vm_activate(vm_map_t *map);
 
 /**
- * Allocate a single page; optionally sleep to wait for one to become available.
- */
-vm_page_t *vm_allocpage(bool sleep);
-
-/**
  * Allocate anonymous memory and map it into the given map.
  *
  * @param[in,out] vaddrp pointer to a vaddr specifying where to map at. If the
@@ -242,6 +244,19 @@ vm_object_t *vm_aobj_new(size_t size);
  */
 int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
     bool copy);
+
+/**
+ * Allocate a single page; optionally sleep to wait for one to become available.
+ * @param sleep whether to sleep the thread until a page is available
+ * @returns LOCKED page, initially on the wired queue.
+ */
+vm_page_t *vm_pagealloc(bool sleep);
+
+/**
+ * Release a wire reference to a page; the page is placed into the active queue
+ * and becomes subject to paging if new wirecnt is 0.
+ */
+void vm_page_unwire(vm_page_t *page);
 
 /**
  * @name Arch-specific
@@ -297,8 +312,15 @@ vaddr_t vm_kalloc(size_t npages, int wait);
  */
 void vm_kfree(vaddr_t addr, size_t pages);
 
-extern struct vm_page_queue    pg_freeq, pg_activeq, pg_inactiveq;
+/** lock the page queues; must be acquired at SPL VM */
+#define VM_PAGE_QUEUES_LOCK() lock(&vm_page_queues_lock)
+/** unlock the page queues */
+#define VM_PAGE_QUEUES_UNLOCK() unlock(&vm_page_queues_lock)
+
+extern struct vm_page_queue    pg_freeq, pg_activeq, pg_inactiveq, pg_wireq;
 extern struct vm_pregion_queue vm_pregion_queue;
+extern spinlock_t	       vm_page_queues_lock;
 extern vm_map_t		       kmap; /** global kernel map */
+extern vmstat_t		       vmstat;
 
 #endif /* VM_H_ */

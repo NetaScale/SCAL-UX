@@ -27,10 +27,25 @@ static vm_object_t    hhdm_obj, kernel_obj, kheap_obj;
 static pmap_t	      kpmap;
 
 vm_page_t *
-vm_allocpage(bool sleep)
+vm_pagealloc(bool sleep)
 {
-	vm_page_t *page = TAILQ_FIRST(&pg_freeq);
+	vm_page_t *page;
+	spl_t	   spl;
+
+	spl = splvm();
+	VM_PAGE_QUEUES_LOCK();
+	page = TAILQ_FIRST(&pg_freeq);
+	if (!page) {
+		fatal("vm_allocpage: oom not yet handled\n");
+	}
 	TAILQ_REMOVE(&pg_freeq, page, queue);
+	TAILQ_INSERT_TAIL(&pg_wireq, page, queue);
+	vmstat.pgs_free--;
+	vmstat.pgs_wired++;
+	page->wirecnt = 1;
+	page->free = 0;
+	VM_PAGE_QUEUES_UNLOCK();
+	splx(spl);
 	return page;
 }
 
@@ -68,7 +83,8 @@ arch_vm_init(paddr_t kphys)
 	for (int i = 255; i < 511; i++) {
 		uint64_t *pml4 = P2V(kpmap.pml4);
 		if (pte_get_addr(pml4[i]) == NULL) {
-			pte_set(&pml4[i], vm_allocpage(0), 0x0);
+			pte_set(&pml4[i], vm_pagealloc(0), 0x0);
+			vmstat.pgs_pgtbl++;
 		}
 	}
 }
@@ -152,9 +168,10 @@ pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 	if (*entry & kMMUPresent) {
 		addr = pte_get_addr(*entry);
 	} else if (alloc) {
-		vm_page_t *page = vm_allocpage(true);
+		vm_page_t *page = vm_pagealloc(true);
 		if (!page)
 			fatal("out of pages");
+		vmstat.pgs_pgtbl++;
 		addr = (uint64_t *)page->paddr;
 		pte_set(entry, addr, mmuprot);
 	}

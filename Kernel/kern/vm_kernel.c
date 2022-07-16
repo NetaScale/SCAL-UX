@@ -37,9 +37,10 @@ internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
 		return r;
 
 	for (int i = 0; i < size - 1; i += PGSIZE) {
-		vm_page_t *page = vm_allocpage(flags & kVMemSleep);
+		vm_page_t *page = vm_pagealloc(flags & kVMemSleep);
 		pmap_enter_kern(kmap.pmap, page->paddr, (vaddr_t)*out + i,
 		    kVMAll);
+		vmstat.pgs_kmem++;
 	}
 
 	return 0;
@@ -61,13 +62,14 @@ internal_freewired(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 	for (int i = 0; i < r; i += PGSIZE) {
 		kprintf("unmap 0x%lx\n", addr + i);
 		/* TODO: actually unmap */
+		/* vmstat.pgs_kmem-- */
 	}
 }
 
 void
 vm_kernel_init()
 {
-	//char *test;
+	// char *test;
 
 	vmem_earlyinit();
 	vmem_init(&kmap.vmem, "kernel-va", KHEAP_BASE, KHEAP_SIZE, PGSIZE, NULL,

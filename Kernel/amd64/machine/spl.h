@@ -47,6 +47,7 @@ splraise(spl_t spl)
 
 #define splhigh() splraise(kSPLHigh)
 #define splsched() splraise(kSPLSched);
+#define splvm() splraise(kSPLVM)
 #define splhard() splraise(kSPLHard)
 #define splsoft() splraise(kSPLSoft)
 

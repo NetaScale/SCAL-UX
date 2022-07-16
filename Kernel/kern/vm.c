@@ -10,17 +10,22 @@
 
 #include <stdatomic.h>
 
+#include "kern/lock.h"
 #include "liballoc.h"
 #include "libkern/klib.h"
+#include "machine/spl.h"
 #include "machine/vm_machdep.h"
 #include "sys/queue.h"
 #include "vm.h"
 #include "vmem.h"
 
+spinlock_t	     vm_page_queues_lock = SPINLOCK_INITIALISER;
 struct vm_page_queue pg_freeq = TAILQ_HEAD_INITIALIZER(pg_freeq),
 		     pg_activeq = TAILQ_HEAD_INITIALIZER(pg_activeq),
-		     pg_inactiveq = TAILQ_HEAD_INITIALIZER(pg_inactiveq);
+		     pg_inactiveq = TAILQ_HEAD_INITIALIZER(pg_inactiveq),
+		     pg_wireq = TAILQ_HEAD_INITIALIZER(pg_wireq);
 vm_map_t kmap;
+vmstat_t vmstat;
 
 /*
  * note: ultimately a vm_object will always have a tree of vm_page_t's. and then
@@ -143,10 +148,25 @@ copyphyspage(paddr_t dst, paddr_t src)
 }
 
 /**
+ * Create a new anon for a given offset.
+ * @returns LOCKED new anon
+ */
+vm_anon_t *
+anon_new(size_t offs)
+{
+	vm_anon_t *newanon = kmalloc(sizeof *newanon);
+	newanon->refcnt = 1;
+	spinlock_init(&newanon->lock);
+	lock(&newanon->lock);
+	newanon->resident = true;
+	newanon->offs = offs;
+	newanon->physpage = vm_pagealloc(1);
+	return newanon;
+}
+
+/**
  * Copy an anon, yielding a new anon.
- *
  * @param anon LOCKED anon to copy
- *
  * @returns LOCKED new anon, or NULL if OOM.
  */
 vm_anon_t *
@@ -156,8 +176,9 @@ anon_copy(vm_anon_t *anon)
 	newanon->refcnt = 1;
 	spinlock_init(&newanon->lock);
 	lock(&newanon->lock);
+	newanon->resident = true;
 	newanon->offs = anon->offs;
-	newanon->physpage = vm_allocpage(1);
+	newanon->physpage = vm_pagealloc(1);
 	copyphyspage(newanon->physpage->paddr, anon->physpage->paddr);
 	return newanon;
 }
@@ -197,6 +218,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 
 		if (!anon->resident) {
 			kprintf("vm_fault: paging in not yet supported\n");
+			/* paging in will set the page wired */
 			assert(!(flags & kVMFaultPresent));
 			unlock(&anon->lock);
 			return -1;
@@ -214,6 +236,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 
 				unlock(&anon->lock);
 				anon = *pAnon;
+				vm_page_unwire(anon->physpage);
 				pmap_enter(map, anon->physpage, vaddr, kVMAll);
 			} else {
 				assert(!(flags & kVMFaultPresent));
@@ -236,9 +259,13 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 	}
 
 	/* page not present locally, nor in parent => map new zero page */
+	anon = anon_new(voff / PGSIZE);
+	/* can just map in readwrite as it's new thus refcnt = 1 */
+	pmap_enter(map, anon->physpage, vaddr, kVMAll);
+	/* now let it be subject to paging */
+	vm_page_unwire(anon->physpage);
 
-	kprintf("vm_fault: map in new zero page not yet implemented\n");
-	return -1;
+	return 0;
 }
 
 int
@@ -290,4 +317,18 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	*vaddrp = (vaddr_t)addr;
 
 	return 0;
+}
+
+void
+vm_page_unwire(vm_page_t *page)
+{
+	spl_t spl = splvm();
+	assert(page->wirecnt > 0);
+	if (--page->wirecnt == 0) {
+		TAILQ_REMOVE(&pg_wireq, page, queue);
+		TAILQ_INSERT_HEAD(&pg_activeq, page, queue);
+		vmstat.pgs_wired--;
+		vmstat.pgs_active++;
+	}
+	splx(spl);
 }
