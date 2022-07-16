@@ -106,7 +106,7 @@ mem_init()
 				sizeof(vm_page_t) * bm->npages,
 			    PGSIZE);
 
-			kprintf("used %lu KiB for page map\n", used / 1024);
+			kprintf("used %lu KiB for resident pagetable\n", used / 1024);
 
 			kprintf("Usable memory area: 0x%lx "
 				"(%lu mb long, %lu pages)\n",
@@ -294,24 +294,24 @@ _start(void)
 
 	vaddr_t anonaddr = VADDR_MAX, anon2addr = VADDR_MAX;
 	vm_allocate(&kmap, &aobj1, &anonaddr, PGSIZE * 32);
-	kprintf("mapped at %p\n", anonaddr);
+	kprintf("Aobj at %p\n", anonaddr);
+
+	strcpy(anonaddr, "Hello, world");
+
+	aobj2 = vm_object_copy(aobj1);
+	vm_map_object(&kmap, aobj2, &anon2addr, PGSIZE * 32, false);
+	kprintf("Aobj copy at %p\n", anon2addr);
+
+	strcpy(anon2addr + 7, "copy-on-write world!");
+
+	kprintf("Page from Aobj1:\t%s\nPage from Aobj2:\t%s\n", (char *)anonaddr,
+	    (char *)anon2addr);
 
 	kprintf(
 	    "Pages Free: %lu\tPages Special: %lu\tPages Active: %lu\n"
 	    "Pages Wired: %lu\tOf Which Kmem: %lu\tOf Which Pagetables: %lu\n",
 	    vmstat.pgs_free, vmstat.pgs_special, vmstat.pgs_active,
 	    vmstat.pgs_wired, vmstat.pgs_kmem, vmstat.pgs_pgtbl);
-
-	strcpy(anonaddr, "Hello, world");
-
-	aobj2 = vm_object_copy(aobj1);
-	vm_map_object(&kmap, aobj2, &anon2addr, PGSIZE * 32, false);
-	kprintf("mapped at %p\n", anon2addr);
-
-	*(char *)anon2addr = 'g';
-
-	kprintf("Page 1:\t %s\nPage 2:\t %s", (char *)anonaddr,
-	    (char *)anon2addr);
 
 	// We're done, just hang...
 	done();

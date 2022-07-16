@@ -314,11 +314,13 @@ pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 				goto next;
 			}
 		}
-	}
 
-	fatal("pmap_unenter: no mapping of frame %p at vaddr %p in map %p\n",
-	    page->paddr, vaddr, map);
+		fatal(
+		    "pmap_unenter: no mapping of frame %p at vaddr %p in map %p\n",
+		    page->paddr, vaddr, map);
+	}
 
 next:
 	LIST_REMOVE(pv, pv_entries);
+	kfree(pv);
 }

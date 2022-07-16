@@ -12,7 +12,11 @@ kernel.
 
 That concludes the facetious part of the readme.
 
-This is SCAL/UX - an operating system currently targeting amd64 PCs. It is
+Welcome to the SCAL/UX repository.
+
+***The First Hobbyist's Operating System with Virtual Memory Compression***
+
+This is an operating system currently targeting amd64 PCs. It is
 designed with the goal of eventually accommodating the Valutron virtual machine
 (which implements a Smalltalk-like language) to run atop it.
 
@@ -27,10 +31,10 @@ Some plans
 VMM:
 
 The VMM is modeled mostly after NetBSD's UVM with some reference to Mach VMM
-(and its derivates in the BSDs: macOS, )
+(and its derivates in the BSDs: macOS, FreeBSD, etc.)
 
-- [ ] VM Compressor: LZ4 compression of pages as first-line destination for
-  swapped-out pages.
+- [x] (initial PoC only) VM Compressor: LZ4 compression of pages as first-line
+  destination for swapped-out pages (Linux calls this ZRam).
 - [ ] Swapping to files.
 
 Allocators:
@@ -39,7 +43,7 @@ Several allocators are planned, resembling those in NetBSD. The design basis is
 Bonwick and Adams' (2001) paper "Magazines and Vmem: Extending the Slab
 Allocator to Many CPUs and Arbitrary Resources."
 
-- [ ] VMem: Despite its name, not limited to allocation of virtual address
+- [x] VMem: Despite its name, not limited to allocation of virtual address
   space. It should deal in any sort of interval scale (for example, PIDs.) To
   have support for several strategies (instant fit, best fit, and next fit).
   Instant fit runs in constant time. Next fit doesn't use the power-of-2

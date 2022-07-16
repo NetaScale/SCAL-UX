@@ -245,6 +245,7 @@ anon_new(size_t offs)
 	newanon->resident = true;
 	newanon->offs = offs;
 	newanon->physpage = vm_pagealloc(1);
+	newanon->physpage->anon = newanon;
 	return newanon;
 }
 
@@ -256,13 +257,7 @@ anon_new(size_t offs)
 vm_anon_t *
 anon_copy(vm_anon_t *anon)
 {
-	vm_anon_t *newanon = kmalloc(sizeof *newanon);
-	newanon->refcnt = 1;
-	spinlock_init(&newanon->lock);
-	lock(&newanon->lock);
-	newanon->resident = true;
-	newanon->offs = anon->offs;
-	newanon->physpage = vm_pagealloc(1);
+	vm_anon_t *newanon = anon_new(anon->offs);
 	copyphyspage(newanon->physpage->paddr, anon->physpage->paddr);
 	return newanon;
 }
