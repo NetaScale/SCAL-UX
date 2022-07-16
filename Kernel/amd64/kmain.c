@@ -290,8 +290,10 @@ _start(void)
 	thread_run(nothing2);
 #endif
 
-	vaddr_t anonaddr = VADDR_MAX;
-	vm_allocate(&kmap, NULL, &anonaddr, PGSIZE * 32);
+	vm_object_t *aobj1, *aobj2;
+
+	vaddr_t anonaddr = VADDR_MAX, anon2addr = VADDR_MAX;
+	vm_allocate(&kmap, &aobj1, &anonaddr, PGSIZE * 32);
 	kprintf("mapped at %p\n", anonaddr);
 
 	kprintf(
@@ -301,7 +303,15 @@ _start(void)
 	    vmstat.pgs_wired, vmstat.pgs_kmem, vmstat.pgs_pgtbl);
 
 	strcpy(anonaddr, "Hello, world");
-	kprintf("Anon page contents: %s\n", (char *)anonaddr);
+
+	aobj2 = vm_object_copy(aobj1);
+	vm_map_object(&kmap, aobj2, &anon2addr, PGSIZE * 32, false);
+	kprintf("mapped at %p\n", anon2addr);
+
+	*(char *)anon2addr = 'g';
+
+	kprintf("Page 1:\t %s\nPage 2:\t %s", (char *)anonaddr,
+	    (char *)anon2addr);
 
 	// We're done, just hang...
 	done();

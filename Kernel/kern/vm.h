@@ -11,8 +11,11 @@
 #ifndef VM_H_
 #define VM_H_
 
+#include <sys/types.h>
+
 #include <machine/vm_machdep.h>
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -182,7 +185,9 @@ typedef struct vm_object {
 			struct vm_page_queue pgs;
 		} kheap;
 		struct {
-			vm_amap_t	  *amap;
+			vm_amap_t *amap;
+			/** if not -1, the maximum size of this object */
+			ssize_t		  maxsize;
 			struct vm_object *parent;
 		} anon;
 	};
@@ -244,6 +249,22 @@ vm_object_t *vm_aobj_new(size_t size);
  */
 int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
     bool copy);
+
+/**
+ * Create a (copy-on-write optimised) copy of a VM object.
+
+ * The exact semantics of a copy vary depending on what sort of object is
+ * copied:
+ * - Copying an anonymous object copies all the pages belonging to that
+ * anonymous object (albeit with copy-on-write optimisation)
+ * - Copying another type of object yields a new anonymous object with no pages;
+ * the new object is assigned the copied object as parent, and when a page is
+ * absent from the copied object, its parent is checked to see whether it holds
+ * the page. Changes to the parent are therefore reflected in the copied object;
+ * unless and until the child object tries to write to one of these pages, which
+ * copies it.
+ */
+vm_object_t *vm_object_copy(vm_object_t *obj);
 
 /**
  * Allocate a single page; optionally sleep to wait for one to become available.

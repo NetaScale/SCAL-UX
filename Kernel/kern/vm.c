@@ -8,6 +8,11 @@
  * All rights reserved.
  */
 
+/**
+ * @file vm.c
+ * @brief Virtual memory
+ */
+
 #include <stdatomic.h>
 
 #include "kern/lock.h"
@@ -56,6 +61,7 @@ amap_copy(vm_amap_t *amap)
 {
 	vm_amap_t *newamap = kmalloc(sizeof *newamap);
 
+	newamap->curnchunk = amap->curnchunk;
 	newamap->chunks = kmalloc(sizeof *newamap->chunks * amap->curnchunk);
 	for (int i = 0; i < amap->curnchunk; i++) {
 		if (amap->chunks[i] == NULL) {
@@ -67,28 +73,12 @@ amap_copy(vm_amap_t *amap)
 		for (int i2 = 0; i2 < ELEMENTSOF(amap->chunks[i]->anon); i2++) {
 			newamap->chunks[i]->anon[i2] =
 			    amap->chunks[i]->anon[i2];
-			amap->chunks[i]->anon[i2]->refcnt++;
+			if (amap->chunks[i]->anon[i2] != NULL)
+				amap->chunks[i]->anon[i2]->refcnt++;
 		}
 	}
 
 	return newamap;
-}
-
-vm_object_t *
-vm_object_copy(vm_object_t *obj)
-{
-	vm_object_t *newobj = kmalloc(sizeof *newobj);
-
-	assert(obj->type == kVMObjAnon);
-
-	spinlock_init(&newobj->lock);
-	newobj->refcnt = 1;
-	newobj->size = obj->size;
-	newobj->type = obj->type;
-	newobj->anon.parent = obj->anon.parent ? obj->anon.parent : obj;
-	newobj->anon.amap = amap_copy(obj->anon.amap);
-
-	return newobj;
 }
 
 int
@@ -262,8 +252,10 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 	anon = anon_new(voff / PGSIZE);
 	/* can just map in readwrite as it's new thus refcnt = 1 */
 	pmap_enter(map, anon->physpage, vaddr, kVMAll);
+	*pAnon = anon;
 	/* now let it be subject to paging */
 	vm_page_unwire(anon->physpage);
+	unlock(&anon->lock);
 
 	return 0;
 }
@@ -274,8 +266,10 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	vm_map_entry_t *ent = map_entry_for_addr(map, vaddr);
 	voff_t		obj_off;
 
+#ifdef DEBUG_VM_FAULT
 	kprintf("vm_fault: in map %p at addr %p (flags: %d)\n", map, vaddr,
 	    flags);
+#endif
 
 	if (!ent) {
 		kprintf("vm_fault: no object at vaddr %p\n", vaddr);
@@ -302,6 +296,8 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	vm_map_entry_t *entry;
 	int		r;
 
+	assert(!copy);
+
 	r = vmem_xalloc(&map->vmem, size, 0, 0, 0, 0, 0, exact ? kVMemExact : 0,
 	    &addr);
 	if (r < 0)
@@ -317,6 +313,28 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	*vaddrp = (vaddr_t)addr;
 
 	return 0;
+}
+
+vm_object_t *
+vm_object_copy(vm_object_t *obj)
+{
+	vm_object_t *newobj = kmalloc(sizeof *newobj);
+
+	if (obj->type != kVMObjAnon) {
+		fatal("vm_object_copy: only implemented for anons as of yet\n");
+	}
+
+	spinlock_init(&newobj->lock);
+	newobj->refcnt = 1;
+	newobj->size = obj->size;
+	newobj->type = obj->type;
+	if (obj->type == kVMObjAnon) {
+		newobj->anon.parent = obj->anon.parent ? obj->anon.parent :
+							 NULL;
+	}
+	newobj->anon.amap = amap_copy(obj->anon.amap);
+
+	return newobj;
 }
 
 void
