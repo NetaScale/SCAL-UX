@@ -9,14 +9,108 @@
  */
 
 /**
- * @file vm.c
- * @brief Virtual memory
+ * \page Virtual Memory Manager
+ *
+ * Overview
+ * ========
+ *
+ * The SCAL/UX virtual memory manager manages the system's memory. It is grossly
+ * divisible into two components: pmap, which is machine-dependent and directly
+ * interfaces with the MMU, and vm, which is machine-independent and calls on
+ * pmap.
+ *
+ * The design of the VMM derives mostly from that of NetBSD's UVM, which itself
+ * derived significant influence from Mach VM and SunOS VM, so elements of those
+ * traditions are also visible.
+ *
+ * Features of the VMM include:
+ * - Lazy allocation
+ *	Memory often does not need to be allocated until it is actually read
+ *	or written to. This applies even to e.g. page tables.
+ * - Swapping (not yet!!):
+ *	Swapping out of pages to a backing store is possible. The treatment of
+ *	pages backed by an actual object (e.g. a memory-mapped file) is
+ *	identical to the treatment of pages backed by swap space.
+ * - VM Compression (not yet!!):
+ *	If possible, pages are compressed instead of being swapped out; a part
+ *	of system memory is reserved by the VM Compressor to compress pages
+ *	into. When this is no longer adequate, the compressed pages can then be
+ *	swapped out.
+ *
+ * Concepts
+ * ========
+ *
+ * Address Space Map (`vm_map_t`)
+ * ------------------------------
+ *
+ * These represent a single address space. There are two kinds: a kernel map (of
+ * which only a single exists) and a process map. On all current ports, the
+ * current user map (if any) defines the mappings for the lower half of the
+ * system virtual address space, while the kernel map defines those for the
+ * higher half.
+ *
+ * Maps are made up of entries (`vm_map_entry_t`), which store protection mode,
+ * a reference to a VM Object, offset into the VM object, and start/end address.
+ *
+ * VM Objects
+ * ----------
+ *
+ * VM Objects are entities which can be mapped into an address space. Being
+ * objects, the exact semantics of their mapping varies. There are three main
+ * types:
+ *  - Anonymous objects: Represent anonymous memory, memory which is
+ * zero-initialised and not backed by a file or any other sort of object. Pages
+ * of anonymous memory may be swapped out (compressed by the VM Compressor and
+ * possibly also stored in a swapfile); the subsystem that does this is called
+ * the Default Pager.
+ * - Device objects: Directly map physical pages. Through these devices accessed
+ * by memory-mapped I/O may be used.
+ * - Backed objects: These are backed by some actually-existing object. They are
+ * associated with a Pager, an object which can fetch pages into memory or put
+ * them back to their backing store. The major example is the VNode Pager, which
+ * handles memory-mapped files.
+ *
+ * Implementation
+ * ==============
+ *
+ * Resident Page Tables (RPTs)
+ * ---------------------------
+ *
+ * These are effectively inverted page tables. They store data on all resident
+ * pages which may be used as memory proper (so framebuffers, device memory, etc
+ * is not covered) and positioned at the beginning of all usable regions of
+ * memory detected by the bootloader. They are arrays of `vm_page_t` structures.
+ *
+ * Physical addresses representing useful memory can therefore be quickly
+ * associated with their RPT entry. The RPT entry stores information including
+ * (if the platform does not make this cheap) where every virtual mapping of a
+ * physical page can be found; this is used during swapout to invalidate all
+ * mappings. They also store linkage into the page queues.
+ *
+ * Page Queues
+ * -----------
+ *
+ * These are queues of pages in the RPTs. There are several queues: the free
+ * queue is a freelist from which pages can be allocated, the active and
+ * inactive queues are for pageable (= swappable out, or can be written back to
+ * backing store) pages, there is a wired queue for pages which have been pinned
+ * so that they may not be paged out.
+ *
+ * Anons and Anon Maps
+ * -------------------
+ *
+ * Anonymous memory is implemented by having an anonymous VM Object carry an
+ * Anon Map. An Anon Map is made up of pointers to Anons, where an Anon
+ * describes a logical page of anonymous memory; it either points to an RPT
+ * entry if the page is currently resident, otherwise it stores a Drum Slot (a
+ * unique identifier sufficient to figure out where the page has been stored in
+ * a swapfile or the VM Compressor).
+ *
  */
 
 #include <stdatomic.h>
 
 #include "kern/lock.h"
-#include "liballoc.h"
 #include "libkern/klib.h"
 #include "machine/spl.h"
 #include "machine/vm_machdep.h"
