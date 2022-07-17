@@ -410,14 +410,19 @@ string_to_eisaid(const char *id)
 	for (acpi_madt_entry_header_t *item =
 		 (acpi_madt_entry_header_t *)&madt->entries[0];
 	     (uint8_t *)item <
-	     (madt->entries + (madt->header.length - sizeof(acpi_madt_t)));
-	     item += item->length) {
+	     (madt->entries + (madt->header.length - sizeof(acpi_madt_t)));) {
 		if (item->type == 1) /* I/O APIC */ {
 			acpi_madt_ioapic_t *ioapic = (acpi_madt_ioapic_t *)item;
 			[[IOApic alloc]
 			    initWithID:ioapic->ioapic_id
 			       address:(void *)(uintptr_t)ioapic->ioapic_addr
 			       gsiBase:ioapic->gsi_base];
+		}
+		/* FIXME: why is that needed? */
+		if (!item->length) {
+			item += sizeof(acpi_madt_entry_header_t);
+		} else {
+			item += item->length;
 		}
 	}
 

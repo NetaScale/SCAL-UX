@@ -1,5 +1,5 @@
-
 #include <amd64/amd64.h>
+#include <amd64/kasan.h>
 
 #include <kern/vm.h>
 #include <libkern/klib.h>
@@ -43,9 +43,26 @@ vm_pagealloc(bool sleep)
 	vmstat.pgs_free--;
 	vmstat.pgs_wired++;
 	page->wirecnt = 1;
+	assert(page->free);
 	page->free = 0;
+
 	VM_PAGE_QUEUES_UNLOCK();
 	splx(spl);
+	return page;
+}
+
+void
+vm_pagefree(vm_page_t *page)
+{
+	page->free = 1;
+	TAILQ_INSERT_HEAD(&pg_freeq, page, queue);
+}
+
+static vm_page_t *
+vm_pagealloc_zero(bool sleep)
+{
+	vm_page_t *page = vm_pagealloc(sleep);
+	memset(P2V(page->paddr), 0x0, PGSIZE);
 	return page;
 }
 
@@ -83,7 +100,7 @@ arch_vm_init(paddr_t kphys)
 	for (int i = 255; i < 511; i++) {
 		uint64_t *pml4 = P2V(kpmap.pml4);
 		if (pte_get_addr(pml4[i]) == NULL) {
-			pte_set(&pml4[i], vm_pagealloc(0)->paddr,
+			pte_set(&pml4[i], vm_pagealloc_zero(0)->paddr,
 			    kMMUDefaultProt);
 			vmstat.pgs_pgtbl++;
 		}
@@ -94,11 +111,11 @@ pmap_t *
 pmap_new()
 {
 	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
-	pmap->pml4 = vm_pagealloc(1)->paddr;
+	pmap->pml4 = vm_pagealloc_zero(1)->paddr;
 	for (int i = 255; i < 512; i++) {
 		uint64_t *pml4 = P2V(pmap->pml4);
 		uint64_t *kpml4 = P2V(kmap.pmap->pml4);
-		pte_set(&pml4[i], kpml4[i], kMMUDefaultProt);
+		pte_set(&pml4[i], (void *)kpml4[i], kMMUDefaultProt);
 	}
 	return pmap;
 }
@@ -106,7 +123,7 @@ pmap_new()
 static void
 invlpg(vaddr_t addr)
 {
-	asm volatile("invlpg %0" ::"m"(addr));
+	asm volatile("invlpg %0" : : "m"(*((const char *)addr)) : "memory");
 }
 
 /* get the flags of a pte */
@@ -182,7 +199,7 @@ pmap_descend(uint64_t *table, size_t index, bool alloc, uint64_t mmuprot)
 	if (*entry & kMMUPresent) {
 		addr = pte_get_addr(*entry);
 	} else if (alloc) {
-		vm_page_t *page = vm_pagealloc(true);
+		vm_page_t *page = vm_pagealloc_zero(true);
 		if (!page)
 			fatal("out of pages");
 		vmstat.pgs_pgtbl++;
@@ -301,20 +318,41 @@ pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 	pdpte_t	*pdpte;
 	pde_t    *pde;
 	pte_t    *pte;
+	pte_t    *pti_virt;
 
 	// kprintf("pmap_enter: phys 0x%lx at virt 0x%lx\n", phys, virt);
 	pdpte = pmap_descend(pml4, pml4i, true, kMMUDefaultProt);
 	pde = pmap_descend(pdpte, pdpti, true, kMMUDefaultProt);
 	pte = pmap_descend(pde, pdi, true, kMMUDefaultProt);
 
-	pte_set(P2V(&pte[pti]), phys, vm_prot_to_i386(prot));
+	pti_virt = P2V(&pte[pti]);
+
+	if (pte_get_addr(*pti_virt) != NULL) {
+		fatal("pmap_enter_kern: address already has a mapping\n");
+	}
+
+	pte_set(pti_virt, phys, vm_prot_to_i386(prot));
+}
+
+static vm_page_t *
+vm_page_from_paddr(paddr_t paddr)
+{
+	vm_pregion_t *preg;
+
+	TAILQ_FOREACH (preg, &vm_pregion_queue, queue) {
+		if (preg->paddr <= paddr &&
+		    (preg->paddr + PGSIZE * preg->npages) > paddr) {
+			return &preg->pages[(paddr - preg->paddr) / PGSIZE];
+		}
+	}
+
+	return NULL;
 }
 
 void
 pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 {
 	/** \todo free no-longer-needed page tables */
-
 	pte_t  *pte = pmap_fully_descend(map->pmap, vaddr);
 	paddr_t paddr;
 
@@ -327,16 +365,7 @@ pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 	invlpg(vaddr);
 
 	if (!page) {
-		vm_pregion_t *preg;
-
-		TAILQ_FOREACH (preg, &vm_pregion_queue, queue) {
-			if (preg->paddr <= paddr &&
-			    (preg->paddr + PGSIZE * preg->npages) > paddr) {
-				page = &preg->pages[(paddr - preg->paddr) /
-				    PGSIZE];
-				break;
-			}
-		}
+		page = vm_page_from_paddr(paddr);
 	}
 
 	assert(page);
@@ -358,8 +387,38 @@ next:
 	kfree(pv);
 }
 
+vm_page_t *
+pmap_unenter_kern(vm_map_t *map, vaddr_t vaddr)
+{
+	pte_t     *pte = pmap_fully_descend(map->pmap, vaddr);
+	paddr_t	   paddr;
+	vm_page_t *page;
+
+	assert(pte);
+	paddr = pte_get_addr(*pte);
+	assert(*pte != 0x0);
+	*pte = 0x0;
+
+	invlpg(vaddr);
+
+	page = vm_page_from_paddr(paddr);
+	assert(page);
+
+	return page;
+}
+
 bool
 pmap_page_accessed_reset(vm_page_t *page)
 {
 	return false;
+}
+
+static void
+kasan_map_enter(vaddr_t vaddr)
+{
+	void *paddr = pmap_trans(kmap.pmap, vaddr);
+	if (paddr == NULL) {
+		vm_page_t *page = vm_pagealloc(0);
+		pmap_enter_kern(kmap.pmap, vaddr, page->paddr, kVMAll);
+	}
 }

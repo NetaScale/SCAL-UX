@@ -12,8 +12,10 @@
 #define VM_H_
 
 #include <sys/types.h>
+#include <sys/vm.h>
 
 #include <machine/vm_machdep.h>
+#include <amd64/kasan.h>
 
 #include <limits.h>
 #include <stdbool.h>
@@ -25,26 +27,7 @@
 #include "sys/queue.h"
 #include "sys/tree.h"
 
-#define VADDR_MAX (vaddr_t) UINT64_MAX
 
-#define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
-#define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
-
-#define PTRROUNDUP(addr) ROUNDUP(addr, (sizeof(uintptr_t)))
-/** Round a value up to pointer alignment. */
-#define PTRROUNDDOWN(addr) ROUNDDOWN(addr, (sizeof(uintptr_t)))
-
-#define PGROUNDUP(addr) ROUNDUP(addr, PGSIZE)
-#define PGROUNDDOWN(addr) ROUNDDOWN(addr, PGSIZE)
-
-/** virtual/physical address */
-typedef void *vaddr_t, *paddr_t;
-/** virtual/physical address offset */
-typedef uintptr_t voff_t, poff_t;
-/** physical pageframe number (multiply by PGSIZE to get physical address) */
-typedef uintptr_t ppg_t;
-/** page offset (multiply by PGSIZE to get bytes offset */
-typedef uintptr_t pgoff_t;
 /** unique identifier for a paged-out page */
 typedef uintptr_t drumslot_t;
 
@@ -282,6 +265,12 @@ vm_object_t *vm_object_copy(vm_object_t *obj);
 vm_page_t *vm_pagealloc(bool sleep);
 
 /**
+ * Free a page. Page must have already been removed from its queue (for now.)
+ * Obviously call at SPL VM.
+ */
+void vm_pagefree(vm_page_t *page);
+
+/**
  * Release a wire reference to a page; the page is placed into the active queue
  * and becomes subject to paging if new wirecnt is 0.
  */
@@ -325,6 +314,8 @@ void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
  * already known, so it does not have to be found again.
  */
 void pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv);
+
+vm_page_t *pmap_unenter_kern(vm_map_t*map, vaddr_t virt);
 
 /**
  * Check whether a page has been accessed. The access bits are reset.

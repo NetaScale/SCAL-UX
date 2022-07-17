@@ -16,7 +16,11 @@ elif (arch == 'hosted')
 endif
 
 kernel_objc_args = kernel_c_args
+#kernel_objc_args += [ '-mllvm', '-asan-globals=false']
 kernel_includes = [ include_directories('Kernel/' + arch, 'Limine', 'Kernel') ]
+
+kernel_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
+  '-fsanitize=kernel-address'  ]
 
 if (arch != 'hosted')
     mlibc = subproject('mlibc')

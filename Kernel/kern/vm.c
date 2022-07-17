@@ -250,7 +250,7 @@ vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 static void
 copyphyspage(paddr_t dst, paddr_t src)
 {
-	vaddr_t dstv = HHDM_BASE + dst, srcv = HHDM_BASE + src;
+	vaddr_t dstv = P2V(dst), srcv = P2V(src);
 	memcpy(dstv, srcv, PGSIZE);
 }
 
@@ -385,6 +385,8 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	kprintf("vm_fault: in map %p at addr %p (flags: %d)\n", map, vaddr,
 	    flags);
 #endif
+
+	vaddr = (vaddr_t)PGROUNDDOWN(vaddr);
 
 	if (!ent) {
 		kprintf("vm_fault: no object at vaddr %p\n", vaddr);

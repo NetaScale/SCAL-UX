@@ -33,8 +33,10 @@ internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
 	assert(vmem == &kmap.vmem);
 
 	r = vmem_xalloc(vmem, size, 0, 0, 0, 0, 0, flags, out);
-	if (r < 0)
+	if (r < 0) {
+		fatal("vmem_xalloc returned %d\n", r);
 		return r;
+	}
 
 	for (int i = 0; i < size - 1; i += PGSIZE) {
 		vm_page_t *page = vm_pagealloc(flags & kVMemSleep);
@@ -58,13 +60,27 @@ internal_freewired(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 		kprintf("internal_freewired: vmem returned %d\n", r);
 		return;
 	}
+	r = size;
 
 	for (int i = 0; i < r; i += PGSIZE) {
-		/* FIXME: actually do this properly */
-		// pmap_unenter(&kmap, NULL, (vaddr_t)addr + i, NULL);
-		//  put page on freeq
-		//  vmstat.pgs_kmem--
+		spl_t	   spl = splvm();
+		vm_page_t *page;
+		page = pmap_unenter_kern(&kmap, (vaddr_t)addr + i);
+		vmstat.pgs_kmem--;
+		vmstat.pgs_wired--;
+		VM_PAGE_QUEUES_LOCK();
+		TAILQ_REMOVE(&pg_wireq, page, queue);
+		vm_pagefree(page);
+		VM_PAGE_QUEUES_UNLOCK();
+		splx(spl);
 	}
+}
+
+void
+vm_kernel_dump()
+{
+	vmem_dump(&kmap.vmem);
+	vmem_dump(&vm_kernel_wired);
 }
 
 void

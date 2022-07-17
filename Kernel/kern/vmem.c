@@ -472,7 +472,7 @@ vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 			goto free;
 	}
 
-	kprintf("vmem_xfree: segment at address 0x%lx\n", addr);
+	fatal("vmem_xfree: segment at address 0x%lx\n", addr);
 	return -ENOENT;
 
 free:
@@ -507,9 +507,25 @@ free:
 	}
 
 	if (left->type == kVMemSegSpanImported && seg->size == left->size) {
+		assert(!right || right->type == kVMemSegSpanImported);
 		kprintf("Entire ispan 0x%lx-0x%lx is free\n", left->base,
 		    left->base + left->size);
 		vmem->freefn(vmem->source, left->base, left->size);
+
+
+		/* XXX seg not set free yet if it wasn't coalesced */
+#if 0
+		if(seg->type != kVMemSegFree) {
+			fatal("unexpected seg type %d\n", seg->type);
+		}
+#endif
+		LIST_REMOVE(seg, seglist);
+		TAILQ_REMOVE(&vmem->segqueue, seg, segqueue);
+		seg_free(vmem, seg);
+
+		LIST_REMOVE(left, seglist);
+		TAILQ_REMOVE(&vmem->segqueue, left, segqueue);
+		seg_free(vmem, left);
 	}
 
 	return size;
@@ -527,7 +543,7 @@ vmem_dump(const vmem_t *vmem)
 {
 	vmem_seg_t *span;
 
-	kprintf("VMem arena %s segments:\n", vmem->name);
+	kprintf("VMem arena <%s> segment queue:\n", vmem->name);
 	TAILQ_FOREACH (span, &vmem->segqueue, segqueue) {
 		kprintf("[%s:0x%lx-0x%lx]\n", vmem_seg_type_str[span->type],
 		    span->base, span->base + span->size);

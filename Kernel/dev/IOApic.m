@@ -88,8 +88,8 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 	TAILQ_FOREACH (ioapic, &ioapics, _ioapics_entries) {
 		if (ioapic->_gsi_base <= gsi &&
 		    ioapic->_gsi_base + ioapic->_n_redirs > gsi) {
-			ioapic_route(ioapic->_vaddr, gsi - ioapic->_gsi_base,
-			    0x20 + gsi);
+			//ioapic_route(ioapic->_vaddr, gsi - ioapic->_gsi_base,
+			//    0x20 + gsi);
 		}
 	}
 }

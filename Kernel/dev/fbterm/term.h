@@ -7,8 +7,8 @@
 extern "C" {
 #endif
 
-extern void *kmalloc(size_t size);
-#define alloc_mem(size) kmalloc(size)
+extern void *kcalloc(size_t n, size_t siz);
+#define alloc_mem(size) kcalloc(1, size)
 #define free_mem(PTR, SIZE) kfree(PTR)
 extern void kfree(void *ptr);
 extern void *memcpy(void *dest, const void *src, size_t len);

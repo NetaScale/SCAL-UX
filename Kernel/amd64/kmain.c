@@ -5,6 +5,7 @@
 #include "amd64/amd64.h"
 #include "dev/fbterm/FBTerm.h"
 #include "kern/liballoc.h"
+#include "kern/lock.h"
 #include "kern/task.h"
 #include "kern/vm.h"
 
@@ -58,9 +59,29 @@ static uint64_t	    bsp_lapic_id;
 static volatile int cpus_up = 0;
 extern void	    *syscon;
 
-void
-limterm_putc(int ch, void *ctx)
+enum { kPortCOM1 = 0x3f8 };
+
+static void
+serial_init()
 {
+	outb(kPortCOM1 + 1, 0x00);
+	outb(kPortCOM1 + 3, 0x80);
+	outb(kPortCOM1 + 0, 0x03);
+	outb(kPortCOM1 + 1, 0x00);
+	outb(kPortCOM1 + 3, 0x03);
+	outb(kPortCOM1 + 2, 0xC7);
+	outb(kPortCOM1 + 4, 0x0B);
+}
+
+ void
+ limterm_putc(int ch, void *ctx)
+ {
+
+	while (!(inb(kPortCOM1 + 5) & 0x20))
+		;
+	outb(kPortCOM1, ch);
+
+#if 1
 	if (!syscon) {
 		struct limine_terminal *terminal =
 		    terminal_request.response->terminals[0];
@@ -68,6 +89,7 @@ limterm_putc(int ch, void *ctx)
 	} else {
 		sysconputc(ch);
 	}
+#endif
 }
 
 static void
@@ -99,7 +121,7 @@ mem_init()
 	struct limine_memmap_entry **entries = memmap_request.response->entries;
 
 	for (int i = 0; i < memmap_request.response->entry_count; i++) {
-#ifdef PRINT_MAP
+#if 1//def PRINT_MAP
 		kprintf("%lx - %lx: %lu\n", entries[i]->base,
 		    entries[i]->base + entries[i]->length, entries[i]->type);
 #endif
@@ -127,8 +149,13 @@ mem_init()
 			    entries[i]->length / PGSIZE);
 
 			/* attach physical address to pages */
-			for (b = 0; b < bm->npages; b++)
+			for (b = 0; b < bm->npages; b++) {
 				bm->pages[b].paddr = bm->paddr + PGSIZE * b;
+				spinlock_init(&bm->pages[b].lock);
+				LIST_INIT(&bm->pages[b].pv_table);
+				bm->pages[b].wirecnt = 0;
+				bm->pages[b].obj = NULL;
+			}
 
 			/* mark off the pages used */
 			for (b = 0; b < used / PGSIZE; b++) {
@@ -271,6 +298,8 @@ void
 _start(void)
 {
 	thread_t *swapthr, *nothing, *nothing2;
+
+	serial_init();
 
 	// Ensure we got a terminal
 	if (terminal_request.response == NULL ||

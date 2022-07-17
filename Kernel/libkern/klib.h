@@ -55,6 +55,13 @@ extern spinlock_t lock_msgbuf;
 	}
 #define unimplemented(...) fatal("%s: unimplemented\n", __PRETTY_FUNCTION__)
 
+#if 0
+extern void    *(kmalloc)(size_t);
+extern void    *(krealloc)(void *, size_t);
+extern void    *(kcalloc)(size_t, size_t);
+extern void     (kfree)(void *);
+#endif
+
 /* assert SPL less than or equal to \p spl */
 static inline void
 splassertle(spl_t spl)

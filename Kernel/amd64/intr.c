@@ -159,9 +159,7 @@ unhandled:
 	kprintf("unhandled interrupt %lu\n", num);
 	kprintf("cr2: 0x%lx\n", read_cr2());
 	trace(frame);
-
 	for (;;) {
-		asm("hlt");
 	}
 }
 

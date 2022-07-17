@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <string.h>
 
+#include "amd64/amd64.h"
 #include "kern/task.h"
 #include "libkern/klib.h"
 #include "machine/spl.h"
@@ -96,9 +97,9 @@ start_init(void *bin)
 	thr1->pcb.frame.rbp = 0x0;
 	thread_run(thr1);
 #endif
-	for (;;) {
-		asm("hlt");
-	}
+	//	for (;;) {
+	//		asm("hlt");
+	//	}
 }
 
 static int
@@ -186,6 +187,14 @@ posix_main(void *initbin, size_t size)
 #endif
 
 	kprintf("Done!\n");
+
+#if 0
+	outw(0x604, 0x0 | 0x2000);
+	const char  s[] = "Shutdown";
+	const char *p;
+	for (p = s; *p != '\0'; p++)
+		outb(0x8900, *p);
+#endif
 
 	for (;;)
 		asm volatile("pause");
