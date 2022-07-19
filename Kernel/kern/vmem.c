@@ -84,18 +84,22 @@
 
 #include <errno.h>
 
-#include "kern/vm.h"
 #include "kern/vmem.h"
 #include "sys/queue.h"
 
 #ifdef _KERNEL
 #include <libkern/klib.h>
+
+#include "kern/vm.h"
 #else
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#define ELEMENTSOF(ARR) (sizeof(ARR) / sizeof(ARR[0]))
+
+#define vm_kalloc(SIZE, FLAGS) malloc(SIZE)
 #define kmalloc malloc
 #define kprintf printf
 #define fatal(...)                              \
@@ -316,7 +320,7 @@ split_seg(vmem_t *vmem, vmem_seg_t *seg, vmem_seg_t **left, vmem_seg_t **right,
 	if (addr > seg->base) {
 		(*left)->type = kVMemSegFree;
 		(*left)->base = seg->base;
-		(*left)->size = (seg->base + seg->size) - addr;
+		(*left)->size = addr - seg->base;
 		TAILQ_INSERT_BEFORE(seg, *left, segqueue);
 		freelist_insert(vmem, *left);
 	} else {
@@ -419,7 +423,6 @@ search:
 
 	list = &vmem->freelist[freelist_idx];
 	LIST_FOREACH (freeseg, list, seglist) {
-
 		if (freeseg->base <= min) {
 			addr = min;
 		} else if (flags & kVMemExact && freeseg->base > min) {
@@ -432,7 +435,6 @@ search:
 			continue;
 		}
 
-		addr = freeseg->base;
 		goto split_seg;
 	}
 
@@ -512,7 +514,6 @@ free:
 		    left->base + left->size);
 		vmem->freefn(vmem->source, left->base, left->size);
 
-
 		/* XXX seg not set free yet if it wasn't coalesced */
 #if 0
 		if(seg->type != kVMemSegFree) {
@@ -562,11 +563,15 @@ main()
 
 	vmem_init(vmem, "hello", 0x0, 0x1000000, 0x1000, NULL, NULL, NULL, 0, 0,
 	    0);
+	vmem_xalloc(vmem, 0x2000, 0, 0, 0, 0x2000, 0, kVMemExact, &addr);
+
+#if 0
 	vmem_add(vmem, 0x1000, 0x1000, 0);
 	vmem_add(vmem, 0x3000, 0x5000, 0);
 	vmem_add(vmem, 0x0, 0x1000, 0);
 	vmem_add(vmem, 0x2000, 0x1000, 0);
 	vmem_add(vmem, 0x10000, 0x5000, 0);
+#endif
 
 	kprintf("spans:\n");
 	LIST_FOREACH (span, &vmem->spanlist, seglist) {
@@ -580,6 +585,7 @@ main()
 
 	vmem_xalloc(vmem, 0x2000, 0, 0, 0, 0, 0, 0, &addr);
 
+#if 0
 	kprintf("\nsegs\n");
 	TAILQ_FOREACH (span, &vmem->segqueue, segqueue) {
 		kprintf("[%s:%p-%p]\n", vmem_seg_type_str[span->type],
@@ -588,6 +594,7 @@ main()
 
 	kprintf("FREEING\n");
 	vmem_xfree(vmem, addr, 0x2000);
+#endif
 
 	kprintf("\nsegs\n");
 }

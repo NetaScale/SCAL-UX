@@ -26,7 +26,8 @@
  * Features of the VMM include:
  * - Lazy allocation
  *	Memory often does not need to be allocated until it is actually read
- *	or written to. This applies even to e.g. page tables.
+ *	or written to. This applies to everything from memory-mapped files to
+ *	even page tables themselves.
  * - Swapping (not yet!!):
  *	Swapping out of pages to a backing store is possible. The treatment of
  *	pages backed by an actual object (e.g. a memory-mapped file) is
@@ -78,7 +79,7 @@
  *
  * These are effectively inverted page tables. They store data on all resident
  * pages which may be used as memory proper (so framebuffers, device memory, etc
- * is not covered) and positioned at the beginning of all usable regions of
+ * are not covered) and positioned at the beginning of all usable regions of
  * memory detected by the bootloader. They are arrays of `vm_page_t` structures.
  *
  * Physical addresses representing useful memory can therefore be quickly
@@ -90,11 +91,13 @@
  * Page Queues
  * -----------
  *
- * These are queues of pages in the RPTs. There are several queues: the free
- * queue is a freelist from which pages can be allocated, the active and
- * inactive queues are for pageable (= swappable out, or can be written back to
- * backing store) pages, there is a wired queue for pages which have been pinned
- * so that they may not be paged out.
+ * Pages of the RPTs belong to queues. There are several queues:
+ *
+ *  - the free queue is a freelist from which pages can be allocated
+ *  - the active and inactive queues are for pageable (= swappable out, or can
+ *  be written back to backing store) pages
+ *  - the wired queue for pages which have been pinned so that they may not be
+ *  paged out.
  *
  * Anons and Anon Maps
  * -------------------
@@ -102,7 +105,7 @@
  * Anonymous memory is implemented by having an anonymous VM Object carry an
  * Anon Map. An Anon Map is made up of pointers to Anons, where an Anon
  * describes a logical page of anonymous memory; it either points to an RPT
- * entry if the page is currently resident, otherwise it stores a Drum Slot (a
+ * entry if the page is currently resident, otherwise it stores a drumslot (a
  * unique identifier sufficient to figure out where the page has been stored in
  * a swapfile or the VM Compressor).
  *
@@ -389,7 +392,8 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	vaddr = (vaddr_t)PGROUNDDOWN(vaddr);
 
 	if (!ent) {
-		kprintf("vm_fault: no object at vaddr %p\n", vaddr);
+		kprintf("vm_fault: no object at vaddr %p in map %p\n", vaddr,
+		    map);
 		return -1;
 	}
 

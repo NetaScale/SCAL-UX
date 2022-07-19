@@ -68,25 +68,23 @@ start_init(void *bin)
 		0x48, 0xc7, 0xc7, 0x10, 0x00, 0x40, 0x00, 0xcd, 0x80, 0x2f,
 		0x69, 0x6e, 0x69, 0x74, 0x00, 0x00 };
 	task_t	       *task1 = task_fork(&task0);
+	thread_t	 *thr1;
+	vaddr_t	       vaddr = (vaddr_t)0x400000;
+
 	task1->pxproc = kmalloc(sizeof(proc_t));
 	task1->pxproc->task = task1;
 	memset(task1->pxproc->files, 0x0, sizeof task1->pxproc->files);
-	thread_t *thr1 = thread_new(task1, false);
-	vaddr_t	  vaddr = (vaddr_t)0x400000;
+	thr1 = thread_new(task1, false);
 
 	assert(vm_allocate(task1->map, NULL, &vaddr, 4096) == 0);
-#if 0
-	/* fault it in */
-	vm_fault(task1->map, 0x0, true);
-	memcpy(P2V(pmap_trans(task1->map->pmap, 0x0)), initcode,
-	    sizeof(initcode));
-#else
-	vm_activate(task1->map);
-	/* memcpy it in */
-	vm_activate(&kmap);
-#endif
 
-#if 0
+	/* copy the initcode */
+	vm_activate(task1->map);
+	task0.map = task1->map;
+	memcpy(vaddr, initcode, sizeof(initcode));
+	task0.map = &kmap;
+	vm_activate(&kmap);
+
 	assert(sys_open(task1->pxproc, "/dev/console", O_RDWR) >= 0);
 	assert(sys_open(task1->pxproc, "/dev/console", O_RDWR) >= 0);
 	assert(sys_open(task1->pxproc, "/dev/console", O_RDWR) >= 0);
@@ -96,10 +94,6 @@ start_init(void *bin)
 	thr1->pcb.frame.rdi = 0x0;
 	thr1->pcb.frame.rbp = 0x0;
 	thread_run(thr1);
-#endif
-	//	for (;;) {
-	//		asm("hlt");
-	//	}
 }
 
 static int

@@ -311,6 +311,7 @@ arch_resched(void *arg)
 	asm("cli");
 	unlock(&sched_lock);
 	spl0();
+	vm_activate(next->task->map);
 	swtch(&next->pcb.frame);
 	asm("sti");
 
