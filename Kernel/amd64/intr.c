@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "machine/spl.h"
+#include "posix/sys.h"
 
 enum {
 	kLAPICRegEOI = 0xb0,
@@ -25,6 +26,7 @@ enum {
 };
 
 enum {
+	kIntNumSyscall = 128,
 	/* set below 224, so that we can filter it out with CR8 */
 	kIntNumLAPICTimer = 223,
 	kIntNumLocalReschedule = 254,
@@ -85,6 +87,8 @@ void lapic_eoi();
 
 INTS(EXTERN_ISR_THUNK)
 
+int posix_syscall(intr_frame_t *frame);
+
 void
 idt_init()
 {
@@ -141,6 +145,11 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 		dpc_enqueue(&CURCPU()->resched.dpc);
 		lapic_eoi(); /* may have been an IPI; TODO seperate vec for ipi
 				resched... */
+		break;
+	}
+
+	case kIntNumSyscall: {
+		posix_syscall(frame);
 		break;
 	}
 

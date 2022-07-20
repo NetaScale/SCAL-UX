@@ -235,7 +235,10 @@ vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 
 	// lock(&map->lock);
 	entry = map_entry_for_addr(map, start);
-	assert(entry);
+	if (!entry) {
+		kprintf("failed to find entry for address %p\n", start);
+		return -1;
+	}
 	assert(vmem_xfree(&map->vmem, (vmem_addr_t)start, size) >= 0);
 	// vm_object_release(entry->obj);
 	for (vaddr_t v = entry->start; v < entry->end; v += PGSIZE) {
@@ -381,7 +384,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 int
 vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 {
-	vm_map_entry_t *ent = map_entry_for_addr(map, vaddr);
+	vm_map_entry_t *ent;
 	voff_t		obj_off;
 
 #ifdef DEBUG_VM_FAULT
@@ -389,6 +392,11 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	    flags);
 #endif
 
+	if (vaddr >= (vaddr_t)KERN_BASE) {
+		map = &kmap;
+	}
+
+	ent = map_entry_for_addr(map, vaddr);
 	vaddr = (vaddr_t)PGROUNDDOWN(vaddr);
 
 	if (!ent) {

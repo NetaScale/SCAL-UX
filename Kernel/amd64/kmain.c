@@ -1,13 +1,14 @@
-#include <libkern/klib.h>
 #include <limine.h>
 #include <stddef.h>
 
 #include "amd64/amd64.h"
 #include "dev/fbterm/FBTerm.h"
+#include "kern/ksrv.h"
 #include "kern/liballoc.h"
 #include "kern/lock.h"
 #include "kern/task.h"
 #include "kern/vm.h"
+#include "libkern/klib.h"
 
 void	 lapic_enable();
 uint32_t lapic_timer_calibrate();
@@ -73,9 +74,9 @@ serial_init()
 	outb(kPortCOM1 + 4, 0x0B);
 }
 
- void
- limterm_putc(int ch, void *ctx)
- {
+void
+limterm_putc(int ch, void *ctx)
+{
 
 	while (!(inb(kPortCOM1 + 5) & 0x20))
 		;
@@ -121,7 +122,7 @@ mem_init()
 	struct limine_memmap_entry **entries = memmap_request.response->entries;
 
 	for (int i = 0; i < memmap_request.response->entry_count; i++) {
-#if 1//def PRINT_MAP
+#if 1 // def PRINT_MAP
 		kprintf("%lx - %lx: %lu\n", entries[i]->base,
 		    entries[i]->base + entries[i]->length, entries[i]->type);
 #endif
@@ -352,6 +353,8 @@ _start(void)
 	    "Pages Wired: %lu\tOf Which Kmem: %lu\tOf Which Pagetables: %lu\n",
 	    vmstat.pgs_free, vmstat.pgs_special, vmstat.pgs_active,
 	    vmstat.pgs_wired, vmstat.pgs_kmem, vmstat.pgs_pgtbl);
+
+	ksrv_parsekern(kernel_file_request.response->kernel_file->address);
 
 	void posix_main(void *initrd, size_t initrd_size);
 	posix_main(module_request.response->modules[0]->address,
