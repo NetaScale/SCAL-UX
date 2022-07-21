@@ -228,26 +228,44 @@ map_entry_for_addr(vm_map_t *map, vaddr_t addr)
 	return NULL;
 }
 
-int
-vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
+static int
+unmap_entry(vm_map_t *map, vm_map_entry_t *entry)
 {
-	spl_t		spl = splvm();
-	vm_map_entry_t *entry;
-
-	// lock(&map->lock);
-	entry = map_entry_for_addr(map, start);
-	if (!entry) {
-		kprintf("failed to find entry for address %p\n", start);
-		return -1;
-	}
-	assert(vmem_xfree(&map->vmem, (vmem_addr_t)start, size) >= 0);
+	assert(vmem_xfree(&map->vmem, (vmem_addr_t)entry->start,
+		   entry->end - entry->start) >= 0);
 	// vm_object_release(entry->obj);
 	for (vaddr_t v = entry->start; v < entry->end; v += PGSIZE) {
 		pmap_unenter(map, NULL, v, NULL);
 	}
 	TAILQ_REMOVE(&map->entries, entry, queue);
 	kfree(entry);
-	/* todo: tlb shootdowns if map is used by multiple threads */
+	/* todo: tlb shootdowns if map is used by multiple
+	 * threads */
+	return 0;
+}
+
+int
+vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
+{
+	spl_t		spl = splvm();
+	vm_map_entry_t *entry, *tmp;
+	vaddr_t		end = start + size;
+
+	// lock(&map->lock);
+
+	TAILQ_FOREACH_SAFE (entry, &map->entries, queue, tmp) {
+		if ((entry->start < start && entry->end < start) ||
+		    (entry->start > end))
+			continue;
+		else if (entry->start >= start && entry->end <= end) {
+			unmap_entry(map, entry);
+		} else if (entry->start >= start && entry->end <= end) {
+			fatal("unimplemented deallocate right of vm object\n");
+		} else if (entry->start < start && entry->end <= end) {
+			fatal("unimplemented other sort of deallocate\n");
+		}
+	}
+
 	// unlock(&map->lock);
 	splx(spl);
 
