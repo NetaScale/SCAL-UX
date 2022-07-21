@@ -58,7 +58,7 @@ kqueue_wait(kqueue_t *kq)
 {
 	int r;
 	kq->sleeping = true;
-	r =  waitq_await(&kq->wq, 1, 250000);
+	r =  waitq_await(&kq->wq, 1, 25000000000);
 	kq->sleeping = false;
 	return r;
 }

@@ -23,6 +23,7 @@ typedef struct {
 	uint8_t length;
 } __attribute__((packed)) acpi_madt_entry_header_t;
 
+/* MADT entry type 1 */
 typedef struct {
 	acpi_madt_entry_header_t header;
 	uint8_t			 ioapic_id;
@@ -30,6 +31,15 @@ typedef struct {
 	uint32_t		 ioapic_addr;
 	uint32_t		 gsi_base;
 } __attribute__((packed)) acpi_madt_ioapic_t;
+
+/* MADT entry type 2 */
+typedef struct {
+	acpi_madt_entry_header_t header;
+	uint8_t			 bus_source;
+	uint8_t			 irq_source;
+	uint32_t		 gsi;
+	uint16_t		 flags;
+} __attribute__((packed)) acpi_madt_int_override_t;
 
 acpi_rsdt_t *rsdt = NULL;
 acpi_xsdt_t *xsdt = NULL;
@@ -396,6 +406,48 @@ string_to_eisaid(const char *id)
 	return YES;
 }
 
+static void
+madt_walk(acpi_madt_t *madt,
+    void (*callback)(acpi_madt_entry_header_t *item, void *arg), void *arg)
+{
+	for (uint8_t *item = &madt->entries[0]; item <
+	     (madt->entries + (madt->header.length - sizeof(acpi_madt_t)));) {
+		acpi_madt_entry_header_t *header = (acpi_madt_entry_header_t *)
+		    item;
+		callback(header, arg);
+		item += header->length;
+	}
+}
+
+static void
+parse_ioapics(acpi_madt_entry_header_t *item, void *arg)
+{
+	acpi_madt_ioapic_t *ioapic;
+
+	if (item->type != 1)
+		return;
+
+	ioapic = (acpi_madt_ioapic_t *)item;
+	[[IOApic alloc] initWithID:ioapic->ioapic_id
+			   address:(void *)(uintptr_t)ioapic->ioapic_addr
+			   gsiBase:ioapic->gsi_base];
+}
+
+static void
+parse_intrs(acpi_madt_entry_header_t *item, void *arg)
+{
+	switch (item->type) {
+	case 2: {
+		acpi_madt_int_override_t *intr = (acpi_madt_int_override_t *)
+		    item;
+		kprintf("AcpiPC/MADT: Remap ISA IRQ %d to %d (lopol %d, "
+			"lvltrig %d)\n",
+		    intr->irq_source, intr->gsi, intr->flags & 0x2,
+		    intr->flags & 0x8);
+	}
+	}
+}
+
 - init
 {
 	acpi_madt_t *madt;
@@ -406,25 +458,8 @@ string_to_eisaid(const char *id)
 	[self registerDevice];
 
 	madt = laihost_scan("APIC", 0);
-
-	for (acpi_madt_entry_header_t *item =
-		 (acpi_madt_entry_header_t *)&madt->entries[0];
-	     (uint8_t *)item <
-	     (madt->entries + (madt->header.length - sizeof(acpi_madt_t)));) {
-		if (item->type == 1) /* I/O APIC */ {
-			acpi_madt_ioapic_t *ioapic = (acpi_madt_ioapic_t *)item;
-			[[IOApic alloc]
-			    initWithID:ioapic->ioapic_id
-			       address:(void *)(uintptr_t)ioapic->ioapic_addr
-			       gsiBase:ioapic->gsi_base];
-		}
-		/* FIXME: why is that needed? */
-		if (!item->length) {
-			item += sizeof(acpi_madt_entry_header_t);
-		} else {
-			item += item->length;
-		}
-	}
+	madt_walk(madt, parse_ioapics, NULL);
+	madt_walk(madt, parse_intrs, NULL);
 
 	[self iterate:lai_resolve_path(NULL, "_SB_")];
 
