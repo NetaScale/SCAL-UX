@@ -7,6 +7,7 @@
 #include <libkern/klib.h>
 #include <stdint.h>
 
+#include "kern/ksrv.h"
 #include "machine/spl.h"
 #include "posix/sys.h"
 
@@ -104,13 +105,18 @@ trace(intr_frame_t *frame)
 		struct frame *rbp;
 		uint64_t      rip;
 	} *aframe = (struct frame *)frame->rbp;
+	const char *name;
+	size_t	    offs;
 
-	kprintf(" - RIP %p\n", (void *)frame->rip);
+	ksrv_backtrace((vaddr_t)frame->rip, &name, &offs);
+	kprintf(" - %p %s+%lu\n", (void *)frame->rip, name, offs);
 
 	if (aframe != NULL)
-		do
-			kprintf(" - RIP %p\n", (void *)aframe->rip);
-		while ((aframe = aframe->rbp) && aframe->rip != 0x0);
+		do {
+			ksrv_backtrace((vaddr_t)aframe->rip, &name, &offs);
+			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name,
+			    offs);
+		} while ((aframe = aframe->rbp) && aframe->rip != 0x0);
 }
 
 void callout_interrupt();

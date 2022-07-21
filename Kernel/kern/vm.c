@@ -128,6 +128,7 @@ struct vm_page_queue pg_freeq = TAILQ_HEAD_INITIALIZER(pg_freeq),
 		     pg_wireq = TAILQ_HEAD_INITIALIZER(pg_wireq);
 vm_map_t kmap;
 vmstat_t vmstat;
+bool	 vm_debug_anon = false;
 
 /*
  * note: ultimately a vm_object will always have a tree of vm_page_t's. and then
@@ -254,6 +255,16 @@ vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 }
 
 static void
+vm_dump(vm_map_t *map)
+{
+	vm_map_entry_t *ent;
+
+	TAILQ_FOREACH (ent, &map->entries, queue) {
+		kprintf("%p-%p type %d", ent->start, ent->end, ent->obj->type);
+	}
+}
+
+static void
 copyphyspage(paddr_t dst, paddr_t src)
 {
 	vaddr_t dstv = P2V(dst), srcv = P2V(src);
@@ -311,6 +322,10 @@ amap_anon_at(vm_amap_t *amap, pgoff_t page)
 	return &amap->chunks[chunk]->anon[(page % kAMapChunkNPages)];
 }
 
+#define VM_DBG(...)        \
+	if (vm_debug_anon) \
+	kprintf(__VA_ARGS__)
+
 static int
 fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
     vm_fault_flags_t flags)
@@ -334,10 +349,16 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 
 		if (anon->refcnt > 1) {
 			if (flags & kVMFaultWrite) {
+				VM_DBG(
+				    "nonpresent; refcnt > 1; write-fault; copy %p to new page and map read-write\n",
+				    anon->physpage->paddr);
+
 				anon->refcnt--;
 				*pAnon = anon_copy(*pAnon);
 
 				if (flags & kVMFaultPresent) {
+					VM_DBG(
+					    " - page mapped read-only (removing)\n");
 					pmap_unenter(map, anon->physpage, vaddr,
 					    NULL);
 				}
@@ -347,17 +368,29 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 				vm_page_unwire(anon->physpage);
 				pmap_enter(map, anon->physpage, vaddr, kVMAll);
 			} else {
+				VM_DBG(
+				    "nonpresent; refcnt > 1; read-fault; map pg %p readonly\n",
+				    anon->physpage->paddr);
+
 				assert(!(flags & kVMFaultPresent));
 				pmap_enter(map, anon->physpage, vaddr,
 				    kVMRead | kVMExecute);
 			}
 		} else {
-			if (flags & kVMFaultPresent)
+			if (flags & kVMFaultPresent) {
+				VM_DBG(
+				    "present and refcnt 1, remap pg %p readwrite\n",
+				    anon->physpage->paddr);
 				/** can simply upgrade to write-enabled */
 				pmap_reenter(map, anon->physpage, vaddr,
 				    kVMAll);
-			else {
-				fatal("unhandled case?\n");
+			} else {
+				VM_DBG(
+				    "nonpresent and refcnt 1, map pg %p readwrite\n",
+				    anon->physpage->paddr);
+
+				/** XXX FIXME: is this legal? */
+				pmap_enter(map, anon->physpage, vaddr, kVMAll);
 			}
 		}
 
@@ -369,8 +402,12 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 		return -1;
 	}
 
+	VM_DBG("not present, creating new zeroed\n");
+
 	/* page not present locally, nor in parent => map new zero page */
 	anon = anon_new(voff / PGSIZE);
+	VM_DBG(" - got page %p\n", anon->physpage->paddr);
+
 	/* can just map in readwrite as it's new thus refcnt = 1 */
 	pmap_enter(map, anon->physpage, vaddr, kVMAll);
 	*pAnon = anon;
@@ -392,7 +429,7 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	    flags);
 #endif
 
-	if (vaddr >= (vaddr_t)KERN_BASE) {
+	if (vaddr >= (vaddr_t)KHEAP_BASE) {
 		map = &kmap;
 	}
 
@@ -402,6 +439,7 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 	if (!ent) {
 		kprintf("vm_fault: no object at vaddr %p in map %p\n", vaddr,
 		    map);
+		vm_dump(map);
 		return -1;
 	}
 

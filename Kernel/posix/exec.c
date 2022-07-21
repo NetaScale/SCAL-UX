@@ -58,7 +58,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	}
 
 	if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0) {
-		kprintf("exec: bad e_ident in %s\n", path);
+		fatal("exec: bad e_ident in %s\n", path);
 		return -ENOEXEC;
 	}
 
@@ -92,7 +92,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 		size = PGROUNDUP(pageoff + phdr->p_memsz);
 		segbase += (uintptr_t)base;
 
-		vm_allocate(pkg->map, NULL, &segbase, size);
+		assert(vm_allocate(pkg->map, NULL, &segbase, size) == 0);
 
 		r = vfs_read(vn, segbase + pageoff, phdr->p_filesz,
 		    phdr->p_offset);

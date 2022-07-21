@@ -353,7 +353,7 @@ void
 pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 {
 	/** \todo free no-longer-needed page tables */
-	pte_t  *pte = pmap_fully_descend(map->pmap, vaddr);
+	pte_t  *pte = P2V(pmap_fully_descend(map->pmap, vaddr));
 	paddr_t paddr;
 
 	assert(pte);

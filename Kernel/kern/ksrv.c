@@ -7,6 +7,7 @@
 #include "kern/ksrv.h"
 #include "kern/vm.h"
 #include "libkern/klib.h"
+#include "sys/vm.h"
 
 #define ELFMAG "\177ELF"
 #define MAX2(x, y) ((x > y) ? x : y)
@@ -89,6 +90,39 @@ kmod_lookupsym(const char *name)
 	}
 
 	return NULL;
+}
+
+int
+ksrv_backtrace(vaddr_t vaddr, const char **name, size_t *offset)
+{
+	const char *cand_name;
+	vaddr_t	    cand_addr = NULL;
+	size_t	    cand_offs;
+	kmod_t     *kmod;
+
+	TAILQ_FOREACH (kmod, &kmods, entries) {
+		const Elf64_Sym *sym = NULL;
+
+		assert(kmod->symtab != NULL);
+		for (int i = 0; i < kmod->symtab_size; i++) {
+			const char *iName = kmod->strtab +
+			    kmod->symtab[i].st_name;
+			vaddr_t iAddr = (vaddr_t)kmod->symtab[i].st_value;
+
+			if (iAddr <= vaddr && iAddr > cand_addr) {
+				cand_name = iName;
+				cand_addr = iAddr;
+				cand_offs = vaddr - iAddr;
+			}
+		}
+	}
+
+	if (cand_addr == NULL)
+		return -1;
+
+	*name = cand_name;
+	*offset = cand_offs;
+	return 0;
 }
 
 void

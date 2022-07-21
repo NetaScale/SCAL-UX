@@ -212,6 +212,8 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	memcpy(buf, vaddr + off, nbyte);
 	vm_deallocate(&kmap, vaddr, PGROUNDUP(nbyte + off));
 
+	return nbyte; /* FIXME */
+
 #if 0
 	/* todo move to vfs_cached_read, this is generic pagecache manipulation? */
 	voff_t base = PGROUNDDOWN(off);
@@ -255,7 +257,7 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 
 	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
 		   false) == 0);
-	memcpy(buf, vaddr + off, nbyte);
+	memcpy(vaddr + off, buf, nbyte);
 	vm_deallocate(&kmap, vaddr, PGROUNDUP(nbyte + off));
 
 	return nbyte;
