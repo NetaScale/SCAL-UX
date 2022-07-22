@@ -303,6 +303,9 @@ sys_pselect(struct proc *proc, int nfds, fd_set *readfds, fd_set *writefds,
     uintptr_t *errp)
 {
 	kqueue_t *kq = kqueue_new();
+	int r;
+
+	kprintf("SYS_PSELECT\n");
 
 	for (int i = 0; i < nfds; i++) {
 		int	      filt = 0;
@@ -318,8 +321,9 @@ sys_pselect(struct proc *proc, int nfds, fd_set *readfds, fd_set *writefds,
 		kqueue_register(kq, &kev);
 	}
 
-	int x = kqueue_wait(kq);
-	kprintf("X: %d\n", x);
+	r = kqueue_wait(kq);
+	(void)r;
+	//kprintf("X: %d\n", x);
 
 	return 1;
 }

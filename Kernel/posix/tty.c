@@ -50,8 +50,6 @@ enqueue(tty_t *tty, int c)
 		tty->writehead = 0;
 	tty->buflen++;
 
-	kprintf("BUFLEN: %d\n", tty->buflen);
-
 	SLIST_FOREACH(knote, &tty->knotes, list)
 	{
 		knote->status = 1;
@@ -190,6 +188,9 @@ int
 tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 {
 	tty_t *tty = sctty;
+	spl_t spl = splhigh();
+
+	lock(&lock_msgbuf);
 	for (int i = 0; i < nbyte; i++) {
 		sysconputc(((char *)buf)[i]);
 #if 0
@@ -198,6 +199,9 @@ tty_write(dev_t dev, void *buf, size_t nbyte, off_t off)
 #endif
 	}
 	sysconflush();
+	unlock(&lock_msgbuf);
+	splx(spl);
+
 	return nbyte;
 }
 
@@ -205,6 +209,11 @@ int
 tty_kqfilter(dev_t dev, struct knote *kn)
 {
 	tty_t *tty = sctty;
-	SLIST_INSERT_HEAD(&tty->knotes, kn, list);
+	if (sctty->buflen > 0) {
+		kn->status = 1;
+		return 1;
+	} else {
+		SLIST_INSERT_HEAD(&tty->knotes, kn, list);
+	}
 	return 0;
 }

@@ -10,6 +10,7 @@
 
 #include <sys/mman.h>
 
+#include "abi-bits/errno.h"
 #include "amd64/amd64.h"
 #include "kern/vm.h"
 #include "libkern/klib.h"
@@ -58,7 +59,7 @@ posix_syscall(intr_frame_t *frame)
 		kprintf("PXSYS_exec: %s\n", (char *)ARG1);
 		const char *args[] = { "bash", NULL };
 		const char *envs[] = { "VAR=42", NULL };
-		assert(sys_exec(proc, "/bash", args, envs, frame) == 0);
+		assert(sys_exec(proc, "/forktest", args, envs, frame) == 0);
 		break;
 	}
 
@@ -99,9 +100,7 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysWrite: {
-		asm("cli");
 		int r = sys_write(proc, ARG1, (void *)ARG2, ARG3);
-		asm("sti");
 		if (r < 0) {
 			RET = -1;
 			err = -r;
@@ -146,6 +145,13 @@ posix_syscall(intr_frame_t *frame)
 	case kPXSysExit: {
 		RET = sys_exit(proc, ARG1);
 	}
+
+	case kPXSysFork:
+		RET = sys_fork(proc, &err);
+		break;
+
+	default:
+		err = EOPNOTSUPP;
 	}
 
 	ERR = err;

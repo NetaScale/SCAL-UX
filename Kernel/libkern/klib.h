@@ -12,11 +12,13 @@
 #define KLIB_H_
 
 #include <machine/spl.h>
+#include <machine/intr.h>
 
 #include <kern/liballoc.h>
 #include <kern/lock.h>
 #include <string.h>
 
+#include "kern/task.h"
 #include "nanoprintf.h"
 
 #define ELEMENTSOF(ARR) (sizeof(ARR) / sizeof(ARR[0]))
@@ -48,9 +50,10 @@ extern spinlock_t lock_msgbuf;
 	}
 #define fatal(...)                      \
 	{                               \
+		kprintf("on CPU %lu, PID %d, thread %p:\n", CURCPU()->num, CURTASK()->pid, CURTHREAD()); \
 		kprintf(__VA_ARGS__);   \
 		while (1) {             \
-			__asm__("hlt"); \
+			__asm__("cli"); \
 		}                       \
 	}
 #define unimplemented(...) fatal("%s: unimplemented\n", __PRETTY_FUNCTION__)

@@ -2,7 +2,7 @@
 
 #include "PS2Keyboard.h"
 #include "dev/IOApic.h"
-//#include "fbterm/FBTerm.h"
+#include "fbterm/FBTerm.h"
 #include "lai/core.h"
 #include "lai/error.h"
 #include "lai/helpers/resource.h"
@@ -105,11 +105,11 @@ laiex_view_resource(lai_nsnode_t *node, lai_variable_t *crs,
 
 - (void)handleCode:(uint8_t)code
 {
-	kprintf("got code %d\n", code);
+	//kprintf("got code %d\n", code);
 	if (code & 0x80) {
 	} else {
-		// extern FBTerm *syscon;
-		//[syscon input:codes[code]];
+		extern FBTerm *syscon;
+		[syscon input:codes[code]];
 	}
 }
 

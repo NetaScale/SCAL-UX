@@ -31,6 +31,7 @@ int
 kqueue_register(kqueue_t *kq, struct kevent *kev)
 {
 	knote_t *kn = kmalloc(sizeof *kn);
+	int r;
 
 	assert(kn);
 	kn->status = 0;
@@ -57,6 +58,13 @@ int
 kqueue_wait(kqueue_t *kq)
 {
 	int r;
+	knote_t *kn;
+
+	TAILQ_FOREACH(kn, &kq->knotes, entries) {
+		if (kn->status != 0)
+			return 1;
+	}
+
 	kq->sleeping = true;
 	r =  waitq_await(&kq->wq, 1, 25000000000);
 	kq->sleeping = false;

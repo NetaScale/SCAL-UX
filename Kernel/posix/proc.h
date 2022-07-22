@@ -24,5 +24,6 @@ typedef struct proc {
 } proc_t;
 
 int sys_exit(proc_t *proc, int code);
+int sys_fork(proc_t *proc, uintptr_t* errp);
 
 #endif /* PROC_H_ */

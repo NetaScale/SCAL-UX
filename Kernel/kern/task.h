@@ -195,8 +195,15 @@ void callout_dequeue(callout_t *callout);
 /** Create a new task, forking the address space of parent. */
 task_t *task_fork(task_t *parent);
 
+/**
+ * Duplicate a thread and place it into a task.
+ *
+ * Works only if the thread is a user thread which was last executing in user
+ * mode, as kernel stack is not duplicated.
+ */
+thread_t *thread_dup(thread_t *thread, task_t *task);
 /** Create a new thread; it is assigned a CPU but not enqueued for running. */
-thread_t *thread_new(task_t *proc, bool iskernel);
+thread_t *thread_new(task_t *task, bool iskernel);
 /** Set a thread to run a function with an argument. */
 void thread_goto(thread_t *thr, void (*fun)(void *), void *arg);
 /** Mark a thread runnable; it may preempt the currently running. */

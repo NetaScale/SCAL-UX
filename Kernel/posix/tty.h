@@ -22,6 +22,8 @@ struct knote;
 struct proc;
 
 typedef struct tty {
+	spinlock_t lock;
+
 	struct termios termios;	  /* termios */
 	char	       buf[2048]; /* input buffer */
 	size_t	       buflen;	  /* input buffer current length */

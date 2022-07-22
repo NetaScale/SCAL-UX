@@ -21,6 +21,7 @@ task_t		  task0 = { .pid = 0, .name = "[kernel]", .map = &kmap };
 cpu_t	    *cpus = NULL;
 size_t		  ncpus = 0;
 size_t		  lastcpu = 0; /* cpu roundrobin */
+pid_t		  lastpid = 100;
 
 /**
  * Signals/exit requests are implemented by adjusting the stack appropriately
@@ -187,13 +188,14 @@ task_fork(task_t *parent)
 	task_t *task = kmalloc(sizeof *task);
 	spl_t	spl;
 
+	task->pid = lastpid++;
 	task->map = vm_map_fork(parent->map);
 	LIST_INIT(&task->threads);
 
 	spl = splhigh();
-	// lock(&task_lock);
+	lock(&sched_lock);
 	TAILQ_INSERT_HEAD(&alltasks, task, alltasks);
-	// unlock(&task_lock);
+	unlock(&sched_lock);
 	splx(spl);
 
 	return task;
@@ -217,14 +219,13 @@ thread_switchto(thread_t *thr)
 }
 
 /* TODO: remove amd64 specifics */
-
 thread_t *
-thread_new(task_t *proc, bool iskernel)
+thread_new(task_t *task, bool iskernel)
 {
-	thread_t *thread = kmalloc(sizeof *thread);
+	thread_t *thread = kcalloc(1, sizeof *thread);
 	spl_t	  spl;
 
-	thread->task = proc;
+	thread->task = task;
 	if (iskernel) {
 		thread->kernel = true;
 		thread->stack = kmalloc(USER_STACK_SIZE) + USER_STACK_SIZE;
@@ -247,11 +248,37 @@ thread_new(task_t *proc, bool iskernel)
 	thread->cpu = nextcpu();
 
 	spl = splsched();
-	/* lock proc? */
-	LIST_INSERT_HEAD(&proc->threads, thread, threads);
+	lock(&sched_lock);
+	LIST_INSERT_HEAD(&task->threads, thread, threads);
+	unlock(&sched_lock);
 	splx(spl);
 
 	return thread;
+}
+
+thread_t *
+thread_dup(thread_t *thread, task_t *task)
+{
+	thread_t *newthr = kcalloc(1, sizeof *thread);
+	spl_t	  spl;
+
+	assert(thread->kernel == false);
+
+	newthr->task = task;
+	newthr->kernel = false;
+	newthr->kstack = kmalloc(16384) + 16384; /* TODO KSTACK_SIZE */
+	newthr->stack = thread->stack;
+	memcpy(&newthr->pcb, &thread->pcb, sizeof thread->pcb);
+
+	newthr->cpu = nextcpu();
+
+	spl = splsched();
+	lock(&sched_lock);
+	LIST_INSERT_HEAD(&task->threads, newthr, threads);
+	unlock(&sched_lock);
+	splx(spl);
+
+	return newthr;
 }
 
 void
@@ -286,9 +313,9 @@ thread_run(thread_t *thread)
 #endif
 
 	/* thread should preempt the currently running thread */
-	if (thread->cpu == CURCPU())
+	if (thread->cpu == CURCPU()) {
 		arch_yield();
-	else
+	} else
 		arch_ipi_resched(thread->cpu);
 }
 

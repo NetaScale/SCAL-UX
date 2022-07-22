@@ -29,6 +29,7 @@ enum {
 
 	kPXSysSetFSBase,
 	kPXSysExit,
+	kPXSysFork,
 };
 
 /*

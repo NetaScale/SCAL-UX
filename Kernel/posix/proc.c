@@ -8,14 +8,14 @@
  * All rights reserved.
  */
 
-
 //#include "amd64.h"
+#include "libkern/klib.h"
 #include "proc.h"
 
 int
 sys_exit(proc_t *proc, int code)
 {
-	spl_t spl = splsoft();
+	spl_t	  spl = splsoft();
 	thread_t *curthread, *thread;
 
 	curthread = CURCPU()->curthread;
@@ -44,4 +44,39 @@ sys_exit(proc_t *proc, int code)
 
 	splx(spl);
 	return 0;
+}
+
+int
+sys_fork(proc_t *proc, uintptr_t *errp)
+{
+	task_t   *newtask;
+	thread_t *curthread = CURTHREAD(), *newthread;
+	proc_t   *newproc;
+	spl_t	  spl;
+
+	kprintf("SYS_FORK()\n");
+
+	newtask = task_fork(proc->task);
+	assert(newtask != NULL);
+
+	newthread = thread_dup(curthread, newtask);
+	assert(newthread != NULL);
+	kprintf("newthread RIP: %lx\n", newthread->pcb.frame.rip);
+	newthread->pcb.frame.rax = 0;
+	newthread->pcb.frame.rdi = 0;
+
+	newproc = kmalloc(sizeof *proc);
+	newproc->task = newtask;
+	spinlock_init(&newproc->fdlock);
+	for (int i = 0; i < ELEMENTSOF(newproc->files); i++) {
+		newproc->files[i] = proc->files[i];
+	}
+
+	newtask->pxproc = newproc;
+
+	spl = spl0();
+	thread_run(newthread);
+	splx(spl);
+
+	return newtask->pid;
 }

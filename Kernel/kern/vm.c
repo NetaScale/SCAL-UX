@@ -130,17 +130,7 @@ vm_map_t kmap;
 vmstat_t vmstat;
 bool	 vm_debug_anon = false;
 
-/*
- * note: ultimately a vm_object will always have a tree of vm_page_t's. and then
- * if you have some vnode vm_object and create a copy, it initially adds
- * vm_pages from the vnode when read-faults occur? need to consider this further
- * - it violates the principle that a vm_page_t is mapped either in one amap or
- * in one object???
- *
- * --- do all vm_object_ts really need a tree of vm_page_ts? not on amd64 anyway
- * --- the one amap/one object principle doesn't exist. they belong to either
- * one object or one anon....
- */
+vm_anon_t *anon_copy(vm_anon_t *anon);
 
 /*
  * we use obj->anon.parent IFF there is no vm_amap_entry for an offset within
@@ -171,8 +161,14 @@ amap_copy(vm_amap_t *amap)
 		for (int i2 = 0; i2 < ELEMENTSOF(amap->chunks[i]->anon); i2++) {
 			newamap->chunks[i]->anon[i2] =
 			    amap->chunks[i]->anon[i2];
-			if (amap->chunks[i]->anon[i2] != NULL)
-				amap->chunks[i]->anon[i2]->refcnt++;
+
+			if (amap->chunks[i]->anon[i2] != NULL) {
+				/* TODO: copy-on-write */
+				// amap->chunks[i]->anon[i2]->refcnt++;
+				newamap->chunks[i]->anon[i2] = anon_copy(
+				    newamap->chunks[i]->anon[i2]);
+				unlock(&newamap->chunks[i]->anon[i2]->lock);
+			}
 		}
 	}
 
@@ -278,7 +274,8 @@ vm_dump(vm_map_t *map)
 	vm_map_entry_t *ent;
 
 	TAILQ_FOREACH (ent, &map->entries, queue) {
-		kprintf("%p-%p type %d", ent->start, ent->end, ent->obj->type);
+		kprintf("%p-%p type %d\n", ent->start, ent->end,
+		    ent->obj->type);
 	}
 }
 
@@ -458,6 +455,7 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 		kprintf("vm_fault: no object at vaddr %p in map %p\n", vaddr,
 		    map);
 		vm_dump(map);
+		fatal("no object");
 		return -1;
 	}
 
@@ -475,10 +473,9 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 vm_map_t *
 vm_map_fork(vm_map_t *map)
 {
-	vm_map_t *newmap = kmalloc(sizeof *newmap);
-	// vm_map_entry_t *ent;
-
-	kprintf("vm_map_fork: not implemented properly yet\n");
+	vm_map_t	 *newmap = kmalloc(sizeof *newmap);
+	vm_map_entry_t *ent;
+	int		r;
 
 	newmap->pmap = pmap_new();
 	TAILQ_INIT(&newmap->entries);
@@ -488,21 +485,20 @@ vm_map_fork(vm_map_t *map)
 	if (map == &kmap)
 		return newmap; /* nothing to inherit */
 
-#if 0
-        TAILQ_FOREACH(ent, &map->entries, entries) {
-                if(ent->inheritance == kVMMapEntryInheritShared) {
-                        vm_map_entry_t * newent = kmalloc(sizeof *newent);
+	TAILQ_FOREACH (ent, &map->entries, queue) {
+		vm_object_t *newobj;
+		vaddr_t	     start = ent->start;
 
-                        newent->inheritance = kVMMapEntryInheritShared;
-                        newent->obj = ent->obj;
-                        newent->obj->refcnt++;
-                        newent->size = ent->size;
-                        newent->vaddr = ent->vaddr;
-                } else {
-                        kprintf("vm_map_fork: unhandled inheritance\n");
-                }
-        }
-#endif
+		if (ent->obj->type != kVMObjAnon)
+			fatal("vm_map_fork: only handles anon objects\n");
+
+		newobj = vm_object_copy(ent->obj);
+		assert(newobj != NULL);
+
+		r = vm_map_object(newmap, newobj, &start, ent->end - ent->start,
+		    false);
+		assert(r == 0)
+	}
 
 	return newmap;
 }

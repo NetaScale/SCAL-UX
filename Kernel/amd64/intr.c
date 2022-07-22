@@ -118,17 +118,17 @@ handle_int(intr_frame_t *frame, uintptr_t num)
 
 	/* interrupts remain disabled at this point */
 
+	CURTHREAD()->pcb.frame = *frame;
+
 	if (md_intrs[num].handler == NULL) {
 		kprintf("unhandled interrupt %lu\n", num);
 		md_intr_frame_trace(frame);
-		for (;;) {
-		}
+		fatal("...");
 	}
 
 	md_intrs[num].handler(frame, md_intrs[num].arg);
 
 	if (splget() < kSPLSoft) {
-		CURCPU()->curthread->pcb.frame = *frame;
 		dpcs_run();
 	}
 
@@ -216,18 +216,21 @@ intr_page_fault(intr_frame_t *frame, void *arg)
 	    0)
 		fatal("unhandled page fault\n");
 }
+
 static void
 intr_lapic_timer(intr_frame_t *frame, void *arg)
 {
 	callout_interrupt();
 	lapic_eoi();
 }
+
 static void
 intr_syscall(intr_frame_t *frame, void *arg)
 {
 
 	posix_syscall(frame);
 }
+
 static void
 intr_local_resched(intr_frame_t *frame, void *arg)
 {
@@ -251,7 +254,8 @@ arch_ipi_resched(cpu_t *cpu)
 	lapic_write(kLAPICRegICR0, kIntNumLocalReschedule);
 }
 
-void md_eoi()
+void
+md_eoi()
 {
 	return lapic_eoi();
 }
@@ -320,8 +324,9 @@ arch_resched(void *arg)
 
 	if (!next && curthr != cpu->idlethread)
 		next = cpu->idlethread;
-	else if (!next || next == curthr)
+	else if (!next || next == curthr) {
 		goto cont;
+	}
 	cpu->curthread = next;
 	cpu->arch_cpu.tss->rsp0 = (uint64_t)next->kstack;
 
