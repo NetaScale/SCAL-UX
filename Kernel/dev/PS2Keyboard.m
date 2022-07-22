@@ -8,6 +8,7 @@
 #include "lai/helpers/resource.h"
 
 PS2Keyboard *ps2k = NULL;
+void	     ps2_intr(intr_frame_t *frame, void *arg);
 
 static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 	'8', '9', '0', '-', '=', '\b', '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u',
@@ -94,16 +95,20 @@ laiex_view_resource(lai_nsnode_t *node, lai_variable_t *crs,
 	DKLog("%s: I/O port A %d, port B %d, GSI %d\n", name, portA, portB,
 	    gsi);
 
-	[IOApic handleGSI:gsi];
+	[IOApic handleGSI:gsi
+	      withHandler:ps2_intr
+		 argument:self
+	       atPriority:kSPL0];
 
 	return self;
 }
 
 - (void)handleCode:(uint8_t)code
 {
+	kprintf("got code %d\n", code);
 	if (code & 0x80) {
 	} else {
-		//extern FBTerm *syscon;
+		// extern FBTerm *syscon;
 		//[syscon input:codes[code]];
 	}
 }
@@ -111,8 +116,9 @@ laiex_view_resource(lai_nsnode_t *node, lai_variable_t *crs,
 @end
 
 void
-ps2_intr()
+ps2_intr(intr_frame_t *frame, void *arg)
 {
 	uint8_t in = inb(0x60);
 	[ps2k handleCode:in];
+	md_eoi();
 }

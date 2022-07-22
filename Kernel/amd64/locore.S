@@ -2,6 +2,10 @@
 # ISR thunks
 #
 
+#define ASM
+
+#include "amd64/asm_intr.h"
+
 .set ._intWithCode, 1
 .set ._intNoCode, 2
 
@@ -77,13 +81,12 @@ MAKE_ISR_THUNK ._intWithCode, 10
 MAKE_ISR_THUNK ._intWithCode, 11
 MAKE_ISR_THUNK ._intWithCode, 12
 MAKE_ISR_THUNK ._intWithCode, 13
-
 MAKE_ISR_THUNK ._intWithCode, 14
-MAKE_ISR_THUNK ._intNoCode, 32 # reschedule
-MAKE_ISR_THUNK ._intNoCode, 33 # irq1
 MAKE_ISR_THUNK ._intNoCode, 128 # posix syscalls
-MAKE_ISR_THUNK ._intNoCode, 223 # lapic timer
-MAKE_ISR_THUNK ._intNoCode, 254 # reschedule
+
+#define INT_ISR_THUNK(VAL) MAKE_ISR_THUNK ._intNoCode, VAL ;
+NORMAL_INTS(INT_ISR_THUNK)
+
 
 .global swtch
 swtch:

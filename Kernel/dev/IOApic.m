@@ -2,6 +2,7 @@
 #include <sys/queue.h>
 
 #include "dev/IOApic.h"
+#include "machine/intr.h"
 
 enum {
 	kDeliveryModeFixed = 0x0,
@@ -82,16 +83,40 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 	return self;
 }
 
-+ (void)handleGSI:(uint32_t)gsi
++ (int)handleGSI:(uint32_t)gsi
+     withHandler:(intr_handler_fn_t)handler
+	argument:(void *)arg
+      atPriority:(spl_t)prio;
 {
 	IOApic *ioapic;
+	bool	found = false;
+
 	TAILQ_FOREACH (ioapic, &ioapics, _ioapics_entries) {
 		if (ioapic->_gsi_base <= gsi &&
 		    ioapic->_gsi_base + ioapic->_n_redirs > gsi) {
-			//ioapic_route(ioapic->_vaddr, gsi - ioapic->_gsi_base,
-			//    0x20 + gsi);
+			int vec = md_intr_alloc(kSPL0, handler, arg);
+
+			if (vec < 0) {
+				DKLog(
+				    "%s: failed to register interrupt for GSI %d",
+				    ioapic->name, gsi);
+				return -1;
+			}
+
+			ioapic_route(ioapic->_vaddr, gsi - ioapic->_gsi_base,
+			    vec);
+			found = true;
+
+			break;
 		}
 	}
+
+	if (!found) {
+		DKLog("IOApic: no I/O APIC found for GSI %d\n", gsi);
+		return -1;
+	}
+
+	return 0;
 }
 
 @end

@@ -7,7 +7,9 @@
 #include <libkern/klib.h>
 #include <stdint.h>
 
+#include "amd64/asm_intr.h"
 #include "kern/ksrv.h"
+#include "machine/intr.h"
 #include "machine/spl.h"
 #include "posix/sys.h"
 
@@ -44,6 +46,19 @@ typedef struct {
 } __attribute__((packed)) idt_entry_t;
 
 static idt_entry_t idt[256] = { 0 };
+static struct md_intr_entry {
+	const char	   *name;
+	spl_t		  prio;
+	intr_handler_fn_t handler;
+	void	     *arg;
+} md_intrs[256] = { 0 };
+
+void lapic_eoi();
+int  posix_syscall(intr_frame_t *frame);
+void callout_interrupt();
+void dpcs_run();
+int  vm_fault(vm_map_t *map, vaddr_t addr, vm_fault_flags_t flags);
+void swtch(void *ctx);
 
 static void
 idt_set(uint8_t index, vaddr_t isr, uint8_t type, uint8_t ist)
@@ -57,125 +72,29 @@ idt_set(uint8_t index, vaddr_t isr, uint8_t type, uint8_t ist)
 	idt[index].zero = 0x0;
 }
 
-void lapic_eoi();
-
-#define INT 0x8e
-/*
- * using interrupt gates for everything now, because sometimes something strange
- * was happening with swapgs - probably interrupts nesting during the window of
- * time in which we're running at CPL 0 but have yet to swapgs, making the
- * nested interrupt fail to do so.
- * so now we explicitly enable interrupts ourselves when it is safe to do so.
- */
-#define TRAP 0x8e
-#define INT_USER 0xee
-#define INTS(X)          \
-	X(4, TRAP)       \
-	X(6, TRAP)       \
-	X(8, TRAP)       \
-	X(10, TRAP)      \
-	X(11, TRAP)      \
-	X(12, TRAP)      \
-	X(13, TRAP)      \
-	X(14, TRAP)      \
-	X(32, INT)       \
-	X(33, INT)       \
-	X(128, INT_USER) \
-	X(223, INT)      \
-	X(254, INT)
-
-#define EXTERN_ISR_THUNK(VAL, GATE) extern void *isr_thunk_##VAL;
-
-INTS(EXTERN_ISR_THUNK)
-
-int posix_syscall(intr_frame_t *frame);
+static void intr_page_fault(intr_frame_t *frame, void *arg);
+static void intr_lapic_timer(intr_frame_t *frame, void *arg);
+static void intr_syscall(intr_frame_t *frame, void *arg);
+static void intr_local_resched(intr_frame_t *frame, void *arg);
 
 void
 idt_init()
 {
+#define IDT_SET(VAL) idt_set(VAL, (vaddr_t)&isr_thunk_##VAL, INT, 0);
+	NORMAL_INTS(IDT_SET);
+#undef IDT_SET
+
 #define IDT_SET(VAL, GATE) idt_set(VAL, (vaddr_t)&isr_thunk_##VAL, GATE, 0);
-	INTS(IDT_SET);
+	SPECIAL_INTS(IDT_SET);
+#undef IDT_SET
+
 	idt_load();
-}
 
-static void
-trace(intr_frame_t *frame)
-{
-	struct frame {
-		struct frame *rbp;
-		uint64_t      rip;
-	} *aframe = (struct frame *)frame->rbp;
-	const char *name;
-	size_t	    offs;
-
-	ksrv_backtrace((vaddr_t)frame->rip, &name, &offs);
-	kprintf(" - %p %s+%lu\n", (void *)frame->rip, name, offs);
-
-	if (aframe != NULL)
-		do {
-			ksrv_backtrace((vaddr_t)aframe->rip, &name, &offs);
-			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name,
-			    offs);
-		} while ((aframe = aframe->rbp) && aframe->rip != 0x0);
-}
-
-void callout_interrupt();
-void dpcs_run();
-int  vm_fault(vm_map_t *map, vaddr_t addr, vm_fault_flags_t flags);
-
-void
-handle_int(intr_frame_t *frame, uintptr_t num)
-{
-#ifdef DEBUG_INTERRUPT
-	kprintf("interrupt %lu\n", num);
-#endif
-
-	/* interrupts remain disabled at this point */
-
-	switch (num) {
-	case 14: /* page fault */
-		/* vm_fault_flags_t matches amd64 mmu */
-		if (vm_fault(CURTHREAD()->task->map, (vaddr_t)read_cr2(),
-			frame->code) < 0)
-			goto unhandled;
-		break;
-
-	case kIntNumLAPICTimer:
-		callout_interrupt();
-		lapic_eoi();
-		break;
-
-	case kIntNumLocalReschedule: {
-		if (CURCPU()->resched.state == kCalloutPending)
-			callout_dequeue(&CURCPU()->resched);
-		dpc_enqueue(&CURCPU()->resched.dpc);
-		lapic_eoi(); /* may have been an IPI; TODO seperate vec for ipi
-				resched... */
-		break;
-	}
-
-	case kIntNumSyscall: {
-		posix_syscall(frame);
-		break;
-	}
-
-	default:
-		goto unhandled;
-	}
-
-	if (splget() < kSPLSoft) {
-		CURCPU()->curthread->pcb.frame = *frame;
-		dpcs_run();
-	}
-
-	return;
-
-unhandled:
-	kprintf("unhandled interrupt %lu\n", num);
-	kprintf("cr2: 0x%lx\n", read_cr2());
-	trace(frame);
-	for (;;) {
-	}
+	md_intr_register(14, kSPLVM, intr_page_fault, NULL);
+	md_intr_register(kIntNumLAPICTimer, kSPLHard, intr_lapic_timer, NULL);
+	md_intr_register(kIntNumSyscall, kSPL0, intr_syscall, NULL);
+	md_intr_register(kIntNumLocalReschedule, kSPLSched, intr_local_resched,
+	    NULL);
 }
 
 void
@@ -187,6 +106,33 @@ idt_load()
 	} __attribute__((packed)) idtr = { sizeof(idt) - 1, (vaddr_t)idt };
 
 	asm volatile("lidt %0" : : "m"(idtr));
+}
+
+/** the handler called by the actual ISRs. */
+void
+handle_int(intr_frame_t *frame, uintptr_t num)
+{
+#ifdef DEBUG_INTERRUPT
+	kprintf("interrupt %lu\n", num);
+#endif
+
+	/* interrupts remain disabled at this point */
+
+	if (md_intrs[num].handler == NULL) {
+		kprintf("unhandled interrupt %lu\n", num);
+		md_intr_frame_trace(frame);
+		for (;;) {
+		}
+	}
+
+	md_intrs[num].handler(frame, md_intrs[num].arg);
+
+	if (splget() < kSPLSoft) {
+		CURCPU()->curthread->pcb.frame = *frame;
+		dpcs_run();
+	}
+
+	return;
 }
 
 static uint32_t
@@ -263,6 +209,35 @@ lapic_timer_calibrate()
 	return (initial - apic_after) * hz;
 }
 
+static void
+intr_page_fault(intr_frame_t *frame, void *arg)
+{
+	if (vm_fault(CURTHREAD()->task->map, (vaddr_t)read_cr2(), frame->code) <
+	    0)
+		fatal("unhandled page fault\n");
+}
+static void
+intr_lapic_timer(intr_frame_t *frame, void *arg)
+{
+	callout_interrupt();
+	lapic_eoi();
+}
+static void
+intr_syscall(intr_frame_t *frame, void *arg)
+{
+
+	posix_syscall(frame);
+}
+static void
+intr_local_resched(intr_frame_t *frame, void *arg)
+{
+	if (CURCPU()->resched.state == kCalloutPending)
+		callout_dequeue(&CURCPU()->resched);
+	dpc_enqueue(&CURCPU()->resched.dpc);
+	lapic_eoi(); /* may have been an IPI; TODO seperate vec for ipi
+			resched... */
+}
+
 void
 arch_yield()
 {
@@ -276,7 +251,46 @@ arch_ipi_resched(cpu_t *cpu)
 	lapic_write(kLAPICRegICR0, kIntNumLocalReschedule);
 }
 
-extern void swtch(void *ctx);
+void md_eoi()
+{
+	return lapic_eoi();
+}
+
+int
+md_intr_alloc(spl_t prio, intr_handler_fn_t handler, void *arg)
+{
+	md_intr_register(32, prio, handler, arg);
+	return 32;
+}
+
+void
+md_intr_register(int vec, spl_t prio, intr_handler_fn_t handler, void *arg)
+{
+	md_intrs[vec].prio = prio;
+	md_intrs[vec].handler = handler;
+	md_intrs[vec].arg = arg;
+}
+
+void
+md_intr_frame_trace(intr_frame_t *frame)
+{
+	struct frame {
+		struct frame *rbp;
+		uint64_t      rip;
+	} *aframe = (struct frame *)frame->rbp;
+	const char *name;
+	size_t	    offs;
+
+	ksrv_backtrace((vaddr_t)frame->rip, &name, &offs);
+	kprintf(" - %p %s+%lu\n", (void *)frame->rip, name, offs);
+
+	if (aframe != NULL)
+		do {
+			ksrv_backtrace((vaddr_t)aframe->rip, &name, &offs);
+			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name,
+			    offs);
+		} while ((aframe = aframe->rbp) && aframe->rip != 0x0);
+}
 
 void
 arch_resched(void *arg)
