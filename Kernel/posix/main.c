@@ -52,6 +52,8 @@ enum {
 	kUStarDirectory = '5',
 };
 
+void proc_init(proc_t *super, proc_t *proc);
+
 static void
 start_init(void *bin)
 {
@@ -72,6 +74,8 @@ start_init(void *bin)
 	vaddr_t	       vaddr = (vaddr_t)0x400000;
 
 	task1->pxproc = kmalloc(sizeof(proc_t));
+	proc_init(task1->pxproc, NULL);
+	task1->pxproc->super = NULL;
 	task1->pxproc->task = task1;
 	memset(task1->pxproc->files, 0x0, sizeof task1->pxproc->files);
 	thr1 = thread_new(task1, false);

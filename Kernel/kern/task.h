@@ -134,12 +134,16 @@ typedef struct thread {
 		kRunnable = 0,
 		kRunning,
 		kWaiting,
-		/** destruction will be enqueued on next reschedule */
+		/**
+		 * This state is set immediately before the exit routine yields.
+		 * It indicates that it is now safe to free the resources of
+		 * the thread.
+		 */
 		kExiting,
 	} state;
 
-	/** whether the thread has a signal to process */
-	bool signalled : 1;
+	/** whether the thread has to process a signal/exit request*/
+	bool should_exit : 1;
 	/** whether the thread is in a system call */
 	bool in_syscall : 1;
 
@@ -170,6 +174,8 @@ typedef struct thread {
 typedef struct task {
 	/* For ::alltasks. */
 	TAILQ_ENTRY(task) alltasks;
+
+	spinlock_t lock;
 
 	char	  name[31];
 	int	  pid;
@@ -208,6 +214,8 @@ thread_t *thread_new(task_t *task, bool iskernel);
 void thread_goto(thread_t *thr, void (*fun)(void *), void *arg);
 /** Mark a thread runnable; it may preempt the currently running. */
 void thread_run(thread_t *thread);
+/** Yield the current thread. */
+void thread_yield();
 
 /** Await an event on a waitq. */
 waitq_result_t waitq_await(waitq_t *wq, waitq_event_t ev, uint64_t nanosecs);

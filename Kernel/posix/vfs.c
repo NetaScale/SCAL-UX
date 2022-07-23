@@ -16,6 +16,7 @@
 
 #include "dev.h"
 #include "event.h"
+#include "kern/buildconf.h"
 #include "libkern/klib.h"
 #include "proc.h"
 #include "vfs.h"
@@ -240,7 +241,9 @@ sys_read(struct proc *proc, int fd, void *buf, size_t nbyte)
 	file_t *file = proc->files[fd];
 	int	r;
 
+#if DEBUG_SYSCALLS == 1
 	kprintf("SYS_READ(%d, nbytes: %lu off: %lu)\n", fd, nbyte, file->pos);
+#endif
 
 	if (file == NULL)
 		return -EBADF;
@@ -262,7 +265,9 @@ sys_write(struct proc *proc, int fd, void *buf, size_t nbyte)
 	file_t *file = proc->files[fd];
 	int	r;
 
+#if DEBUG_SYSCALLS == 1
 	kprintf("SYS_WRITE(%d, nbytes: %lu off: %lu)\n", fd, nbyte, file->pos);
+#endif
 
 	if (file == NULL)
 		return -EBADF;
@@ -305,7 +310,9 @@ sys_pselect(struct proc *proc, int nfds, fd_set *readfds, fd_set *writefds,
 	kqueue_t *kq = kqueue_new();
 	int r;
 
+#if DEBUG_SYSCALLS == 1
 	kprintf("SYS_PSELECT\n");
+#endif
 
 	for (int i = 0; i < nfds; i++) {
 		int	      filt = 0;

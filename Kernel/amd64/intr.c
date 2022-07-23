@@ -11,7 +11,9 @@
 #include "kern/ksrv.h"
 #include "machine/intr.h"
 #include "machine/spl.h"
+#include "posix/proc.h"
 #include "posix/sys.h"
+#include "sys/queue.h"
 
 enum {
 	kLAPICRegEOI = 0xb0,
@@ -296,6 +298,25 @@ md_intr_frame_trace(intr_frame_t *frame)
 		} while ((aframe = aframe->rbp) && aframe->rip != 0x0);
 }
 
+/**
+ * Complete a task which has no longer any threads.
+ * (this should probably be for proc, not task, and definitely not in intr.c.)
+ */
+static void
+task_complete(task_t *task)
+{
+	task->pxproc->status = kProcCompleted;
+#if 0
+	task_t *parent =  task->parent;
+	
+	task->pxproc->status = kProcCompleted;
+
+	lock(&parent->lock);
+	waitq_wake_one(&parent->pxproc->waitwq, 0);
+	unlock(&parent->lock);
+#endif
+}
+
 void
 arch_resched(void *arg)
 {
@@ -307,13 +328,27 @@ arch_resched(void *arg)
 	cpu = (cpu_t *)arg;
 	curthr = cpu->curthread;
 
+	lock(&curthr->lock);
+
 	if (curthr->state == kWaiting) {
 		if (curthr->wqtimeout.nanosecs != 0)
 			callout_enqueue(&curthr->wqtimeout);
+	} else if (curthr->state == kExiting) {
+		task_t *task = curthr->task;
+		kprintf("May exit thread %p!\n", curthr);
+		vm_deallocate(task->map, curthr->stack - USER_STACK_SIZE,
+		    USER_STACK_SIZE);
+		LIST_REMOVE(curthr, threads);
+		if (LIST_EMPTY(&task->threads))
+			task_complete(task);
+		goto next;
 	} else if (curthr != cpu->idlethread) {
 		TAILQ_INSERT_TAIL(&CURCPU()->runqueue, curthr, runqueue);
 	}
 
+	unlock(&curthr->lock);
+
+next:
 	next = TAILQ_FIRST(&cpu->runqueue);
 	if (next)
 		TAILQ_REMOVE(&cpu->runqueue, next, runqueue);

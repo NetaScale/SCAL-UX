@@ -30,6 +30,7 @@ enum {
 	kPXSysSetFSBase,
 	kPXSysExit,
 	kPXSysFork,
+	kPXSysWaitPID,
 };
 
 /*

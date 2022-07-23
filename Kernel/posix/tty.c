@@ -150,10 +150,11 @@ tty_input(tty_t *tty, int c)
 		}
 	}
 
-	enqueue(tty, c);
 	if (tty->termios.c_lflag & ECHO /* and is the code printable? */)
 		/* print to the underlying tty too... */
 		tty->putch(tty->data, c);
+
+	enqueue(tty, c);
 }
 
 int
@@ -163,8 +164,6 @@ tty_read(dev_t dev, void *buf, size_t nbyte, off_t off)
 	tty_t *tty = sctty;
 
 	// assert(off == 0);
-
-	kprintf("tty_read\n");
 
 	if (tty->buflen < nbyte)
 		nbyte = tty->buflen;
@@ -176,7 +175,6 @@ tty_read(dev_t dev, void *buf, size_t nbyte, off_t off)
 	while (nread < nbyte) {
 		int c = dequeue(tty);
 		((char *)buf)[nread++] = c;
-		kprintf("read <%c>\n", c);
 		if (c == '\n' || c == tty->termios.c_cc[VEOL])
 			break;
 	}

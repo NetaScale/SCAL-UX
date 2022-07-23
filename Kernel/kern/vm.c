@@ -250,14 +250,14 @@ vm_deallocate(vm_map_t *map, vaddr_t start, size_t size)
 	// lock(&map->lock);
 
 	TAILQ_FOREACH_SAFE (entry, &map->entries, queue, tmp) {
-		if ((entry->start < start && entry->end < start) ||
-		    (entry->start > end))
+		if ((entry->start < start && entry->end <= start) ||
+		    (entry->start >= end))
 			continue;
 		else if (entry->start >= start && entry->end <= end) {
 			unmap_entry(map, entry);
 		} else if (entry->start >= start && entry->end <= end) {
 			fatal("unimplemented deallocate right of vm object\n");
-		} else if (entry->start < start && entry->end <= end) {
+		} else if (entry->start < start && entry->end < end) {
 			fatal("unimplemented other sort of deallocate\n");
 		}
 	}

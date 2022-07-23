@@ -59,7 +59,7 @@ posix_syscall(intr_frame_t *frame)
 		kprintf("PXSYS_exec: %s\n", (char *)ARG1);
 		const char *args[] = { "bash", NULL };
 		const char *envs[] = { "VAR=42", NULL };
-		assert(sys_exec(proc, "/forktest", args, envs, frame) == 0);
+		assert(sys_exec(proc, "/bash", args, envs, frame) == 0);
 		break;
 	}
 
@@ -148,6 +148,10 @@ posix_syscall(intr_frame_t *frame)
 
 	case kPXSysFork:
 		RET = sys_fork(proc, &err);
+		break;
+
+	case kPXSysWaitPID:
+		RET = sys_waitpid(proc, ARG1, (int *)ARG2, ARG3, &err);
 		break;
 
 	default:

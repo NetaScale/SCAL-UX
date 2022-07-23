@@ -319,6 +319,12 @@ thread_run(thread_t *thread)
 		arch_ipi_resched(thread->cpu);
 }
 
+void thread_yield()
+{
+	splassertle(kSPL0);
+	arch_yield();
+}
+
 /* callout callback for timeout of a waitqueue */
 static void
 waitq_timeout(void *arg)
