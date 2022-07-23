@@ -307,6 +307,8 @@ static void
 task_complete(task_t *task)
 {
 	task->pxproc->status = kProcCompleted;
+	vm_map_release(task->map);
+	task->map = NULL;
 #if 0
 	task_t *parent =  task->parent;
 	

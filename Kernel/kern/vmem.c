@@ -82,9 +82,13 @@
  *
  */
 
+/**
+ * @file vmem.c
+ * @brief Implementation of the VMem resource allocator.
+ */
+
 #include <errno.h>
 
-#include "kern/vmem.h"
 #include "sys/queue.h"
 
 #ifdef _KERNEL
@@ -468,6 +472,7 @@ vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 {
 	vmem_seglist_t *bucket = hashbucket_for_addr(vmem, addr);
 	vmem_seg_t	   *seg, *left, *right;
+	bool		coalesced = false;
 
 	LIST_FOREACH (seg, bucket, seglist) {
 		if (seg->base == addr)
@@ -496,6 +501,7 @@ free:
 		seg_free(vmem, seg);
 		seg = left;
 		left = prev_seg(seg);
+		coalesced = true;
 	}
 
 	/* coalesce to the right */
@@ -506,6 +512,7 @@ free:
 		seg_free(vmem, seg);
 		seg = right;
 		right = next_seg(seg);
+		coalesced = true;
 	}
 
 	if (left->type == kVMemSegSpanImported && seg->size == left->size) {
@@ -527,6 +534,13 @@ free:
 		LIST_REMOVE(left, seglist);
 		TAILQ_REMOVE(&vmem->segqueue, left, segqueue);
 		seg_free(vmem, left);
+
+		coalesced = true;
+	}
+
+	if (!coalesced) {
+		TAILQ_REMOVE(&vmem->segqueue, seg, segqueue);
+		seg_free(vmem, seg);
 	}
 
 	return size;
@@ -537,6 +551,18 @@ vmem_earlyinit()
 {
 	for (int i = 0; i < ELEMENTSOF(static_segs); i++)
 		seg_free(NULL, &static_segs[i]);
+}
+
+void
+vmem_destroy(vmem_t *vmem)
+{
+	vmem_seg_t *seg;
+
+	for (int i = 0; i < kNHashBuckets; i++)
+		assert(LIST_EMPTY(&vmem->hashtab[i]));
+
+	TAILQ_FOREACH (seg, &vmem->segqueue, segqueue)
+		seg_free(vmem, seg);
 }
 
 void

@@ -260,6 +260,9 @@ int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
  */
 vm_object_t *vm_object_copy(vm_object_t *obj);
 
+/** Release a reference to a map. The map may be fully freed. */
+void vm_map_release(vm_map_t *map);
+
 /**
  * Allocate a single page; optionally sleep to wait for one to become available.
  * @param sleep whether to sleep the thread until a page is available

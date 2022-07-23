@@ -8,6 +8,12 @@
  * All rights reserved.
  */
 
+/**
+ * @file vmem.h
+ * @brief Private interface to the VMem resource allocator. See vmem.c for
+ * detailed description of VMem.
+ */
+
 #ifndef VMEM_IMPL_H_
 #define VMEM_IMPL_H_
 

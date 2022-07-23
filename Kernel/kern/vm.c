@@ -571,6 +571,15 @@ vm_object_copy(vm_object_t *obj)
 }
 
 void
+vm_map_release(vm_map_t *map)
+{
+	vm_deallocate(map, (vaddr_t)USER_BASE, USER_SIZE);
+	vmem_destroy(&map->vmem);
+	// pmap_free(map->pmap);
+	kfree(map);
+}
+
+void
 vm_page_unwire(vm_page_t *page)
 {
 	spl_t spl = splvm();

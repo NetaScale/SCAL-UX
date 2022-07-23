@@ -234,7 +234,7 @@ sys_exec(proc_t *proc, const char *u_path, const char *u_argp[],
 	pkg.stack = stack;
 	assert(copyargs(&pkg, argp, envp) == 0);
 
-	vm_deallocate(oldmap, 0x0, (size_t)VADDR_MAX);
+	vm_map_release(oldmap);
 	thread->stack = stack;
 
 	frame->rip = (uint64_t)rtldpkg.entry;

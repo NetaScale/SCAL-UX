@@ -228,19 +228,19 @@ pmap_fully_descend(pmap_t *pmap, vaddr_t virt)
 
 	pdptes = pmap_descend(pml4, pml4i, false, 0);
 	if (!pdptes) {
-		kprintf("no pml4 entry\n");
+		//kprintf("no pml4 entry\n");
 		return 0x0;
 	}
 
 	pdes = pmap_descend(pdptes, pdpti, false, 0);
 	if (!pdes) {
-		kprintf("no pdpt entry\n");
+		//kprintf("no pdpt entry\n");
 		return 0x0;
 	}
 
 	ptes = pmap_descend(pdes, pdi, false, 0);
 	if (!ptes) {
-		kprintf("no pte entry\n");
+		//kprintf("no pte entry\n");
 		return 0x0;
 	}
 
@@ -264,19 +264,19 @@ pmap_trans(pmap_t *pmap, vaddr_t virt)
 
 	pdpte = pmap_descend(pml4, pml4i, false, 0);
 	if (!pdpte) {
-		kprintf("no pml4 entry\n");
+		//kprintf("no pml4 entry\n");
 		return 0x0;
 	}
 
 	pde = pmap_descend(pdpte, pdpti, false, 0);
 	if (!pde) {
-		kprintf("no pdpt entry\n");
+		//kprintf("no pdpt entry\n");
 		return 0x0;
 	}
 
 	pte = pmap_descend(pde, pdi, false, 0);
 	if (!pte) {
-		kprintf("no pte entry\n");
+		//kprintf("no pte entry\n");
 		return 0x0;
 	}
 
