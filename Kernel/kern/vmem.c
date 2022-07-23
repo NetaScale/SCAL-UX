@@ -89,6 +89,7 @@
 
 #include <errno.h>
 
+#include "kern/lock.h"
 #include "sys/queue.h"
 
 #ifdef _KERNEL
@@ -131,6 +132,7 @@ typedef struct seg_block {
 
 static vmem_seg_t     static_segs[128];
 static vmem_seglist_t free_segs = LIST_HEAD_INITIALIZER(free_segs);
+static spinlock_t     free_segs_lock = SPINLOCK_INITIALISER;
 static int	      nfreesegs = 0;
 // static LIST_HEAD(, seg_block) seg_blocks = LIST_HEAD_INITIALIZER(seg_blocks);
 
@@ -173,10 +175,17 @@ static vmem_seg_t *
 seg_alloc(vmem_t *vmem, vmem_flag_t flags)
 {
 	vmem_seg_t *seg;
+	spl_t	    spl;
+
+	spl = splsched();
+	lock(&free_segs_lock);
 	assert(!LIST_EMPTY(&free_segs));
 	seg = LIST_FIRST(&free_segs);
 	LIST_REMOVE(seg, seglist);
 	nfreesegs--;
+	unlock(&free_segs_lock);
+	splx(spl);
+
 	return seg;
 }
 
@@ -184,8 +193,14 @@ seg_alloc(vmem_t *vmem, vmem_flag_t flags)
 static void
 seg_free(vmem_t *vmem, vmem_seg_t *seg)
 {
+	spl_t  spl;
+
+	spl = splsched();
+	lock(&free_segs_lock);
 	LIST_INSERT_HEAD(&free_segs, seg, seglist);
 	nfreesegs++;
+	unlock(&free_segs_lock);
+	splx(spl);
 }
 
 /** Refill the free segments list. */
@@ -199,8 +214,11 @@ seg_refill(int flags)
 
 	block = vm_kalloc(1, flags & kVMemSleep ? 0x3 : 0x2);
 	assert(block != NULL);
-	for (int i = 0; i < ELEMENTSOF(block->_chunks); i++)
+	for (int i = 0; i < ELEMENTSOF(block->_chunks); i++) {
+		memset(&block->_chunks[i].seg, 0x0,
+		    sizeof(block->_chunks[i].seg));
 		seg_free(NULL, &block->_chunks[i].seg);
+	}
 }
 
 uint64_t
@@ -472,7 +490,7 @@ vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 {
 	vmem_seglist_t *bucket = hashbucket_for_addr(vmem, addr);
 	vmem_seg_t	   *seg, *left, *right;
-	bool		coalesced = false;
+	bool coalesced_left = false, coalesced_right = false, coalesced = false;
 
 	LIST_FOREACH (seg, bucket, seglist) {
 		if (seg->base == addr)
@@ -501,7 +519,7 @@ free:
 		seg_free(vmem, seg);
 		seg = left;
 		left = prev_seg(seg);
-		coalesced = true;
+		coalesced_left = coalesced = true;
 	}
 
 	/* coalesce to the right */
@@ -509,10 +527,13 @@ free:
 	if (right && right->type == kVMemSegFree) {
 		freeseg_expand(vmem, right, seg->base, right->size + seg->size);
 		TAILQ_REMOVE(&vmem->segqueue, seg, segqueue);
+		if (coalesced_left)
+			/* remaining on a freelist */
+			LIST_REMOVE(seg, seglist);
 		seg_free(vmem, seg);
 		seg = right;
 		right = next_seg(seg);
-		coalesced = true;
+		coalesced_right = coalesced = true;
 	}
 
 	if (left->type == kVMemSegSpanImported && seg->size == left->size) {
@@ -527,7 +548,8 @@ free:
 			fatal("unexpected seg type %d\n", seg->type);
 		}
 #endif
-		LIST_REMOVE(seg, seglist);
+		if (coalesced)
+			LIST_REMOVE(seg, seglist);
 		TAILQ_REMOVE(&vmem->segqueue, seg, segqueue);
 		seg_free(vmem, seg);
 
