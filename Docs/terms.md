@@ -7,3 +7,4 @@ used:
    "signalled process".
  - "Completed process" replaces "zombie process". 
  - "Subprocess" replaces "child process"
+ - "Superprocess" replaces "parent process"

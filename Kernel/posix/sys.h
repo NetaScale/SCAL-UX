@@ -28,6 +28,7 @@ enum {
 	kPXSysIsATTY,
 
 	kPXSysSetFSBase,
+	kPXSysExecVE,
 	kPXSysExit,
 	kPXSysFork,
 	kPXSysWaitPID,

@@ -159,44 +159,97 @@ copyargs(exec_package_t *pkg, const char *argp[], const char *envp[])
 	return 0;
 }
 
-/* todo: don't wipe the map, it makes it impossible to recover */
-int
-sys_exec(proc_t *proc, const char *path, const char *argp[], const char *envp[],
-    intr_frame_t *frame)
+static int
+copyout_strv(const char *user_strv[], char ***out)
 {
-	int	       r;
+	int    cnt = 0;
+	char **strv;
+
+	while (true) {
+		if (user_strv[cnt++] == NULL)
+			break;
+	}
+
+	strv = kmalloc((sizeof *user_strv) * cnt);
+	memcpy(strv, user_strv, (sizeof *user_strv) * cnt);
+
+	cnt = 0;
+	while (strv[cnt] != NULL) {
+		strv[cnt] = strdup(strv[cnt]);
+		cnt++;
+	}
+
+	*out = strv;
+
+	return 0;
+}
+
+static void
+strv_free(char **strv)
+{
+	if (*strv == NULL)
+		return;
+
+	for (char **ptr = strv; *ptr != NULL; ptr++)
+		kfree(*ptr);
+	kfree(strv);
+}
+
+int
+sys_exec(proc_t *proc, const char *u_path, const char *u_argp[],
+    const char *u_envp[], intr_frame_t *frame)
+{
+	int	       r = 0;
 	exec_package_t pkg, rtldpkg;
 	vaddr_t	       stack = VADDR_MAX;
 	thread_t	 *thread = CURTHREAD();
+	char	     *path = NULL, **argp = NULL, **envp = NULL;
+	vm_map_t	 *oldmap = proc->task->map;
 
-	/* end all other threads of the process.... */
+	/* TODO: end all other threads of the process.... */
 
 	assert(proc->task->map != &kmap);
-	pkg.map = rtldpkg.map = proc->task->map;
+	pkg.map = rtldpkg.map = vm_map_new();
+	assert(pkg.map != NULL);
 
-	vm_deallocate(proc->task->map, 0x0, (size_t)VADDR_MAX);
+	path = strdup(u_path);
+	assert(copyout_strv(u_argp, &argp) == 0);
+	assert(copyout_strv(u_envp, &envp) == 0);
+
+	proc->task->map = pkg.map;
+	vm_activate(pkg.map);
 
 	/* assume it's not PIE */
 	r = loadelf(path, (vaddr_t)0x0, &pkg);
 	if (r < 0)
-		return r;
+		goto fail;
 
 	r = loadelf("/usr/lib/ld.so", (vaddr_t)0x40000000, &rtldpkg);
 	if (r < 0)
-		return r;
+		goto fail;
 
 	pkg.stack = VADDR_MAX;
-	assert(
-	    vm_allocate(proc->task->map, NULL, &stack, USER_STACK_SIZE) == 0);
+	assert(vm_allocate(pkg.map, NULL, &stack, USER_STACK_SIZE) == 0);
 	stack += USER_STACK_SIZE;
 	pkg.stack = stack;
-	thread->stack = stack;
 	assert(copyargs(&pkg, argp, envp) == 0);
+
+	vm_deallocate(oldmap, 0x0, (size_t)VADDR_MAX);
+	thread->stack = stack;
 
 	frame->rip = (uint64_t)rtldpkg.entry;
 	frame->rsp = (uint64_t)pkg.sp;
-	thread->pcb.frame.rip = (uint64_t)rtldpkg.entry;
-	thread->pcb.frame.rsp = (uint64_t)pkg.sp;
 
-	return 0;
+	r = 0;
+	goto succ;
+
+fail:
+	vm_activate(oldmap);
+	proc->task->map = oldmap;
+
+succ:
+	kfree(path);
+	strv_free(argp);
+	strv_free(envp);
+	return r;
 }

@@ -15,6 +15,7 @@
 #include <sys/vm.h>
 
 #include <machine/vm_machdep.h>
+
 #include <amd64/kasan.h>
 
 #include <limits.h>
@@ -26,7 +27,6 @@
 #include "kern/vmem_impl.h"
 #include "sys/queue.h"
 #include "sys/tree.h"
-
 
 /** unique identifier for a paged-out page */
 typedef uintptr_t drumslot_t;
@@ -227,6 +227,9 @@ int vm_deallocate(vm_map_t *map, vaddr_t start, size_t size);
 /** Fork a map. */
 vm_map_t *vm_map_fork(vm_map_t *map);
 
+/** Create a new, empty map. */
+vm_map_t *vm_map_new();
+
 /**
  * Map a VM object into an address space either at a given virtual address, or
  * (if \p vaddr points to vaddr of VADDR_MAX) pick a suitable place to put it.
@@ -315,7 +318,7 @@ void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
  */
 void pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv);
 
-vm_page_t *pmap_unenter_kern(vm_map_t*map, vaddr_t virt);
+vm_page_t *pmap_unenter_kern(vm_map_t *map, vaddr_t virt);
 
 /**
  * Check whether a page has been accessed. The access bits are reset.

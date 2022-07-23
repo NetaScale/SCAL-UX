@@ -353,10 +353,19 @@ void
 pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
 {
 	/** \todo free no-longer-needed page tables */
-	pte_t  *pte = P2V(pmap_fully_descend(map->pmap, vaddr));
+	pte_t  *pte = pmap_fully_descend(map->pmap, vaddr);
 	paddr_t paddr;
 
-	assert(pte);
+	/*
+	 * XXX: maybe we should be more careful about this
+	 * perhaps instead of bulk pmap_unenter'ing on deallocation, instead
+	 * we should iterate through the object's page queue (amap for anon
+	 * objects)
+	 */
+	if (pte == NULL)
+		return;
+
+	pte = P2V(pte);
 	paddr = pte_get_addr(*pte);
 	if (*pte == 0)
 		return;

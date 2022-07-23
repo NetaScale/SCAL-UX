@@ -319,7 +319,8 @@ thread_run(thread_t *thread)
 		arch_ipi_resched(thread->cpu);
 }
 
-void thread_yield()
+void
+thread_yield()
 {
 	splassertle(kSPL0);
 	arch_yield();

@@ -59,7 +59,8 @@ void lapic_eoi();
 int  posix_syscall(intr_frame_t *frame);
 void callout_interrupt();
 void dpcs_run();
-int  vm_fault(vm_map_t *map, vaddr_t addr, vm_fault_flags_t flags);
+int  vm_fault(intr_frame_t *frame, vm_map_t *map, vaddr_t addr,
+     vm_fault_flags_t flags);
 void swtch(void *ctx);
 
 static void
@@ -214,8 +215,8 @@ lapic_timer_calibrate()
 static void
 intr_page_fault(intr_frame_t *frame, void *arg)
 {
-	if (vm_fault(CURTHREAD()->task->map, (vaddr_t)read_cr2(), frame->code) <
-	    0)
+	if (vm_fault(frame, CURTHREAD()->task->map, (vaddr_t)read_cr2(),
+		frame->code) < 0)
 		fatal("unhandled page fault\n");
 }
 

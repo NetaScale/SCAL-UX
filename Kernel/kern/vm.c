@@ -115,6 +115,7 @@
 
 #include "kern/lock.h"
 #include "libkern/klib.h"
+#include "machine/intr.h"
 #include "machine/spl.h"
 #include "machine/vm_machdep.h"
 #include "sys/queue.h"
@@ -434,7 +435,8 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 }
 
 int
-vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
+vm_fault(intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
+    vm_fault_flags_t flags)
 {
 	vm_map_entry_t *ent;
 	voff_t		obj_off;
@@ -455,7 +457,8 @@ vm_fault(vm_map_t *map, vaddr_t vaddr, vm_fault_flags_t flags)
 		kprintf("vm_fault: no object at vaddr %p in map %p\n", vaddr,
 		    map);
 		vm_dump(map);
-		fatal("no object");
+		md_intr_frame_trace(frame);
+		fatal("no object\n");
 		return -1;
 	}
 
@@ -499,6 +502,19 @@ vm_map_fork(vm_map_t *map)
 		    false);
 		assert(r == 0)
 	}
+
+	return newmap;
+}
+
+vm_map_t *
+vm_map_new()
+{
+	vm_map_t *newmap = kmalloc(sizeof *newmap);
+
+	newmap->pmap = pmap_new();
+	TAILQ_INIT(&newmap->entries);
+	vmem_init(&newmap->vmem, "task map", USER_BASE, USER_SIZE, PGSIZE, NULL,
+	    NULL, NULL, 0, 0, kSPLVM);
 
 	return newmap;
 }
