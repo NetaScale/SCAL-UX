@@ -5,6 +5,7 @@
 #include <kern/task.h>
 #include <kern/vm.h>
 #include <libkern/klib.h>
+#include <stdatomic.h>
 #include <stdint.h>
 
 #include "amd64/asm_intr.h"
@@ -35,6 +36,7 @@ enum {
 	/* set below 224, so that we can filter it out with CR8 */
 	kIntNumLAPICTimer = 223,
 	kIntNumLocalReschedule = 254,
+	kIntNumInvlPG = 255,
 };
 
 typedef struct {
@@ -79,6 +81,7 @@ static void intr_page_fault(intr_frame_t *frame, void *arg);
 static void intr_lapic_timer(intr_frame_t *frame, void *arg);
 static void intr_syscall(intr_frame_t *frame, void *arg);
 static void intr_local_resched(intr_frame_t *frame, void *arg);
+static void intr_invlpg(intr_frame_t *frame, void *arg);
 
 void
 idt_init()
@@ -98,6 +101,7 @@ idt_init()
 	md_intr_register(kIntNumSyscall, kSPL0, intr_syscall, NULL);
 	md_intr_register(kIntNumLocalReschedule, kSPLSched, intr_local_resched,
 	    NULL);
+	md_intr_register(kIntNumInvlPG, kSPLHigh, intr_invlpg, NULL);
 }
 
 void
@@ -244,6 +248,17 @@ intr_local_resched(intr_frame_t *frame, void *arg)
 			resched... */
 }
 
+static void
+intr_invlpg(intr_frame_t *frame, void *arg)
+{
+	extern vaddr_t	    invlpg_addr;
+	extern volatile int invlpg_done_cnt;
+	void		    invlpg(vaddr_t vaddr);
+	invlpg(invlpg_addr);
+	atomic_fetch_add(&invlpg_done_cnt, 1);
+	lapic_eoi();
+}
+
 void
 arch_yield()
 {
@@ -255,6 +270,13 @@ arch_ipi_resched(cpu_t *cpu)
 {
 	lapic_write(kLAPICRegICR1, (uint32_t)cpu->arch_cpu.lapic_id << 24);
 	lapic_write(kLAPICRegICR0, kIntNumLocalReschedule);
+}
+
+void
+arch_ipi_invlpg(cpu_t *cpu)
+{
+	lapic_write(kLAPICRegICR1, (uint32_t)cpu->arch_cpu.lapic_id << 24);
+	lapic_write(kLAPICRegICR0, kIntNumInvlPG); /* NMI */
 }
 
 void

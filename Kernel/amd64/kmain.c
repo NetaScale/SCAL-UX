@@ -97,7 +97,7 @@ static void
 done(void)
 {
 	for (;;) {
-		__asm__("hlt");
+		__asm__("pause");
 	}
 }
 

@@ -4,6 +4,7 @@
 #include <kern/vm.h>
 #include <libkern/klib.h>
 
+#include "kern/task.h"
 #include "machine/vm_machdep.h"
 
 enum {
@@ -25,6 +26,7 @@ struct vm_pregion_queue vm_pregion_queue = TAILQ_HEAD_INITIALIZER(
 static vm_map_entry_t hhdm_entry, kernel_entry, kheap_entry;
 static vm_object_t    hhdm_obj, kernel_obj, kheap_obj;
 static pmap_t	      kpmap;
+static spinlock_t     invlpg_global_lock;
 
 static vm_page_t *
 vm_page_from_paddr(paddr_t paddr)
@@ -53,12 +55,12 @@ vm_pagealloc(bool sleep)
 	if (!page) {
 		fatal("vm_allocpage: oom not yet handled\n");
 	}
+	assert(page->free);
 	TAILQ_REMOVE(&pg_freeq, page, queue);
 	TAILQ_INSERT_TAIL(&pg_wireq, page, queue);
 	vmstat.pgs_free--;
 	vmstat.pgs_wired++;
 	page->wirecnt = 1;
-	assert(page->free);
 	page->free = 0;
 
 	VM_PAGE_QUEUES_UNLOCK();
@@ -69,11 +71,13 @@ vm_pagealloc(bool sleep)
 void
 vm_pagefree(vm_page_t *page)
 {
+	assert(!page->free);
+	page->anon = NULL;
 	page->free = 1;
 	TAILQ_INSERT_HEAD(&pg_freeq, page, queue);
 }
 
-static vm_page_t *
+vm_page_t *
 vm_pagealloc_zero(bool sleep)
 {
 	vm_page_t *page = vm_pagealloc(sleep);
@@ -170,10 +174,34 @@ pmap_new()
 	return pmap;
 }
 
-static void
+void
 invlpg(vaddr_t addr)
 {
 	asm volatile("invlpg %0" : : "m"(*((const char *)addr)) : "memory");
+}
+
+void	     arch_ipi_invlpg(cpu_t *cpu);
+vaddr_t	     invlpg_addr;
+volatile int invlpg_done_cnt;
+
+void
+global_invlpg(vaddr_t vaddr)
+{
+	spl_t spl = splhigh();
+	lock(&invlpg_global_lock);
+	invlpg_addr = vaddr;
+	invlpg_done_cnt = 1;
+	for (int i = 0; i < ncpus; i++) {
+		if (&cpus[i] == CURCPU())
+			continue;
+
+		arch_ipi_invlpg(&cpus[i]);
+	}
+	invlpg(vaddr);
+	while (invlpg_done_cnt != ncpus)
+		__asm__("pause");
+	unlock(&invlpg_global_lock);
+	splx(spl);
 }
 
 /* get the flags of a pte */

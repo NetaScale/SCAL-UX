@@ -186,9 +186,13 @@ amap_release(vm_amap_t *amap)
 		if (amap->chunks[i] == NULL)
 			continue;
 		for (int i2 = 0; i2 < ELEMENTSOF(amap->chunks[i]->anon); i2++) {
-			if (amap->chunks[i]->anon[i2] == NULL)
+			vm_anon_t *anon = amap->chunks[i]->anon[i2];
+
+			if (anon == NULL)
 				continue;
-			anon_release(amap->chunks[i]->anon[i2]);
+
+			lock(&anon->lock);
+			anon_release(anon);
 		}
 		kfree(amap->chunks[i]);
 	}
@@ -226,7 +230,7 @@ vm_aobj_new(size_t size)
 
 	obj->type = kVMObjAnon;
 	obj->anon.parent = NULL;
-	obj->anon.amap = kmalloc(sizeof(*obj->anon.amap));
+	obj->anon.amap = kcalloc(1, sizeof(*obj->anon.amap));
 	obj->anon.amap->chunks = NULL;
 	obj->anon.amap->curnchunk = 0;
 	obj->size = size;
@@ -321,7 +325,7 @@ anon_new(size_t offs)
 	lock(&newanon->lock);
 	newanon->resident = true;
 	newanon->offs = offs;
-	newanon->physpage = vm_pagealloc(1);
+	newanon->physpage = vm_pagealloc_zero(1);
 	newanon->physpage->anon = newanon;
 	return newanon;
 }
@@ -347,7 +351,16 @@ anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock)
 		return;
 	}
 
-	// kprintf("free anon %p\n", anon);
+	if (!anon->resident)
+		fatal("anon_release: doesn't support swapped-out anons yet\n");
+
+	assert(anon->physpage);
+
+	VM_PAGE_QUEUES_LOCK();
+	TAILQ_REMOVE(&pg_wireq, anon->physpage, queue);
+	vm_pagefree(anon->physpage);
+	VM_PAGE_QUEUES_UNLOCK();
+	kfree(anon);
 }
 
 static vm_anon_t **
@@ -459,8 +472,12 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 	/* can just map in readwrite as it's new thus refcnt = 1 */
 	pmap_enter(map, anon->physpage, vaddr, kVMAll);
 	*pAnon = anon;
+#if 0 /* let's do this a better way! e.g. on trying to pageout, lock page's \
+	 owner => its anon and check if there is a wire bit set in the anon \
+	 instead? */
 	/* now let it be subject to paging */
 	vm_page_unwire(anon->physpage);
+#endif
 	unlock(&anon->lock);
 
 	return 0;
@@ -534,7 +551,7 @@ vm_map_fork(vm_map_t *map)
 		    false);
 		assert(r == 0)
 
-		vm_object_release(newobj);
+		    vm_object_release(newobj);
 	}
 
 	return newmap;

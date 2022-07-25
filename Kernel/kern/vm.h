@@ -303,8 +303,8 @@ vm_map_t *vm_map_new();
  * @param copy whether to copy \p obj instead of mapping it shared
  * (copy-on-write optimisation may be employed.)
  */
-int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp,
-    size_t size, bool copy) LOCK_REQUIRES(obj->lock);
+int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
+    bool copy) LOCK_REQUIRES(obj->lock);
 
 /** Release a reference to a map. The map may be fully freed. */
 void vm_map_release(vm_map_t *map);
@@ -317,6 +317,11 @@ void vm_map_release(vm_map_t *map);
  * @returns LOCKED page, initially on the wired queue.
  */
 vm_page_t *vm_pagealloc(bool sleep);
+
+/**
+ * As vm_pagealloc, but zero the page. TODO merge them.
+ */
+vm_page_t *vm_pagealloc_zero(bool sleep);
 
 /**
  * Free a page. Page must have already been removed from its queue (for now.)
