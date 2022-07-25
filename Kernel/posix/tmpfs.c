@@ -98,6 +98,7 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
 	case VREG:
 		/* vnode object is associated as soon as needed */
 		n->reg.vmobj = vm_aobj_new(UINT32_MAX);
+		n->reg.vmobj->refcnt++;
 		break;
 
 	case VDIR:

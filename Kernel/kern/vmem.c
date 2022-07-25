@@ -490,7 +490,7 @@ vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 {
 	vmem_seglist_t *bucket = hashbucket_for_addr(vmem, addr);
 	vmem_seg_t	   *seg, *left, *right;
-	bool coalesced_left = false, coalesced_right = false, coalesced = false;
+	bool coalesced_left = false, coalesced = false;
 
 	LIST_FOREACH (seg, bucket, seglist) {
 		if (seg->base == addr)
@@ -533,7 +533,7 @@ free:
 		seg_free(vmem, seg);
 		seg = right;
 		right = next_seg(seg);
-		coalesced_right = coalesced = true;
+		coalesced = true;
 	}
 
 	if (left->type == kVMemSegSpanImported && seg->size == left->size) {

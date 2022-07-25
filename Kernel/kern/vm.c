@@ -115,6 +115,7 @@
 
 #include "kern/lock.h"
 #include "libkern/klib.h"
+#include "libkern/obj.h"
 #include "machine/intr.h"
 #include "machine/spl.h"
 #include "machine/vm_machdep.h"
@@ -132,6 +133,7 @@ vmstat_t vmstat;
 bool	 vm_debug_anon = false;
 
 vm_anon_t *anon_copy(vm_anon_t *anon);
+void	   anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock);
 
 /*
  * we use obj->anon.parent IFF there is no vm_amap_entry for an offset within
@@ -163,17 +165,34 @@ amap_copy(vm_amap_t *amap)
 			newamap->chunks[i]->anon[i2] =
 			    amap->chunks[i]->anon[i2];
 
-			if (amap->chunks[i]->anon[i2] != NULL) {
-				/* TODO: copy-on-write */
-				// amap->chunks[i]->anon[i2]->refcnt++;
-				newamap->chunks[i]->anon[i2] = anon_copy(
-				    newamap->chunks[i]->anon[i2]);
-				unlock(&newamap->chunks[i]->anon[i2]->lock);
-			}
+			if (amap->chunks[i]->anon[i2] == NULL)
+				continue;
+
+			/* TODO: copy-on-write */
+			// amap->chunks[i]->anon[i2]->refcnt++;
+			newamap->chunks[i]->anon[i2] = anon_copy(
+			    newamap->chunks[i]->anon[i2]);
+			unlock(&newamap->chunks[i]->anon[i2]->lock);
 		}
 	}
 
 	return newamap;
+}
+
+void
+amap_release(vm_amap_t *amap)
+{
+	for (int i = 0; i < amap->curnchunk; i++) {
+		if (amap->chunks[i] == NULL)
+			continue;
+		for (int i2 = 0; i2 < ELEMENTSOF(amap->chunks[i]->anon); i2++) {
+			if (amap->chunks[i]->anon[i2] == NULL)
+				continue;
+			anon_release(amap->chunks[i]->anon[i2]);
+		}
+		kfree(amap->chunks[i]);
+	}
+	kfree(amap);
 }
 
 int
@@ -187,14 +206,15 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size)
 	obj = vm_aobj_new(size);
 
 	r = vm_map_object(map, obj, vaddrp, size, false);
-	if (r < 0) {
-		kfree(obj->anon.amap);
-		kfree(obj);
-		return r;
-	}
+	if (r < 0)
+		goto finish;
 
 	if (out)
 		*out = obj;
+
+finish:
+	/* object is retained by the map now */
+	vm_object_release(obj);
 
 	return 0;
 }
@@ -210,6 +230,7 @@ vm_aobj_new(size_t size)
 	obj->anon.amap->chunks = NULL;
 	obj->anon.amap->curnchunk = 0;
 	obj->size = size;
+	obj->refcnt = 1;
 
 	return obj;
 }
@@ -230,10 +251,10 @@ unmap_entry(vm_map_t *map, vm_map_entry_t *entry)
 {
 	assert(vmem_xfree(&map->vmem, (vmem_addr_t)entry->start,
 		   entry->end - entry->start) >= 0);
-	// vm_object_release(entry->obj);
 	for (vaddr_t v = entry->start; v < entry->end; v += PGSIZE) {
 		pmap_unenter(map, NULL, v, NULL);
 	}
+	vm_object_release(entry->obj);
 	TAILQ_REMOVE(&map->entries, entry, queue);
 	kfree(entry);
 	/* todo: tlb shootdowns if map is used by multiple
@@ -316,6 +337,17 @@ anon_copy(vm_anon_t *anon)
 	vm_anon_t *newanon = anon_new(anon->offs);
 	copyphyspage(newanon->physpage->paddr, anon->physpage->paddr);
 	return newanon;
+}
+
+void
+anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock)
+{
+	if (--anon->refcnt > 0) {
+		unlock(&anon->lock);
+		return;
+	}
+
+	// kprintf("free anon %p\n", anon);
 }
 
 static vm_anon_t **
@@ -501,6 +533,8 @@ vm_map_fork(vm_map_t *map)
 		r = vm_map_object(newmap, newobj, &start, ent->end - ent->start,
 		    false);
 		assert(r == 0)
+
+		vm_object_release(newobj);
 	}
 
 	return newmap;
@@ -540,6 +574,7 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	entry->start = (vaddr_t)addr;
 	entry->end = (vaddr_t)addr + size;
 	entry->obj = obj;
+	obj->refcnt++;
 
 	TAILQ_INSERT_TAIL(&map->entries, entry, queue);
 
@@ -571,11 +606,27 @@ vm_object_copy(vm_object_t *obj)
 }
 
 void
+vm_object_release(vm_object_t *obj) LOCK_RELEASE(obj->lock)
+{
+	if (--obj->refcnt > 0) {
+		unlock(&obj->lock);
+		return;
+	}
+
+	if (obj->type == kVMObjAnon) {
+		amap_release(obj->anon.amap);
+	} else
+		fatal("vm_object_release: only implemented for anons\n");
+
+	kfree(obj);
+}
+
+void
 vm_map_release(vm_map_t *map)
 {
 	vm_deallocate(map, (vaddr_t)USER_BASE, USER_SIZE);
 	vmem_destroy(&map->vmem);
-	// pmap_free(map->pmap);
+	pmap_free(map->pmap);
 	kfree(map);
 }
 

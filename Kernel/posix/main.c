@@ -121,7 +121,6 @@ posix_main(void *initbin, size_t size)
 	spl0();
 
 	tmpfs_mountroot();
-	vnode_t *tvn = NULL;
 
 	root_vnode->ops->mkdir(root_vnode, &root_dev, "dev");
 

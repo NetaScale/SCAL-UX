@@ -101,9 +101,6 @@ ksrv_backtrace(vaddr_t vaddr, const char **name, size_t *offset)
 	kmod_t     *kmod;
 
 	TAILQ_FOREACH (kmod, &kmods, entries) {
-		const Elf64_Sym *sym = NULL;
-
-		assert(kmod->symtab != NULL);
 		for (int i = 0; i < kmod->symtab_size; i++) {
 			const char *iName = kmod->strtab +
 			    kmod->symtab[i].st_name;

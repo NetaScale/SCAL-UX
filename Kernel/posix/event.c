@@ -43,7 +43,8 @@ kqueue_register(kqueue_t *kq, struct kevent *kev)
 	switch (kn->kev.filter) {
 	case EVFILT_READ: {
 		file_t *file = CURPSXPROC()->files[kev->ident];
-		file->vn->ops->kqfilter(file->vn, kn);
+		r = file->vn->ops->kqfilter(file->vn, kn);
+		(void)r;
 		break;
 	}
 

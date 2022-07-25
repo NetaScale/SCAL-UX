@@ -51,19 +51,19 @@ __asan_loadN_noabort(uintptr_t addr, size_t size)
 void
 __asan_storeN_noabort(uintptr_t addr, size_t size)
 {
-	kasan_check(addr, size, true, __builtin_return_address(0));
+	kasan_check((vaddr_t)addr, size, true, __builtin_return_address(0));
 }
 
 void
 __asan_report_load_n_noabort(uintptr_t addr, size_t size)
 {
-	kasan_check(addr, size, true, __builtin_return_address(0));
+	kasan_check((vaddr_t)addr, size, true, __builtin_return_address(0));
 }
 
 void
 __asan_report_store_n_noabort(uintptr_t addr, size_t size)
 {
-	kasan_check(addr, size, true, __builtin_return_address(0));
+	kasan_check((vaddr_t)addr, size, true, __builtin_return_address(0));
 }
 
 void

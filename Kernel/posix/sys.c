@@ -144,7 +144,7 @@ posix_syscall(intr_frame_t *frame)
 
 	case kPXSysExecVE: {
 		kprintf("PXSYS_execve: %s\n", (char *)ARG1);
-		assert(sys_exec(proc, "/bash", ARG2, ARG3, frame) == 0);
+		assert(sys_exec(proc, "/bash", (const char **)ARG2, (const char **)ARG3, frame) == 0);
 		break;
 	}
 

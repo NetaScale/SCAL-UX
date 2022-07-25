@@ -18,6 +18,7 @@
 
 #include <amd64/kasan.h>
 
+#include <libkern/obj.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -124,8 +125,8 @@ typedef struct vm_amap {
 #if 0
 	SPLAY_HEAD(vm_amap_entry_tree, vm_amap_entry) anons;
 #endif
-	vm_amap_chunk_t **chunks;
-	size_t		  curnchunk;
+	vm_amap_chunk_t **chunks;    /**< sparse array pointers to chunks */
+	size_t		  curnchunk; /**< number of slots in chunks */
 } vm_amap_t;
 
 #if 0
@@ -197,96 +198,12 @@ typedef struct vm_map {
 
 typedef struct pmap pmap_t;
 
-/** The swapper thread loop. */
-void swapper(void *unused);
-
-/** Activate a map. */
-void vm_activate(vm_map_t *map);
-
 /**
- * Allocate anonymous memory and map it into the given map.
- *
- * @param[in,out] vaddrp pointer to a vaddr specifying where to map at. If the
- * pointed-to value is VADDR_MAX, then first fit is chosen. The address at which
- * the object was mapped, if not explicitly specified, is written out.
- * @param[out] out if non-null, the created vm_object_t is written out.
- * @param size size in bytes to allocate.
- *
- * @returns 0 for success.
- */
-int vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size);
-
-/** Allocate a new anonymous VM object of size \p size bytes. */
-vm_object_t *vm_aobj_new(size_t size);
-
-/**
- * Deallocate address space from a given map.
- */
-int vm_deallocate(vm_map_t *map, vaddr_t start, size_t size);
-
-/** Fork a map. */
-vm_map_t *vm_map_fork(vm_map_t *map);
-
-/** Create a new, empty map. */
-vm_map_t *vm_map_new();
-
-/**
- * Map a VM object into an address space either at a given virtual address, or
- * (if \p vaddr points to vaddr of VADDR_MAX) pick a suitable place to put it.
- *
- * @param size is the size of area to be mapped in bytes - it must be a multiple
- * of the PAGESIZE.
- * @param[in,out] vaddrp points to a vaddr_t describing the preferred address.
- * If VADDR_MAX, then anywhere is fine. The result is written to its referent.
- * @param copy whether to copy \p obj instead of mapping it shared
- * (copy-on-write optimisation may be employed.)
- */
-int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
-    bool copy);
-
-/**
- * Create a (copy-on-write optimised) copy of a VM object.
-
- * The exact semantics of a copy vary depending on what sort of object is
- * copied:
- * - Copying an anonymous object copies all the pages belonging to that
- * anonymous object (albeit with copy-on-write optimisation)
- * - Copying another type of object yields a new anonymous object with no pages;
- * the new object is assigned the copied object as parent, and when a page is
- * absent from the copied object, its parent is checked to see whether it holds
- * the page. Changes to the parent are therefore reflected in the copied object;
- * unless and until the child object tries to write to one of these pages, which
- * copies it.
- */
-vm_object_t *vm_object_copy(vm_object_t *obj);
-
-/** Release a reference to a map. The map may be fully freed. */
-void vm_map_release(vm_map_t *map);
-
-/**
- * Allocate a single page; optionally sleep to wait for one to become available.
- * @param sleep whether to sleep the thread until a page is available
- * @returns LOCKED page, initially on the wired queue.
- */
-vm_page_t *vm_pagealloc(bool sleep);
-
-/**
- * Free a page. Page must have already been removed from its queue (for now.)
- * Obviously call at SPL VM.
- */
-void vm_pagefree(vm_page_t *page);
-
-/**
- * Release a wire reference to a page; the page is placed into the active queue
- * and becomes subject to paging if new wirecnt is 0.
- */
-void vm_page_unwire(vm_page_t *page);
-
-/**
- * @name Arch-specific
+ * @name Arch-specific/pmap
  * @{
  */
 
+/** Setup the virtual memory subsystem. */
 void arch_vm_init(paddr_t kphys);
 
 /**
@@ -299,6 +216,9 @@ void pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
  * Map a single page at the given virtual address - for non-pageable memory.
  */
 void pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot);
+
+/** Free a pmap. */
+void pmap_free(pmap_t *pmap);
 
 /** Create a new pmap. */
 pmap_t *pmap_new();
@@ -330,6 +250,121 @@ bool pmap_page_accessed_reset(vm_page_t *page);
 
 /** @} */
 
+/** The swapper thread loop. */
+void swapper(void *unused);
+
+/**
+ * @name Maps
+ * @{
+ */
+
+/** Activate a map. */
+void vm_activate(vm_map_t *map);
+
+/**
+ * Allocate anonymous memory and map it into the given map.
+ *
+ * @param[in,out] vaddrp pointer to a vaddr specifying where to map at. If the
+ * pointed-to value is VADDR_MAX, then first fit is chosen. The address at which
+ * the object was mapped, if not explicitly specified, is written out.
+ * @param[out] out if non-null, the [non-retained] vm_object_t is written out.
+ * @param size size in bytes to allocate.
+ *
+ * @returns 0 for success.
+ */
+int vm_allocate(vm_map_t *map, GEN_RETURNS_UNRETAINED vm_object_t **out,
+    vaddr_t *vaddrp, size_t size);
+
+/**
+ * Deallocate address space from a given map. For now only handles deallocation
+ * of whole objects, which are released.
+ */
+int vm_deallocate(vm_map_t *map, vaddr_t start, size_t size);
+
+/**
+ * Fork a map.
+ *
+ * @returns retained new vm_map_t
+ */
+vm_map_t *vm_map_fork(vm_map_t *map);
+
+/** Create a new, empty map. */
+vm_map_t *vm_map_new();
+
+/**
+ * Map a VM object into an address space either at a given virtual address, or
+ * (if \p vaddr points to vaddr of VADDR_MAX) pick a suitable place to put it.
+ *
+ * @param size is the size of area to be mapped in bytes - it must be a multiple
+ * of the PAGESIZE.
+ * @param obj the object to be mapped. It is retained.
+ * @param[in,out] vaddrp points to a vaddr_t describing the preferred address.
+ * If VADDR_MAX, then anywhere is fine. The result is written to its referent.
+ * @param copy whether to copy \p obj instead of mapping it shared
+ * (copy-on-write optimisation may be employed.)
+ */
+int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp,
+    size_t size, bool copy) LOCK_REQUIRES(obj->lock);
+
+/** Release a reference to a map. The map may be fully freed. */
+void vm_map_release(vm_map_t *map);
+
+/** @} */
+
+/**
+ * Allocate a single page; optionally sleep to wait for one to become available.
+ * @param sleep whether to sleep the thread until a page is available
+ * @returns LOCKED page, initially on the wired queue.
+ */
+vm_page_t *vm_pagealloc(bool sleep);
+
+/**
+ * Free a page. Page must have already been removed from its queue (for now.)
+ * Obviously call at SPL VM.
+ */
+void vm_pagefree(vm_page_t *page);
+
+/**
+ * Release a wire reference to a page; the page is placed into the active queue
+ * and becomes subject to paging if new wirecnt is 0.
+ */
+void vm_page_unwire(vm_page_t *page);
+
+/**
+ * @name Objects
+ * @{
+ */
+
+/** Allocate a new anonymous VM object of size \p size bytes. */
+vm_object_t *vm_aobj_new(size_t size);
+
+/**
+ * Create a (copy-on-write optimised) copy of a @locked VM object.
+
+ * The exact semantics of a copy vary depending on what sort of object is
+ * copied:
+ * - Copying an anonymous object copies all the pages belonging to that
+ * anonymous object (albeit with copy-on-write optimisation)
+ * - Copying another type of object yields a new anonymous object with no pages;
+ * the new object is assigned the copied object as parent, and when a page is
+ * absent from the copied object, its parent is checked to see whether it holds
+ * the page. Changes to the parent are therefore reflected in the copied object;
+ * unless and until the child object tries to write to one of these pages, which
+ * copies it.
+ */
+vm_object_t *vm_object_copy(vm_object_t *obj);
+
+/** Release a reference to a @locked VM object. */
+void vm_object_release(vm_object_t *obj) LOCK_REQUIRES(obj->lock);
+
+/** @} */
+
+/**
+ * @name Kernel memory
+ * @{
+ */
+
+/** Set up the kernel memory subsystem. */
 void vm_kernel_init();
 
 /**
@@ -345,6 +380,8 @@ vaddr_t vm_kalloc(size_t npages, int wait);
  * Free pages of kernel heap.
  */
 void vm_kfree(vaddr_t addr, size_t pages);
+
+/** @} */
 
 /** lock the page queues; must be acquired at SPL VM */
 #define VM_PAGE_QUEUES_LOCK() lock(&vm_page_queues_lock)

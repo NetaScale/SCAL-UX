@@ -141,13 +141,17 @@ callout_interrupt()
 
 	spl = splsched();
 	co = TAILQ_FIRST(queue);
-	assert(co != NULL);
+	//assert(co != NULL);
+	if (co == NULL)
+		goto finish;
 	TAILQ_REMOVE(queue, co, entries);
 	co->state = kCalloutElapsed;
 	TAILQ_INSERT_TAIL(&CURCPU()->dpcqueue, &co->dpc, dpcqueue);
 	co = TAILQ_FIRST(queue);
 	if (co != NULL)
 		arch_timer_set(co->nanosecs / 1000);
+
+finish:
 	splx(spl);
 }
 
@@ -199,23 +203,6 @@ task_fork(task_t *parent)
 	splx(spl);
 
 	return task;
-}
-
-/**
- * Switch to thread \p thr. Previously-running thread should have already been
- * placed on an appropriate queue or otherwise dealt with. sched_lock should be
- * held (it will be relinquished after switching.) Reschedule callout should be
- * set with nanoseconds to an appropriate value; it will be enqueued if not 0.
- */
-static int
-thread_switchto(thread_t *thr)
-{
-	cpu_t *cpu = CURCPU();
-
-	cpu->curthread = thr;
-	vm_activate(thr->task->map);
-
-	return 0;
 }
 
 /* TODO: remove amd64 specifics */

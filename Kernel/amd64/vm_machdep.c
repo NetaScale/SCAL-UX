@@ -26,6 +26,21 @@ static vm_map_entry_t hhdm_entry, kernel_entry, kheap_entry;
 static vm_object_t    hhdm_obj, kernel_obj, kheap_obj;
 static pmap_t	      kpmap;
 
+static vm_page_t *
+vm_page_from_paddr(paddr_t paddr)
+{
+	vm_pregion_t *preg;
+
+	TAILQ_FOREACH (preg, &vm_pregion_queue, queue) {
+		if (preg->paddr <= paddr &&
+		    (preg->paddr + PGSIZE * preg->npages) > paddr) {
+			return &preg->pages[(paddr - preg->paddr) / PGSIZE];
+		}
+	}
+
+	return NULL;
+}
+
 vm_page_t *
 vm_pagealloc(bool sleep)
 {
@@ -107,6 +122,41 @@ arch_vm_init(paddr_t kphys)
 	}
 }
 
+/* table is a PHYSICAL address */
+void
+pmap_free_sub(uint64_t *table, int level)
+{
+	if (table == NULL)
+		return;
+
+	table = P2V(table);
+
+	/*
+	 * we don't free the individual mappings (there shouldn't *be*
+	 * any left, as they should've been removed by vm_deallocate).
+	 * Only the page tables themselves are freed.
+	 */
+	if (level > 1)
+		for (int i = 0; i < 512; i++) {
+			pte_t *entry = &table[i];
+			pmap_free_sub(pte_get_addr(*entry), level - 1);
+		}
+
+	/* page table pages don't get queued anywhere atm; so no TAILQ_REMOVE */
+	vmstat.pgs_pgtbl--;
+	vm_pagefree(vm_page_from_paddr(V2P(table)));
+}
+
+void
+pmap_free(pmap_t *pmap)
+{
+	uint64_t *vpml4 = P2V(pmap->pml4);
+	for (int i = 0; i < 255; i++) {
+		pte_t *entry = &vpml4[i];
+		pmap_free_sub(pte_get_addr(*entry), 3);
+	}
+}
+
 pmap_t *
 pmap_new()
 {
@@ -148,27 +198,6 @@ pte_set(uint64_t *pte, paddr_t addr, uint64_t flags)
 	a &= kMMUFrame;
 	*pte = 0x0;
 	*pte = a | flags;
-}
-
-void
-pmap_free_sub(uint64_t *table, int level)
-{
-	if (table == NULL)
-		return;
-	if (level > 1)
-		for (int i = 0; i < 255; i++) {
-			pte_t entry = *(pte_t *)P2V(&table[i]);
-			pmap_free_sub(pte_get_addr(entry), level - 1);
-		}
-	kprintf("page %p of pagetable free\n", table);
-}
-
-void
-pmap_free(pmap_t *pmap)
-{
-	pmap_free_sub(pmap->pml4, 4);
-	for (int i = 0; i < 255; i++)
-		((uint64_t *)P2V(pmap->pml4))[i] = 0x0;
 }
 
 void
@@ -228,19 +257,19 @@ pmap_fully_descend(pmap_t *pmap, vaddr_t virt)
 
 	pdptes = pmap_descend(pml4, pml4i, false, 0);
 	if (!pdptes) {
-		//kprintf("no pml4 entry\n");
+		// kprintf("no pml4 entry\n");
 		return 0x0;
 	}
 
 	pdes = pmap_descend(pdptes, pdpti, false, 0);
 	if (!pdes) {
-		//kprintf("no pdpt entry\n");
+		// kprintf("no pdpt entry\n");
 		return 0x0;
 	}
 
 	ptes = pmap_descend(pdes, pdi, false, 0);
 	if (!ptes) {
-		//kprintf("no pte entry\n");
+		// kprintf("no pte entry\n");
 		return 0x0;
 	}
 
@@ -264,19 +293,19 @@ pmap_trans(pmap_t *pmap, vaddr_t virt)
 
 	pdpte = pmap_descend(pml4, pml4i, false, 0);
 	if (!pdpte) {
-		//kprintf("no pml4 entry\n");
+		// kprintf("no pml4 entry\n");
 		return 0x0;
 	}
 
 	pde = pmap_descend(pdpte, pdpti, false, 0);
 	if (!pde) {
-		//kprintf("no pdpt entry\n");
+		// kprintf("no pdpt entry\n");
 		return 0x0;
 	}
 
 	pte = pmap_descend(pde, pdi, false, 0);
 	if (!pte) {
-		//kprintf("no pte entry\n");
+		// kprintf("no pte entry\n");
 		return 0x0;
 	}
 
@@ -332,21 +361,6 @@ pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 	}
 
 	pte_set(pti_virt, phys, vm_prot_to_i386(prot));
-}
-
-static vm_page_t *
-vm_page_from_paddr(paddr_t paddr)
-{
-	vm_pregion_t *preg;
-
-	TAILQ_FOREACH (preg, &vm_pregion_queue, queue) {
-		if (preg->paddr <= paddr &&
-		    (preg->paddr + PGSIZE * preg->npages) > paddr) {
-			return &preg->pages[(paddr - preg->paddr) / PGSIZE];
-		}
-	}
-
-	return NULL;
 }
 
 void
