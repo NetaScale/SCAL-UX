@@ -25,6 +25,9 @@ configure:
 run:
 	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm
 
+runq35:
+	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm -M q35
+
 runnogui:
 	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s  -vnc :0   -enable-kvm
 

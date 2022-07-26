@@ -4,11 +4,13 @@
 
 #include "AcpiPC.h"
 #include "dev/IOApic.h"
+#include "dev/PCIBus.h"
 #include "dev/PS2Keyboard.h"
 #include "devicekit/DKDevice.h"
 #include "kern/vm.h"
 #include "lai/core.h"
 #include "lai/helpers/sci.h"
+#include "lai/internal-exec.h"
 #include "libkern/klib.h"
 
 typedef struct {
@@ -43,6 +45,7 @@ typedef struct {
 
 acpi_rsdt_t *rsdt = NULL;
 acpi_xsdt_t *xsdt = NULL;
+mcfg_t *mcfg = NULL;
 
 uint8_t
 pci_readb(uint32_t bus, uint32_t slot, uint32_t function, uint32_t offset)
@@ -370,6 +373,11 @@ string_to_eisaid(const char *id)
 	/* TODO: matching on device classes by a more elegant means */
 	if (strcmp(devid, "PNP0303") == 0)
 		[PS2Keyboard probeWithAcpiNode:node];
+	else if (strcmp(devid, ACPI_PCI_ROOT_BUS_PNP_ID) == 0) {
+		[PCIBus probeWithAcpiNode:node];
+	} else if (strcmp(devid, ACPI_PCIE_ROOT_BUS_PNP_ID) == 0) {
+		[PCIBus probeWithAcpiNode:node];
+	}
 }
 
 /* depth-first traversal of devices within the tree */
@@ -448,9 +456,59 @@ parse_intrs(acpi_madt_entry_header_t *item, void *arg)
 	}
 }
 
+static void
+laiex_create_integer(lai_variable_t *var, uint64_t val)
+{
+	var->type = LAI_TYPE_INTEGER;
+	var->integer = val;
+}
+
+#if 0
+static void
+do_osc(lai_nsnode_t *osc)
+{
+	const char *strUuid = "0811b06e-4a27-44f9-8d60-3cbbc22e7b48";
+	LAI_CLEANUP_STATE lai_state_t  state;
+	LAI_CLEANUP_VAR lai_variable_t uuid, revId, cntCap, caps, ret;
+	uint32_t		      *u32Ret;
+	int			       r;
+
+	lai_init_state(&state);
+
+	r = lai_create_buffer(&uuid, strlen(strUuid));
+	memcpy(lai_exec_buffer_access(&uuid), strUuid, strlen(strUuid));
+	laiex_create_integer(&revId, 1);
+	laiex_create_integer(&cntCap, 2);
+	r = lai_create_buffer(&caps, 2);
+	memset(lai_exec_buffer_access(&caps), 0x0, 2);
+
+	r = lai_eval_largs(&ret, osc, &state, uuid, revId, cntCap, caps, NULL);
+	if (r != LAI_ERROR_NONE) {
+		DKLog("AcpiPC: failed to evaluate _OSC (error %d)\n", r);
+		return;
+	}
+
+	if (lai_exec_buffer_size(&ret) != lai_exec_buffer_size(&caps)) {
+		kprintf("AcpiPC: _OSC return value of unexpected length");
+		return;
+	}
+
+	u32Ret = (uint32_t *)lai_exec_buffer_access(&ret);
+	if (u32Ret[0] & 0x2) {
+		kprintf("AcpiPC: _OSC failure\n");
+	}
+	if (u32Ret[0] & 0x4) {
+		kprintf("AcpiPC: _OSC failed to recognise UUID\n");
+	}
+	if (u32Ret[0] & 0x8) {
+		kprintf("AcpiPC: _OSC failed to recognise revision\n");
+	}
+}
+#endif
+
 - init
 {
-	acpi_madt_t *madt;
+	acpi_madt_t  *madt;
 
 	self = [super init];
 
@@ -460,6 +518,8 @@ parse_intrs(acpi_madt_entry_header_t *item, void *arg)
 	madt = laihost_scan("APIC", 0);
 	madt_walk(madt, parse_ioapics, NULL);
 	madt_walk(madt, parse_intrs, NULL);
+
+	mcfg = laihost_scan("MCFG", 0);
 
 	[self iterate:lai_resolve_path(NULL, "_SB_")];
 

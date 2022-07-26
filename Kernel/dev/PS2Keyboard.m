@@ -4,6 +4,7 @@
 #include "dev/IOApic.h"
 #include "fbterm/FBTerm.h"
 #include "lai/core.h"
+#include "acpi/laiex.h"
 #include "lai/error.h"
 #include "lai/helpers/resource.h"
 
@@ -15,29 +16,6 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 	'i', 'o', 'p', '[', ']', '\n', '\0', 'a', 's', 'd', 'f', 'g', 'h', 'j',
 	'k', 'l', ';', '\'', '`', '\0', '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm',
 	',', '.', '/', '\0', '\0', '\0', ' ', '\0' };
-
-static int
-laiex_view_resource(lai_nsnode_t *node, lai_variable_t *crs,
-    struct lai_resource_view *view, lai_state_t *state)
-{
-	lai_nsnode_t *hcrs;
-
-	hcrs = lai_resolve_path(node, "_CRS");
-
-	if (hcrs == NULL) {
-		lai_warn("missing _CRS\n");
-		return -1;
-	}
-
-	if (lai_eval(crs, hcrs, state)) {
-		lai_warn("failed to eval _CRS");
-		return -1;
-	}
-
-	*view = (struct lai_resource_view)LAI_RESOURCE_VIEW_INITIALIZER(crs);
-
-	return 0;
-}
 
 @implementation PS2Keyboard
 

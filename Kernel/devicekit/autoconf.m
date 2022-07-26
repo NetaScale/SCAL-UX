@@ -30,5 +30,7 @@ autoconf()
 	[FBTerm probeWithFB:sysfb];
 	[AcpiPC probeWithRSDP:rsdp_request.response->address];
 
+	for (;;) asm("pause");
+
 	return 0;
 }

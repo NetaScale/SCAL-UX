@@ -6,6 +6,7 @@
 #include <OFObject.h>
 
 #define DKLog(...) kprintf(__VA_ARGS__)
+#define DKDevLog()
 
 @interface DKDevice : OFObject {
 	char	  name[32];
