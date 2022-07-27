@@ -65,6 +65,7 @@ vm_pagealloc(bool sleep)
 
 	VM_PAGE_QUEUES_UNLOCK();
 	splx(spl);
+
 	return page;
 }
 
@@ -130,6 +131,8 @@ arch_vm_init(paddr_t kphys)
 void
 pmap_free_sub(uint64_t *table, int level)
 {
+	vm_page_t *page;
+
 	if (table == NULL)
 		return;
 
@@ -146,9 +149,11 @@ pmap_free_sub(uint64_t *table, int level)
 			pmap_free_sub(pte_get_addr(*entry), level - 1);
 		}
 
-	/* page table pages don't get queued anywhere atm; so no TAILQ_REMOVE */
+	page = vm_page_from_paddr(V2P(table));
 	vmstat.pgs_pgtbl--;
-	vm_pagefree(vm_page_from_paddr(V2P(table)));
+	/* all pages go onto the wired queue by default right now, so remove */
+	TAILQ_REMOVE(&pg_wireq, page, queue);
+	vm_pagefree(page);
 }
 
 void

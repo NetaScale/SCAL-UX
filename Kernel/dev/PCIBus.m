@@ -1,5 +1,6 @@
 #include "PCIBus.h"
 #include "acpi/laiex.h"
+#include "dev/NVMEController.h"
 #include "lai/core.h"
 #include "lai/error.h"
 #include "lai/host.h"
@@ -7,6 +8,7 @@
 enum {
 	kVendorID = 0x0,
 	kDeviceID = 0x2,
+	kCommand = 0x4,
 	kSubclass = 0xa,
 	kClass = 0xb,
 	kHeaderType = 0xe, /* bit 7 = is multifunction */
@@ -51,6 +53,28 @@ iterate(lai_nsnode_t *obj, size_t depth)
 
 @implementation PCIBus
 
+#define INFO_ARGS(INFO) INFO->seg, INFO->bus, INFO->slot, INFO->fun
+#define ENABLE_CMD_FLAG(INFO, FLAG)                   \
+	laihost_pci_writew(INFO_ARGS(INFO), kCommand, \
+	    laihost_pci_readw(INFO_ARGS(INFO), kCommand) | (FLAG));
+
++ (void)enableMemorySpace:(dk_device_pci_info_t *)pciInfo
+{
+	ENABLE_CMD_FLAG(pciInfo, 0x1 | 0x2);
+}
+
++ (void)enableBusMastering:(dk_device_pci_info_t *)pciInfo
+{
+	ENABLE_CMD_FLAG(pciInfo, 0x4);
+}
+
++ (paddr_t)getBar:(uint8_t)num info:(dk_device_pci_info_t *)pciInfo
+{
+	return (paddr_t)((uintptr_t)laihost_pci_readd(INFO_ARGS(pciInfo),
+			     kBaseAddress0 + sizeof(uint32_t) * num) &
+	    0xfffffff0);
+}
+
 + (BOOL)probeWithAcpiNode:(lai_nsnode_t *)node;
 {
 	uint64_t		      seg = -1, bbn = -1;
@@ -64,7 +88,7 @@ iterate(lai_nsnode_t *obj, size_t depth)
 		if (r == LAI_ERROR_NO_SUCH_NODE) {
 			seg = 0;
 		} else {
-			DKLog("PCIBus: failed to evaluate _SEG: %d\n", r);
+			DKLog("PCIBus", "failed to evaluate _SEG: %d\n", r);
 			return NO;
 		}
 	}
@@ -74,7 +98,7 @@ iterate(lai_nsnode_t *obj, size_t depth)
 		if (r == LAI_ERROR_NO_SUCH_NODE) {
 			bbn = 0;
 		} else {
-			DKLog("PCIBus: failed to evaluate _BBN: %d\n", r);
+			DKLog("PCIBus", "failed to evaluate _BBN: %d\n", r);
 		}
 	}
 
@@ -86,6 +110,7 @@ iterate(lai_nsnode_t *obj, size_t depth)
 static void
 doFunction(PCIBus *bus, uint16_t seg, uint8_t busNum, uint8_t slot, uint8_t fun)
 {
+	dk_device_pci_info_t pciInfo;
 	uint8_t class, subClass;
 	uint16_t vendorId, deviceId;
 
@@ -99,12 +124,23 @@ doFunction(PCIBus *bus, uint16_t seg, uint8_t busNum, uint8_t slot, uint8_t fun)
 	class = CFG_READ(b, kClass);
 	subClass = CFG_READ(b, kSubclass);
 
-	DKLog("Function at %d:%d:%d:%d: Vendor %x, device %x, class %d/%d\n", seg, busNum,
-	    slot, fun, vendorId, deviceId, class, subClass);
+	pciInfo.busObj = bus;
+	pciInfo.seg = seg;
+	pciInfo.bus = busNum;
+	pciInfo.slot = slot;
+	pciInfo.fun = fun;
 
+	DKDevLog(bus,
+	    "Function at %d:%d:%d:%d: Vendor %x, device %x, class %d/%d\n", seg,
+	    busNum, slot, fun, vendorId, deviceId, class, subClass);
 
 	if (class == 6 && subClass == 4) {
-		DKLog("FIXME: PCI-PCI Bridge\n");
+		DKDevLog(bus, "FIXME: PCI-PCI Bridge\n");
+		return;
+	}
+
+	if (class == 1 && subClass == 8) {
+		[NVMEController probeWithPCIInfo:&pciInfo];
 		return;
 	}
 }

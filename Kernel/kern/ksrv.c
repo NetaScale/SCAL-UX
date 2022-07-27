@@ -257,7 +257,6 @@ kmod_load(void *addr)
 	kmod.base = VADDR_MAX;
 	vm_object_t *obj;
 	vm_allocate(&kmap, &obj, &kmod.base, kmod.mem_size);
-	kprintf("\n\nKMOD VMOBJECT: %p BASE: %p\n", obj, kmod.base);
 
 	for (int i = 0; i < ehdr.e_phnum; i++) {
 		Elf64_Phdr phdr;

@@ -26,7 +26,7 @@ run:
 	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm
 
 runq35:
-	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm -M q35
+	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm -M q35 -drive file=hda.img,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm
 
 runnogui:
 	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s  -vnc :0   -enable-kvm

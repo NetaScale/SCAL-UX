@@ -45,7 +45,7 @@ typedef struct {
 
 acpi_rsdt_t *rsdt = NULL;
 acpi_xsdt_t *xsdt = NULL;
-mcfg_t *mcfg = NULL;
+mcfg_t      *mcfg = NULL;
 
 uint8_t
 pci_readb(uint32_t bus, uint32_t slot, uint32_t function, uint32_t offset)
@@ -107,7 +107,7 @@ pci_writel(uint32_t bus, uint32_t slot, uint32_t function, uint32_t offset,
 void
 laihost_log(int level, const char *msg)
 {
-	DKLog("AcpiPC: lai: %s\n", msg);
+	DKLog("AcpiPC", "lai: %s\n", msg);
 }
 
 __attribute__((noreturn)) void
@@ -448,10 +448,12 @@ parse_intrs(acpi_madt_entry_header_t *item, void *arg)
 	case 2: {
 		acpi_madt_int_override_t *intr = (acpi_madt_int_override_t *)
 		    item;
-		kprintf("AcpiPC/MADT: Remap ISA IRQ %d to %d (lopol %d, "
-			"lvltrig %d)\n",
-		    intr->irq_source, intr->gsi, intr->flags & 0x2,
-		    intr->flags & 0x8);
+		DKLog("AcpiPC0",
+		    "Remap ISA IRQ %d to %d (lopol %d, "
+		    "lvltrig %d)\n",
+		    intr->irq_source, intr->gsi,
+		    (intr->flags & 0x2) == 0x2 ? 0x1 : 0x0,
+		    (intr->flags & 0x8) == 0x8 ? 0x1 : 0x0);
 	}
 	}
 }
@@ -508,7 +510,7 @@ do_osc(lai_nsnode_t *osc)
 
 - init
 {
-	acpi_madt_t  *madt;
+	acpi_madt_t *madt;
 
 	self = [super init];
 

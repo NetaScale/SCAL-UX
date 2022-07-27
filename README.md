@@ -80,6 +80,7 @@ Several third-party components are used. These are some of them:
 - nanoprintf: used for `kprintf`.
 - NetBSD: (`kernel/sys/queue.h`): NetBSD's `sys/queue.h`.
   - (`kernel/dev/fbterm/nbsdbold.psfu`): Bold8x16 font used for FBTerm.
+  - (`Kernel/dev/nvmereg.h`): NVMe register definitions.
 - Solaris (`kernel/dev/fbterm/sun12x22.psfu`): Sun Demi Gallant font available
   for FBTerm
 - ObjFW: provides an Objective-C runtime.

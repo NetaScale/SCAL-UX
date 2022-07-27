@@ -4,9 +4,22 @@
 #include "devicekit/DKDevice.h"
 #include "lai/core.h"
 
+typedef struct dk_device_pci_info {
+        id busObj; /* PCIBus * */
+	uint16_t seg;
+	uint8_t	 bus;
+	uint8_t	 slot;
+	uint8_t	 fun;
+} dk_device_pci_info_t;
+
 @interface PCIBus : DKDevice
 
++ (void)enableMemorySpace:(dk_device_pci_info_t *)pciInfo;
++ (void)enableBusMastering:(dk_device_pci_info_t *)pciInfo;
++ (paddr_t)getBar:(uint8_t)num info:(dk_device_pci_info_t *)pciInfo;
+
 + (BOOL)probeWithAcpiNode:(lai_nsnode_t *)node;
+
 - initWithSeg:(uint8_t)seg bus:(uint8_t)bus;
 
 @end

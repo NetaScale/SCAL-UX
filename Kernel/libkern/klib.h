@@ -11,8 +11,8 @@
 #ifndef KLIB_H_
 #define KLIB_H_
 
-#include <machine/spl.h>
 #include <machine/intr.h>
+#include <machine/spl.h>
 
 #include <kern/liballoc.h>
 #include <kern/lock.h>
@@ -46,15 +46,16 @@ extern spinlock_t lock_msgbuf;
 #define assert(...)                                                    \
 	{                                                              \
 		if (!(__VA_ARGS__))                                    \
-			fatal("assertion failed: " #__VA_ARGS__ "\n"); \
+			fatal("assertion failed: %s\n", #__VA_ARGS__); \
 	}
-#define fatal(...)                      \
-	{                               \
-		kprintf("on CPU %lu, PID %d, thread %p:\n", CURCPU()->num, CURTASK()->pid, CURTHREAD()); \
-		kprintf(__VA_ARGS__);   \
-		while (1) {             \
-			__asm__("cli"); \
-		}                       \
+#define fatal(...)                                                         \
+	{                                                                  \
+		kprintf("on CPU %lu, PID %d, thread %p:\n", CURCPU()->num, \
+		    CURTASK()->pid, CURTHREAD());                          \
+		kprintf(__VA_ARGS__);                                      \
+		while (1) {                                                \
+			__asm__("cli");                                    \
+		}                                                          \
 	}
 #define unimplemented(...) fatal("%s: unimplemented\n", __PRETTY_FUNCTION__)
 

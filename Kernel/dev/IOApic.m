@@ -97,9 +97,9 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 			int vec = md_intr_alloc(kSPL0, handler, arg);
 
 			if (vec < 0) {
-				DKLog(
-				    "%s: failed to register interrupt for GSI %d",
-				    ioapic->name, gsi);
+				DKDevLog(ioapic,
+				    "failed to register interrupt for GSI %d",
+				    gsi);
 				return -1;
 			}
 
@@ -112,7 +112,7 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 	}
 
 	if (!found) {
-		DKLog("IOApic: no I/O APIC found for GSI %d\n", gsi);
+		DKLog("IOApic", "no I/O APIC found for GSI %d\n", gsi);
 		return -1;
 	}
 

@@ -1,10 +1,10 @@
 #include <amd64/amd64.h>
 
 #include "PS2Keyboard.h"
+#include "acpi/laiex.h"
 #include "dev/IOApic.h"
 #include "fbterm/FBTerm.h"
 #include "lai/core.h"
-#include "acpi/laiex.h"
 #include "lai/error.h"
 #include "lai/helpers/resource.h"
 
@@ -44,8 +44,8 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 				if (gsi == -1)
 					gsi = res.gsi;
 				else {
-					DKLog(
-					    "PS2Keyboard: strange number of IRQs, gsi is %lu\n",
+					DKLog("PS2Keyboard",
+					    "strange number of IRQs, gsi is %lu\n",
 					    res.entry_idx);
 					break;
 				}
@@ -54,7 +54,8 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 	}
 
 	if (ioa == -1 || iob == -1 || gsi == -1) {
-		DKLog("PS2Keyboard: failed to identify resources from ACPI\n");
+		DKLog("PS2Keyboard",
+		    "failed to identify resources from ACPI\n");
 		return NO;
 	}
 
@@ -70,8 +71,7 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 	ksnprintf(name, sizeof name, "PS2Keyboard0");
 	[self registerDevice];
 
-	DKLog("%s: I/O port A %d, port B %d, GSI %d\n", name, portA, portB,
-	    gsi);
+	DKDevLog(self, "I/O port A %d, port B %d, GSI %d\n", portA, portB, gsi);
 
 	[IOApic handleGSI:gsi
 	      withHandler:ps2_intr
@@ -83,7 +83,7 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 
 - (void)handleCode:(uint8_t)code
 {
-	//kprintf("got code %d\n", code);
+	// kprintf("got code %d\n", code);
 	if (code & 0x80) {
 	} else {
 		extern FBTerm *syscon;

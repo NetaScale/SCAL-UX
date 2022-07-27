@@ -24,13 +24,13 @@ LimineFB	 *sysfb = NULL;
 	self = [super init];
 	parent = nil;
 	ksnprintf(name, sizeof name, "LimFB%d", fbNum++);
+	[self registerDevice];
 	width = fb->width;
 	height = fb->height;
 	pitch = fb->pitch;
 	bpp = fb->bpp;
 	base = fb->address;
-	DKLog("Limine framebuffer: %lux%lux%d\n", width, height, bpp);
-	[self registerDevice];
+	DKDevLog(self, " %lux%lux%d\n", width, height, bpp);
 	return self;
 }
 
