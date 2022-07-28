@@ -141,7 +141,7 @@ callout_interrupt()
 
 	spl = splsched();
 	co = TAILQ_FIRST(queue);
-	//assert(co != NULL);
+	// assert(co != NULL);
 	if (co == NULL)
 		goto finish;
 	TAILQ_REMOVE(queue, co, entries);

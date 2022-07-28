@@ -9,9 +9,10 @@
 
 typedef enum {
 	kSPLHigh = 15, /* all interrupts blocked, including hardclock */
-	kSPLSched = kSPLHigh,
+	kSPLSched = kSPLHigh, /* scheduler; todo split hardclock out */
 	kSPLHard = 3, /* hard interrupts blocked */
-	kSPLVM = kSPLHard,
+	kSPLVM = kSPLHard, /* virtual memory */
+	kSPLBIO = kSPLHard, /* block I/O */
 	kSPLSoft = 2, /* soft interrupts blocked */
 	kSPL0 = 0,    /* blocks none */
 	_kSPLForceLong = INT64_MAX,

@@ -1,3 +1,5 @@
+#include <sys/param.h>
+
 #include <machine/pcb.h>
 
 #include <amd64/amd64.h>
@@ -288,8 +290,22 @@ md_eoi()
 int
 md_intr_alloc(spl_t prio, intr_handler_fn_t handler, void *arg)
 {
-	md_intr_register(32, prio, handler, arg);
-	return 32;
+	uint8_t vec = 0;
+
+	for (int i = MAX(prio << 4, 32); i < 256; i++)
+		if (md_intrs[i].handler == NULL) {
+			vec = i;
+			break;
+		}
+
+	if (vec == 0) {
+		kprintf("md_intr_alloc: out of vectors for priority %lu\n",
+		    prio);
+		return -1;
+	}
+
+	md_intr_register(vec, prio, handler, arg);
+	return vec;
 }
 
 void

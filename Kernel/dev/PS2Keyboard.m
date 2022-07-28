@@ -76,6 +76,7 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 	[IOApic handleGSI:gsi
 	      withHandler:ps2_intr
 		 argument:self
+	      lowPolarity:false
 	       atPriority:kSPL0];
 
 	return self;

@@ -10,6 +10,7 @@
 	vaddr_t	 _vaddr;
 	uint32_t _gsi_base;
 	uint32_t _n_redirs;
+	uint8_t	 redirs[24]; /** < map APCI PIN to IDT vector */
 
 	_TAILQ_ENTRY(IOApic, ) _ioapics_entries;
 }
@@ -24,7 +25,8 @@
  */
 + (int)handleGSI:(uint32_t)gsi
      withHandler:(intr_handler_fn_t)handler
-     argument:(void*) arg
+	argument:(void *)arg
+     lowPolarity:(bool)lopol
       atPriority:(spl_t)prio;
 
 - initWithID:(uint32_t)id address:(paddr_t *)address gsiBase:(uint32_t)gsiBase;

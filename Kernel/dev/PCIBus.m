@@ -1,18 +1,28 @@
+#include "IOApic.h"
 #include "PCIBus.h"
 #include "acpi/laiex.h"
+#include "acpispec/resources.h"
 #include "dev/NVMEController.h"
 #include "lai/core.h"
 #include "lai/error.h"
+#include "lai/helpers/pci.h"
 #include "lai/host.h"
 
 enum {
-	kVendorID = 0x0,
-	kDeviceID = 0x2,
-	kCommand = 0x4,
+	kVendorID = 0x0, /* u16 */
+	kDeviceID = 0x2, /* u16 */
+	kCommand = 0x4,	 /* u16 */
+	kStatus = 0x6,	 /* bit 4 = capabilities list exists */
 	kSubclass = 0xa,
 	kClass = 0xb,
 	kHeaderType = 0xe, /* bit 7 = is multifunction */
-	kBaseAddress0 = 0x10
+	kBaseAddress0 = 0x10,
+	kCapabilitiesPointer = 0x34,
+	kInterruptPin = 0x3d, /* u8 */
+};
+
+enum {
+	kCapMSIx = 0x11,
 };
 
 static int
@@ -56,7 +66,35 @@ iterate(lai_nsnode_t *obj, size_t depth)
 #define INFO_ARGS(INFO) INFO->seg, INFO->bus, INFO->slot, INFO->fun
 #define ENABLE_CMD_FLAG(INFO, FLAG)                   \
 	laihost_pci_writew(INFO_ARGS(INFO), kCommand, \
-	    laihost_pci_readw(INFO_ARGS(INFO), kCommand) | (FLAG));
+	    laihost_pci_readw(INFO_ARGS(INFO), kCommand) | (FLAG))
+#define DISABLE_CMD_FLAG(INFO, FLAG)                  \
+	laihost_pci_writew(INFO_ARGS(INFO), kCommand, \
+	    laihost_pci_readw(INFO_ARGS(INFO), kCommand) & ~(FLAG))
+
++ (int)handleInterruptOf:(dk_device_pci_info_t *)pciInfo
+	     withHandler:(intr_handler_fn_t)handler
+		argument:(void *)arg
+	      atPriority:(spl_t)priority
+{
+	acpi_resource_t res;
+	int		r;
+
+	r = lai_pci_route_pin(&res, INFO_ARGS(pciInfo), pciInfo->pin);
+	if (r != LAI_ERROR_NONE)
+		return -r;
+
+	// TODO: res.irq_flags & ACPI_SMALL_IRQ_EDGE_TRIGGERED
+
+	r = [IOApic handleGSI:res.base
+		  withHandler:handler
+		     argument:arg
+		  lowPolarity:res.irq_flags & ACPI_SMALL_IRQ_ACTIVE_LOW
+		   atPriority:priority];
+	if (r < 0)
+		return r;
+
+	return 0;
+}
 
 + (void)enableMemorySpace:(dk_device_pci_info_t *)pciInfo
 {
@@ -66,6 +104,14 @@ iterate(lai_nsnode_t *obj, size_t depth)
 + (void)enableBusMastering:(dk_device_pci_info_t *)pciInfo
 {
 	ENABLE_CMD_FLAG(pciInfo, 0x4);
+}
+
++ (void)setInterruptsOf:(dk_device_pci_info_t *)pciInfo enabled:(BOOL)enabled
+{
+	if (enabled)
+		DISABLE_CMD_FLAG(pciInfo, (1 << 10));
+	else
+		ENABLE_CMD_FLAG(pciInfo, (1 << 10));
 }
 
 + (paddr_t)getBar:(uint8_t)num info:(dk_device_pci_info_t *)pciInfo
@@ -108,6 +154,18 @@ iterate(lai_nsnode_t *obj, size_t depth)
 }
 
 static void
+doCapability(dk_device_pci_info_t *pciInfo, voff_t pCap)
+{
+	uint8_t cap = laihost_pci_readw(INFO_ARGS(pciInfo), pCap);
+
+	switch (cap) {
+	case kCapMSIx:
+		DKDevLog(pciInfo->busObj, "Supports MSI-x\n");
+		break;
+	}
+}
+
+static void
 doFunction(PCIBus *bus, uint16_t seg, uint8_t busNum, uint8_t slot, uint8_t fun)
 {
 	dk_device_pci_info_t pciInfo;
@@ -129,10 +187,22 @@ doFunction(PCIBus *bus, uint16_t seg, uint8_t busNum, uint8_t slot, uint8_t fun)
 	pciInfo.bus = busNum;
 	pciInfo.slot = slot;
 	pciInfo.fun = fun;
+	pciInfo.pin = CFG_READ(b, kInterruptPin);
 
 	DKDevLog(bus,
-	    "Function at %d:%d:%d:%d: Vendor %x, device %x, class %d/%d\n", seg,
-	    busNum, slot, fun, vendorId, deviceId, class, subClass);
+	    "Function at %d:%d:%d:%d: "
+	    "Vendor %x, device %x, class %d/%d, pin %d\n",
+	    seg, busNum, slot, fun, vendorId, deviceId, class, subClass,
+	    pciInfo.pin);
+
+	if (CFG_READ(w, kStatus) & (1 << 4)) {
+		voff_t pCap = CFG_READ(b, kCapabilitiesPointer);
+
+		while (pCap != 0) {
+			doCapability(&pciInfo, pCap);
+			pCap = CFG_READ(b, pCap + 1);
+		}
+	}
 
 	if (class == 6 && subClass == 4) {
 		DKDevLog(bus, "FIXME: PCI-PCI Bridge\n");

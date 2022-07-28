@@ -48,7 +48,7 @@ ioapic_write(vaddr_t *vaddr, uint32_t reg, uint32_t val)
 }
 
 static void
-ioapic_route(vaddr_t *vaddr, uint8_t i, uint8_t vec)
+ioapic_route(vaddr_t *vaddr, uint8_t i, uint8_t vec, bool lopol)
 {
 	uint64_t ent = vec;
 	// ent |= kDeliveryModeLowPriority << 8;
@@ -56,8 +56,9 @@ ioapic_route(vaddr_t *vaddr, uint8_t i, uint8_t vec)
 	ent |= kDeliveryModeFixed << 8;
 	ent |= kDestinationModePhysical << 11;
 	ent |= 1ul << 56; /* lapic id 1 */
-	ent |= 1 << 13;	  /* polarity low */
-	ent |= 1 << 15;	  /* level triggered */
+	if (lopol)
+		ent |= 1 << 13; /* polarity low */
+	ent |= 1 << 15;		/* level triggered */
 	ioapic_write(vaddr, redirection_register(i), ent);
 	ioapic_write(vaddr, redirection_register(i) + 1, ent >> 32);
 }
@@ -74,6 +75,10 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 	_vaddr = P2V(paddr);
 	_gsi_base = gsiBase;
 	_n_redirs = ((ioapic_read(_vaddr, kRegisterVersion) >> 16) & 0xff) + 1;
+	assert(_n_redirs <= 24);
+
+	for (int i = 0; i < ELEMENTSOF(redirs); i++)
+		redirs[i] = 0;
 
 	TAILQ_INSERT_TAIL(&ioapics, self, _ioapics_entries);
 
@@ -86,6 +91,7 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 + (int)handleGSI:(uint32_t)gsi
      withHandler:(intr_handler_fn_t)handler
 	argument:(void *)arg
+     lowPolarity:(bool)lopol
       atPriority:(spl_t)prio;
 {
 	IOApic *ioapic;
@@ -94,19 +100,23 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 	TAILQ_FOREACH (ioapic, &ioapics, _ioapics_entries) {
 		if (ioapic->_gsi_base <= gsi &&
 		    ioapic->_gsi_base + ioapic->_n_redirs > gsi) {
-			int vec = md_intr_alloc(kSPL0, handler, arg);
+			int	vec;
+			uint8_t intr = gsi - ioapic->_gsi_base;
 
+			assert(ioapic->redirs[intr] == 0 && "shared");
+
+			vec = md_intr_alloc(kSPL0, handler, arg);
 			if (vec < 0) {
 				DKDevLog(ioapic,
-				    "failed to register interrupt for GSI %d",
+				    "failed to register interrupt for GSI %d\n",
 				    gsi);
 				return -1;
 			}
 
-			ioapic_route(ioapic->_vaddr, gsi - ioapic->_gsi_base,
-			    vec);
+			ioapic_route(ioapic->_vaddr, intr, vec, lopol);
+			ioapic->redirs[intr] = vec;
+			;
 			found = true;
-
 			break;
 		}
 	}

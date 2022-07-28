@@ -60,6 +60,18 @@ struct nvme_ver {
 	uint16_t maj;
 };
 
+union nvme_status_code {
+	struct {
+		uint16_t P : 1,	  /* phase */
+		    SC : 8,	  /* status code */
+		    SCT : 3,	  /* status code type */
+		    reserved : 2, /* ... */
+		    M : 1,	  /* more */
+		    DNR : 1;	  /* do not retry */
+	};
+	uint16_t asShort;
+};
+
 _Static_assert(sizeof(struct nvme_cap) == sizeof(uint64_t), "NVMe caps size");
 _Static_assert(sizeof(struct nvme_cc) == sizeof(uint32_t), "NVMe cc size");
 
@@ -117,11 +129,14 @@ copy32(void *dst, void *src, size_t nbytes)
 	}
 }
 
+static void nvme_intr(intr_frame_t *frame, void *arg);
+
 @implementation NVMEController
 
 + (BOOL)probeWithPCIInfo:(dk_device_pci_info_t *)pciInfo
 {
 	volatile vaddr_t bar0;
+	int		 r;
 
 	[PCIBus enableMemorySpace:pciInfo];
 	[PCIBus enableBusMastering:pciInfo];
@@ -129,6 +144,17 @@ copy32(void *dst, void *src, size_t nbytes)
 
 	if (*((uint32_t *)(bar0 + NVME_VS)) == 0xffff) {
 		DKLog("NVMe", "Bad BAR mapping");
+		return NO;
+	}
+
+	[PCIBus setInterruptsOf:pciInfo enabled:NO];
+	r = [PCIBus handleInterruptOf:pciInfo
+			  withHandler:nvme_intr
+			     argument:self
+			   atPriority:kSPL0];
+
+	if (r < 0) {
+		DKLog("NVMe", "Failed to allocate interrupt handler: %d\n", r);
 		return NO;
 	}
 
@@ -216,8 +242,6 @@ size_t subid = 0;
 
 	[self polledSubmit:&cmd toQueue:adminq];
 
-	*(uint32_t *)(regs + adminq->cqhdbl) = adminq->cqhead;
-
 	TRIMSPACES(cident->mn);
 	TRIMSPACES(cident->fr);
 	TRIMSPACES(cident->sn);
@@ -281,7 +305,7 @@ size_t subid = 0;
 	vm_page_t	  *page = vm_pagealloc_zero(1);
 
 	self = [super init];
-	ksnprintf(name, sizeof name, "NVME%d", controller_id++);
+	ksnprintf(name, sizeof name, "NVMeController%d", controller_id++);
 
 	[self registerDevicePCIInfo:pciInfo];
 
@@ -305,7 +329,9 @@ size_t subid = 0;
 		return nil;
 	}
 
+	[PCIBus setInterruptsOf:pciInfo enabled:YES];
 	[self identifyController];
+
 	for (int i = 1; i < 256; i++) {
 		struct nvm_identify_namespace *nsident = P2V(page->paddr);
 		size_t			       secs;
@@ -326,3 +352,10 @@ size_t subid = 0;
 }
 
 @end
+
+static void
+nvme_intr(intr_frame_t *frame, void *arg)
+{
+	kprintf("NVMe interrupt\n");
+	md_eoi();
+}
