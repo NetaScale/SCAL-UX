@@ -454,6 +454,7 @@ parse_intrs(acpi_madt_entry_header_t *item, void *arg)
 		    intr->irq_source, intr->gsi,
 		    (intr->flags & 0x2) == 0x2 ? 0x1 : 0x0,
 		    (intr->flags & 0x8) == 0x8 ? 0x1 : 0x0);
+		break;
 	}
 	}
 }

@@ -28,7 +28,7 @@ conditions. Right now they are not present.
 Some plans
 ----------
 
-VMM:
+#### VMM
 
 The VMM is modeled mostly after NetBSD's UVM with some reference to Mach VMM
 (and its derivates in the BSDs: macOS, FreeBSD, etc.)
@@ -37,7 +37,7 @@ The VMM is modeled mostly after NetBSD's UVM with some reference to Mach VMM
   destination for swapped-out pages (Linux calls this ZRam).
 - [ ] Swapping to files.
 
-Allocators:
+#### Allocators
 
 Several allocators are planned, resembling those in NetBSD. The design basis is
 Bonwick and Adams' (2001) paper "Magazines and Vmem: Extending the Slab
@@ -55,6 +55,10 @@ Allocator to Many CPUs and Arbitrary Resources."
   System's allocation points.)
 - [x] kmalloc: General-purpose for odd sizes. Currently provided by liballoc.
   VMem itself could possibly replace it?
+- [ ] Better physical page allocation - currently just uses a single system-wide
+  free list. Would be nice if it were NUMA-aware, could allocate contiguous
+  spans of physical pages, and perhaps subject to constraints on location (e.g.
+  for DMA buffers).
 
 VMem, KMem, and the virtual memory manager itself have an interesting mutual
 dependency on one-another; VMem must get boundary tag structures allocated by
@@ -64,6 +68,24 @@ VMem set a flag which instructs VMem to use a local cache of free boundary tag
 structures; this cache must be filled with extra structures (enough to satisfy
 the entire operation) before any non-nested operation to ensure that no infinite
 loop can occur.
+
+#### DeviceKit
+
+Object-oriented driver framework. Inspired by NeXTSTEP's DriverKit, Apple
+I/OKit/DriverKit, NetBSD autoconf.
+
+- Storage: Stack approach used. See [static hierarchy] and [runtime stack] for
+  an illustration of how NVMe class hierarchy and stack look.
+- [ ] Need some way to take a set of pages, mark them busy so they can't be
+  interfered with, and pass along to (only a single at once; i.e. only one thing
+  can operate on them?) other subsystems for processing. This is really a VMM
+  thing but DeviceKit will probably be the first to take advantage.
+
+  Major reason why: NVMe's PRPs give scatter-gather capabilities; we can do
+  zero-copy I/O directly into the page cache if we want.
+
+[static hierarchy]: Docs/storage_hier.png
+[runtime stack]: Docs/storage_runtime.png
 
 Misc todos
 ----------

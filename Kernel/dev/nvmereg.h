@@ -29,6 +29,7 @@
 #endif
 #define __packed __attribute__((packed))
 #define __aligned(ALIGN) __attribute__((aligned(ALIGN)))
+#define __BIT(__n)	(1U << (__n))
 
 
 #define NVME_CAP	0x0000	/* Controller Capabilities */

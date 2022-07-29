@@ -91,20 +91,43 @@ struct nvme_queue {
 
 static int controller_id = 0;
 
+static void
+copy32(void *dst, void *src, size_t nbytes)
+{
+	assert(nbytes % 4 == 0);
+
+	for (int i = 0; i < nbytes; i += 4) {
+		*(uint32_t *)(dst + i) = *(uint32_t *)(src + i);
+	}
+}
+
+static void
+write32(void *dst, uint32_t val)
+{
+	*(uint32_t *)dst = val;
+}
+
 struct nvme_queue *
 queue_alloc(uint16_t idx, uint16_t dstrd)
 {
 	struct nvme_queue *q = kcalloc(1, sizeof *q);
 	vm_page_t	  *page;
-	size_t		   stride = 4; /* xxx */
+	size_t		   stride = 4 << dstrd; /* xxx */
 
 	assert(q != NULL);
-	assert(dstrd == 0);
 
 	page = vm_pagealloc_zero(1);
 	assert(page != NULL);
 	q->cq = P2V(page->paddr);
+#if 0
 	q->cqslots = PGSIZE / sizeof(struct nvme_cqe);
+#else
+	/*
+	 * this is necessary for VirtualBox for some reason, differing sizes at
+	 * least for the admin queue don't work with it.
+	 */
+	q->cqslots = PGSIZE / sizeof(struct nvme_sqe);
+#endif
 
 	page = vm_pagealloc_zero(1);
 	assert(page != NULL);
@@ -117,16 +140,6 @@ queue_alloc(uint16_t idx, uint16_t dstrd)
 	q->phase = 1;
 
 	return q;
-}
-
-static void
-copy32(void *dst, void *src, size_t nbytes)
-{
-	assert(nbytes % 4 == 0);
-
-	for (int i = 0; i < nbytes; i += 4) {
-		*(uint32_t *)(dst + i) = *(uint32_t *)(src + i);
-	}
 }
 
 static void nvme_intr(intr_frame_t *frame, void *arg);
@@ -187,9 +200,11 @@ size_t subid = 0;
 	size_t cnt = 0;
 
 	cmd->cid = subid++;
+	__sync_synchronize();
 	adminq->sq[adminq->sqtail++] = *cmd;
 	if (adminq->sqtail == adminq->sqslots)
 		adminq->sqtail = 0;
+	__sync_synchronize();
 	*(uint32_t *)(regs + adminq->sqtdbl) = adminq->sqtail;
 
 	while (true) {
@@ -209,15 +224,22 @@ size_t subid = 0;
 	assert(adminq->cq[adminq->cqhead].cid == cmd->cid);
 
 	if (flags >> 1 != 0) {
-		DKDevLog(self, "Command error %d", flags);
-		return flags;
+		DKDevLog(self, "Command error %d\n", flags);
+		union nvme_status_code code;
+		code.asShort = flags;
+		for (;;)
+			;
 	}
 
 	if (++adminq->cqhead == adminq->cqslots) {
 		adminq->cqhead = 0;
 		adminq->phase = !adminq->phase;
 	}
+
+	__sync_synchronize();
 	*(uint32_t *)(regs + adminq->cqhdbl) = adminq->cqhead;
+
+	return flags >> 1;
 }
 
 #define TRIMSPACES(CHARARR)                                                   \
@@ -251,8 +273,7 @@ size_t subid = 0;
 }
 
 /* out must be a pointer in the HHDM to a page */
-- (void)identifyNamespace:(uint8_t)nsNum
-		      out:(struct nvm_identify_namespace *)out
+- (int)identifyNamespace:(uint8_t)nsNum out:(struct nvm_identify_namespace *)out
 {
 	struct nvme_sqe cmd = { 0 };
 
@@ -261,7 +282,7 @@ size_t subid = 0;
 	cmd.cdw10 = 0; /* get namespace info */
 	cmd.entry.prp[0] = (uint64_t)V2P(out);
 
-	[self polledSubmit:&cmd toQueue:adminq];
+	return [self polledSubmit:&cmd toQueue:adminq];
 }
 
 - (int)enable
@@ -298,10 +319,44 @@ size_t subid = 0;
 	return 0;
 }
 
+- (struct nvme_queue *)createQueuePairWithID:(uint16_t)qid
+{
+	struct nvme_queue *queue = queue_alloc(qid, dstrd);
+	uint16_t	   status;
+	struct nvme_sqe_q  create = { 0 };
+
+	assert(queue != NULL);
+
+	/* completion queue */
+	create.opcode = NVM_ADMIN_ADD_IOCQ;
+	create.qid = qid;
+	create.prp1 = (uint64_t)V2P(queue->cq);
+	create.qsize = queue->cqslots - 1;
+	create.cqid = 0; /* IRQ vector */
+	/* physically contiguous, interrupts enabled */
+	create.qflags = NVM_SQE_Q_PC | NVM_SQE_CQ_IEN;
+
+	status = [self polledSubmit:(struct nvme_sqe *)&create toQueue:adminq];
+	assert (status == 0);
+
+	/* completion queue */
+	create.opcode = NVM_ADMIN_ADD_IOSQ;
+	create.cqid = qid;
+	create.prp1 = (uint64_t)V2P(queue->sq);
+	create.qsize = queue->sqslots - 1;
+	create.cqid = qid;	     /* completion queue */
+	create.qflags = NVM_SQE_Q_PC; /* physically contiguous */
+
+	status = [self polledSubmit:(struct nvme_sqe *)&create toQueue:adminq];
+	assert(status == 0);
+
+	return queue;
+}
+
 - initWithPCIInfo:(dk_device_pci_info_t *)pciInfo
 {
-	struct nvme_ver ver;
 	struct nvme_cap cap;
+	struct nvme_ver ver;
 	vm_page_t	  *page = vm_pagealloc_zero(1);
 
 	self = [super init];
@@ -329,13 +384,15 @@ size_t subid = 0;
 		return nil;
 	}
 
-	[PCIBus setInterruptsOf:pciInfo enabled:YES];
+	write32(regs + NVME_INTMS, 0x1);
 	[self identifyController];
 
-	for (int i = 1; i < 256; i++) {
+	/* identify namespaces */
+	for (int i = 1; i < cident->nn; i++) {
 		struct nvm_identify_namespace *nsident = P2V(page->paddr);
 		size_t			       secs;
 
+		nsident->nsze = 0;
 		[self identifyNamespace:i out:nsident];
 		if (nsident->nsze == 0)
 			continue;
@@ -348,6 +405,15 @@ size_t subid = 0;
 		    nsident->nsze, secs, secs * nsident->nsze / 1024);
 	}
 
+	/* create I/O submission and completion queues */
+	/* just one pair for now; eventually one per CPU would be nice */
+	ioqueue = [self createQueuePairWithID:1];
+	assert(ioqueue != NULL);
+
+	write32(regs + NVME_INTMC, 0x1);
+	[PCIBus setInterruptsOf:pciInfo enabled:YES];
+
+	DKDevLog(self, "Done\n");
 	return self;
 }
 
@@ -357,5 +423,6 @@ static void
 nvme_intr(intr_frame_t *frame, void *arg)
 {
 	kprintf("NVMe interrupt\n");
+
 	md_eoi();
 }

@@ -1,0 +1,32 @@
+@startuml
+
+skinparam componentStyle uml2
+
+title DeviceKit Storage Stack at Runtime
+
+[NVMEController0]
+[NVMEDisk0] <<Intel SSD>>
+[GPTPartitionMapper]
+[GPTPartition] <<EFI System Partition>> as gptp0
+[GPTPartition] <<SCAL/UX Root>> as gptp1
+
+
+[NVMEDisk0] -up-> [NVMEController0]
+[GPTPartitionMapper] -up-> [NVMEDisk0]
+
+gptp0 -up-> [GPTPartitionMapper]
+gptp1 -up-> [GPTPartitionMapper]
+gptp0 -[hidden]> gptp1
+
+
+
+() "/dev/nvd0" as nvd0
+() "/dev/nvd0p0" as nvd0p0
+() "/dev/nvd0p1" as nvd0p1
+
+
+nvd0 -> [NVMEDisk0]
+nvd0p0 -up-> gptp0
+nvd0p1 -up-> gptp1
+
+@enduml
