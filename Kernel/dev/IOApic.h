@@ -10,7 +10,7 @@
 	vaddr_t	 _vaddr;
 	uint32_t _gsi_base;
 	uint32_t _n_redirs;
-	uint8_t	 redirs[24]; /** < map APCI PIN to IDT vector */
+	uint8_t	 redirs[24]; /**< map APIC PIN to IDT vector */
 
 	_TAILQ_ENTRY(IOApic, ) _ioapics_entries;
 }

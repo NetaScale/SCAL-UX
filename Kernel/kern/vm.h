@@ -8,6 +8,17 @@
  * All rights reserved.
  */
 
+/**
+ * @file vm.h
+ * @brief Interface to the kernel's virtual memory manager.
+ *
+ * \addtogroup Kernel
+ * @{
+ * \defgroup VMM Virtual Memory Management
+ * The virtual memory manager manages virtual memory.
+ * @}
+ */
+
 #ifndef VM_H_
 #define VM_H_
 
@@ -57,6 +68,7 @@ typedef struct vmstat {
  *
  * If neither anon nor obj are set, it may be internally managed (kmem).
  * In the case of tmpfs, both may be set.
+ * \ingroup VMM
  */
 typedef struct vm_page {
 	/** Links to freelist, wired, inactive, or active queue. */
@@ -241,6 +253,10 @@ void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
  */
 void pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, pv_entry_t *pv);
 
+/**
+ * Low-level unmapping of a page. Similar to pmap_unenter() except it does not
+ * update the pv_table; it simply unmaps the page.
+ */
 vm_page_t *pmap_unenter_kern(vm_map_t *map, vaddr_t virt);
 
 /**
@@ -400,3 +416,5 @@ extern vm_map_t		       kmap; /** global kernel map */
 extern vmstat_t		       vmstat;
 
 #endif /* VM_H_ */
+
+/* @} @} */

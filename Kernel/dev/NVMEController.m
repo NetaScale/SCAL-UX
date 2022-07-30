@@ -1,10 +1,11 @@
 #include <stdint.h>
 
 #include "NVMEController.h"
+#include "dev/NVMEDisk.h"
 #include "kern/vm.h"
 #include "nvmereg.h"
 
-/**
+/*
  * Definitions from the NVM Express Base Specification, Revision 1.4c
  */
 
@@ -76,8 +77,11 @@ _Static_assert(sizeof(struct nvme_cap) == sizeof(uint64_t), "NVMe caps size");
 _Static_assert(sizeof(struct nvme_cc) == sizeof(uint32_t), "NVMe cc size");
 
 struct nvme_queue {
+	spinlock_t lock; /* locks cq and sq + related; todo split */
+
 	voff_t sqtdbl; /* offset submission queue tail doorbell */
 	voff_t cqhdbl; /* offset completion queue head doorbell */
+
 	volatile struct nvme_sqe *sq; /* vaddr submission queue */
 	volatile struct nvme_cqe *cq; /* vaddr completion queue */
 
@@ -201,16 +205,17 @@ size_t subid = 0;
 
 	cmd->cid = subid++;
 	__sync_synchronize();
-	adminq->sq[adminq->sqtail++] = *cmd;
-	if (adminq->sqtail == adminq->sqslots)
-		adminq->sqtail = 0;
+	assert(queue && queue->sq);
+	queue->sq[queue->sqtail++] = *cmd;
+	if (queue->sqtail == queue->sqslots)
+		queue->sqtail = 0;
 	__sync_synchronize();
-	*(uint32_t *)(regs + adminq->sqtdbl) = adminq->sqtail;
+	*(uint32_t *)(regs + queue->sqtdbl) = queue->sqtail;
 
 	while (true) {
-		flags = adminq->cq[adminq->cqhead].flags;
+		flags = queue->cq[queue->cqhead].flags;
 
-		if ((flags & 0x1) == adminq->phase)
+		if ((flags & 0x1) == queue->phase)
 			break;
 
 		asm("pause");
@@ -221,7 +226,7 @@ size_t subid = 0;
 		}
 	}
 
-	assert(adminq->cq[adminq->cqhead].cid == cmd->cid);
+	assert(queue->cq[queue->cqhead].cid == cmd->cid);
 
 	if (flags >> 1 != 0) {
 		DKDevLog(self, "Command error %d\n", flags);
@@ -231,13 +236,13 @@ size_t subid = 0;
 			;
 	}
 
-	if (++adminq->cqhead == adminq->cqslots) {
-		adminq->cqhead = 0;
-		adminq->phase = !adminq->phase;
+	if (++queue->cqhead == queue->cqslots) {
+		queue->cqhead = 0;
+		queue->phase = !queue->phase;
 	}
 
 	__sync_synchronize();
-	*(uint32_t *)(regs + adminq->cqhdbl) = adminq->cqhead;
+	*(uint32_t *)(regs + queue->cqhdbl) = queue->cqhead;
 
 	return flags >> 1;
 }
@@ -337,14 +342,14 @@ size_t subid = 0;
 	create.qflags = NVM_SQE_Q_PC | NVM_SQE_CQ_IEN;
 
 	status = [self polledSubmit:(struct nvme_sqe *)&create toQueue:adminq];
-	assert (status == 0);
+	assert(status == 0);
 
 	/* completion queue */
 	create.opcode = NVM_ADMIN_ADD_IOSQ;
 	create.cqid = qid;
 	create.prp1 = (uint64_t)V2P(queue->sq);
 	create.qsize = queue->sqslots - 1;
-	create.cqid = qid;	     /* completion queue */
+	create.cqid = qid;	      /* completion queue */
 	create.qflags = NVM_SQE_Q_PC; /* physically contiguous */
 
 	status = [self polledSubmit:(struct nvme_sqe *)&create toQueue:adminq];
@@ -387,34 +392,58 @@ size_t subid = 0;
 	write32(regs + NVME_INTMS, 0x1);
 	[self identifyController];
 
+	/* create I/O submission and completion queues */
+	/* just one pair for now; eventually one per CPU would be nice */
+	ioqueue = [self createQueuePairWithID:1];
+	assert(ioqueue != NULL);
+
 	/* identify namespaces */
 	for (int i = 1; i < cident->nn; i++) {
 		struct nvm_identify_namespace *nsident = P2V(page->paddr);
-		size_t			       secs;
+		struct nvme_disk_attach	       diskAttachInfo;
 
 		nsident->nsze = 0;
 		[self identifyNamespace:i out:nsident];
 		if (nsident->nsze == 0)
 			continue;
 
-		secs =
-		    1 << nsident->lbaf[NVME_ID_NS_FLBAS(nsident->flbas)].lbads;
+		diskAttachInfo.controller = self;
+		diskAttachInfo.nsid = i;
+		diskAttachInfo.nsident = nsident;
 
-		kprintf(
-		    "namespace %d: %lu sectors, %lu bytes/sector, %luKiB \n", i,
-		    nsident->nsze, secs, secs * nsident->nsze / 1024);
+		NVMEDisk *disk = [[NVMEDisk alloc]
+		    initWithAttachmentInfo:&diskAttachInfo];
+
+		[disk readBlocks:8 at:0 intoBuffer:NULL completion:NULL];
 	}
-
-	/* create I/O submission and completion queues */
-	/* just one pair for now; eventually one per CPU would be nice */
-	ioqueue = [self createQueuePairWithID:1];
-	assert(ioqueue != NULL);
 
 	write32(regs + NVME_INTMC, 0x1);
 	[PCIBus setInterruptsOf:pciInfo enabled:YES];
 
 	DKDevLog(self, "Done\n");
 	return self;
+}
+
+- (int)readBlocks:(blksize_t)nBlocks
+	       at:(blkoff_t)offset
+	     nsid:(uint16_t)nsid
+       intoBuffer:(char *)buf
+       completion:(struct dk_diskio_completion *)completion
+{
+	struct nvme_sqe_io io = { 0 };
+	vm_page_t	  *page = vm_pagealloc_zero(1);
+	int		   stat;
+
+	io.opcode = NVM_CMD_READ;
+	io.nsid = nsid;
+	io.slba = offset;
+	io.nlb = nBlocks - 1;
+	io.entry.prp[0] = page->paddr;
+
+	stat = [self polledSubmit:(struct nvme_sqe *)&io toQueue:ioqueue];
+	(void)stat;
+
+	/* TODO implement rest; make async */
 }
 
 @end

@@ -103,18 +103,21 @@
 /*
  * Singly-linked List definitions.
  */
-#define	SLIST_HEAD(name, type)						\
+
+#define	_SLIST_HEAD(name, type, qual)					\
 struct name {								\
-	struct type *slh_first;	/* first element */			\
+	qual type *slh_first;		/* first element */		\
 }
+#define SLIST_HEAD(name, type)	_SLIST_HEAD(name, struct type,)
 
 #define	SLIST_HEAD_INITIALIZER(head)					\
 	{ NULL }
 
-#define	SLIST_ENTRY(type)						\
+#define	_SLIST_ENTRY(type, qual)					\
 struct {								\
-	struct type *sle_next;	/* next element */			\
+	qual type *sle_next;		/* next element */		\
 }
+#define SLIST_ENTRY(type)	_SLIST_ENTRY(struct type,)
 
 /*
  * Singly-linked List access methods.
@@ -178,20 +181,21 @@ struct {								\
 /*
  * List definitions.
  */
-#define	LIST_HEAD(name, type)						\
+#define	_LIST_HEAD(name, type, qual)					\
 struct name {								\
-	struct type *lh_first;	/* first element */			\
+	qual type *lh_first;		/* first element */		\
 }
+#define LIST_HEAD(name, type)	_LIST_HEAD(name, struct type,)
 
 #define	LIST_HEAD_INITIALIZER(head)					\
 	{ NULL }
 
-#define	LIST_ENTRY(type)						\
+#define	_LIST_ENTRY(type, qual)						\
 struct {								\
-	struct type *le_next;	/* next element */			\
-	struct type **le_prev;	/* address of previous next element */	\
+	qual type *le_next;		/* next element */		\
+	qual type *qual *le_prev;	/* address of previous next element */\
 }
-
+#define LIST_ENTRY(type)	_LIST_ENTRY(struct type,)
 /*
  * List access methods.
  */

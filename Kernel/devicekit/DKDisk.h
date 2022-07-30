@@ -11,29 +11,59 @@
 #ifndef DKDISK_H_
 #define DKDISK_H_
 
+#include <sys/types.h>
+
 #include "devicekit/DKDevice.h"
 
-/**
+/*!
+ * Represents an I/O operation. The initiator of the operation allocates one of
+ * these and passes it to a method; the initiator is responsible for freeing the
+ * structure, but must ensure not to do so before the operation is completed.
+ */
+struct dk_diskio_completion {
+	/*!
+	 * Function to be called when the I/O completes.
+	 * @param data the completion's data member
+	 * @param result number of writes read/writen, or -errno for error
+	 */
+	void (*callback)(void *data, ssize_t result);
+	/*! Opaque data passed to callback. */
+	void *data;
+};
+
+/*!
  * Protocol common to physical and logical disks.
  */
 @protocol DKAbstractDiskMethods
 
-- (int)readBytes:(size_t)nBytes at:(off_t)offset intoBuffer:(char *)buf;
-- (int)writeBytes:(size_t)nBytes at:(off_t)offset fromBuffer:(char *)buf;
+- (int)readBytes:(size_t)nBytes
+	      at:(off_t)offset
+      intoBuffer:(char *)buf
+      completion:(struct dk_diskio_completion *)completion;
+- (int)writeBytes:(size_t)nBytes
+	       at:(off_t)offset
+       fromBuffer:(char *)buf
+       completion:(struct dk_diskio_completion *)completion;
 
 @end
 
-/**
+/*!
  * Physical disk methods. @see DKDisk
  */
 @protocol DKDiskMethods
 
-- (int)readBlocks:(size_t)nBlocks at:(off_t)offset intoBuffer:(char *)buf;
-- (int)writeBlocks:(size_t)nBlocks at:(off_t)offset fromBuffer:(char *)buf;
+- (int)readBlocks:(blksize_t)nBlocks
+	       at:(blkoff_t)offset
+       intoBuffer:(char *)buf
+       completion:(struct dk_diskio_completion *)completion;
+- (int)writeBlocks:(blksize_t)nBlocks
+		at:(blkoff_t)offset
+	fromBuffer:(char *)buf
+	completion:(struct dk_diskio_completion *)completion;
 
 @end
 
-/**
+/*!
  * The abstract superclass of physical disks proper which are present in a
  * drive. The class provides methods which handle the generic aspects of block
  * I/O, such as deblocking.
@@ -42,9 +72,15 @@
  * the actual I/O.
  */
 @interface DKDisk : DKDevice <DKAbstractDiskMethods> {
-	uint16_t blockSize; /** block size in byets */
-	uint16_t nBlocks;   /** total number of blocks */
+	blksize_t m_blockSize;
+	blkcnt_t  m_nBlocks;
 }
+
+/** block size in byets */
+@property (readonly) blksize_t blockSize;
+
+/** total size in unit blockSize */
+@property (readonly) blkcnt_t nBlocks;
 
 @end
 

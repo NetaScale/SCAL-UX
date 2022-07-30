@@ -5,6 +5,7 @@
 
 struct nvme_queue;
 struct nvm_identify_controller;
+struct dk_diskio_completion;
 
 @interface NVMEController : DKDevice {
     @private
@@ -20,6 +21,12 @@ struct nvm_identify_controller;
 + (BOOL)probeWithPCIInfo:(dk_device_pci_info_t *)pciInfo;
 
 - initWithPCIInfo:(dk_device_pci_info_t *)pciInfo;
+
+- (int)readBlocks:(blksize_t)nBlocks
+	       at:(blkoff_t)offset
+	     nsid:(uint16_t)nsid
+       intoBuffer:(char *)buf
+       completion:(struct dk_diskio_completion *)completion;
 
 @end
 

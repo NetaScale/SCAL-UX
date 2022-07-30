@@ -3,16 +3,16 @@
 
 @implementation DKDevice
 
+- (const char *)name
+{
+	return name;
+}
+
 - (void)addToTree
 {
 	TAILQ_INIT(&subdevs);
 	if (parent)
 		TAILQ_INSERT_TAIL(&parent->subdevs, self, subdev_entries);
-}
-
-- (const char *)name
-{
-	return name;
 }
 
 - (void)registerDevice

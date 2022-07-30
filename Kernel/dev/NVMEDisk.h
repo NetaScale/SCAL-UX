@@ -15,14 +15,17 @@
 
 @class NVMEController;
 
-struct nvme_disk_probe {
-	NVMEController *controller;
+struct nvme_disk_attach {
+	NVMEController		       *controller;
+	uint16_t		       nsid;
+	struct nvm_identify_namespace *nsident;
 };
 
-@interface NVMEDisk : DKDisk {
+@interface NVMEDisk : DKDisk <DKDiskMethods> {
+	uint16_t		       nsid;
 }
 
-+ probe:(NVMEController *)controller;
+- initWithAttachmentInfo:(struct nvme_disk_attach *)info;
 
 @end
 

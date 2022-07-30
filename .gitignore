@@ -9,3 +9,7 @@ mine/
 subprojects/cxxshim*
 subprojects/frigg*
 a.out
+
+/hda.img
+/html
+/latex
