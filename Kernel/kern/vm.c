@@ -649,6 +649,31 @@ vm_map_release(vm_map_t *map)
 }
 
 int
+vm_mdl_expand(vm_mdl_t **mdl, size_t bytes)
+{
+	size_t	  nPages = PGROUNDUP(bytes) / PGSIZE;
+	vm_mdl_t *newmdl;
+
+	newmdl = kmalloc(sizeof *newmdl + sizeof(vm_page_t *) * nPages);
+	if (!newmdl)
+		return -ENOMEM;
+
+	newmdl->nPages = nPages;
+	for (int i = 0; i < (*mdl)->nPages; i++)
+		newmdl->pages[i] = (*mdl)->pages[i];
+
+	for (int i = (*mdl)->nPages; i < nPages; i++) {
+		newmdl->pages[i] = vm_pagealloc(1);
+		assert(newmdl->pages[i]);
+	}
+
+	kfree(*mdl);
+	*mdl = newmdl;
+
+	return 0;
+}
+
+int
 vm_mdl_new_with_capacity(vm_mdl_t **out, size_t bytes)
 {
 	size_t	  nPages = PGROUNDUP(bytes) / PGSIZE;
@@ -657,6 +682,7 @@ vm_mdl_new_with_capacity(vm_mdl_t **out, size_t bytes)
 	if (!mdl)
 		return -ENOMEM;
 
+	mdl->nPages = nPages;
 	for (int i = 0; i < nPages; i++) {
 		mdl->pages[i] = vm_pagealloc_zero(true);
 		assert(mdl->pages[i] != NULL);
@@ -665,6 +691,39 @@ vm_mdl_new_with_capacity(vm_mdl_t **out, size_t bytes)
 	*out = mdl;
 
 	return 0;
+}
+
+size_t
+vm_mdl_capacity(vm_mdl_t *mdl)
+{
+	return mdl->nPages * PGSIZE;
+}
+
+void
+vm_mdl_copy(vm_mdl_t *mdl, void *buf, size_t nBytes, off_t off)
+{
+	voff_t base = PGROUNDDOWN(off);
+	voff_t pageoff = off - base;
+	size_t firstpage = base / PGSIZE;
+	size_t lastpage = firstpage + (pageoff + nBytes - 1) / PGSIZE + 1;
+
+	for (size_t iPage = firstpage; iPage < lastpage; iPage++) {
+		vm_page_t *page;
+		size_t	   tocopy;
+
+		if (nBytes > PGSIZE)
+			tocopy = PGSIZE - pageoff;
+		else
+			tocopy = nBytes;
+
+		page = mdl->pages[iPage];
+
+		memcpy(buf + (iPage - firstpage) * PGSIZE,
+		    P2V(page->paddr) + pageoff, tocopy);
+
+		nBytes -= tocopy;
+		pageoff = 0;
+	}
 }
 
 void

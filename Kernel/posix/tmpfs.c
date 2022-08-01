@@ -220,7 +220,7 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
 	size_t firstpage = base / PGSIZE;
-	size_t lastpage = firstpage + (pageoff + nbyte) / PGSIZE + 1;
+	size_t lastpage = firstpage + (pageoff + nbyte - 1) / PGSIZE + 1;
 
 	for (size_t page = firstpage; page < lastpage; page++) {
 		vm_anon_t *anon;
@@ -267,7 +267,7 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	/* FIXME: fix offset writes after the example of tmp_read */
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
-	size_t npages = (pageoff + nbyte) / PGSIZE + 1;
+	size_t npages = (pageoff + nbyte - 1 /* ?? */) / PGSIZE + 1;
 
 	if (off + nbyte > vn->attr.size)
 		vn->attr.size = off + nbyte;

@@ -4,6 +4,7 @@
 #include "dev/GPTVolumeManager.h"
 #include "dev/NVMEDisk.h"
 #include "kern/vm.h"
+#include "machine/vm_machdep.h"
 #include "nvmereg.h"
 
 /*
@@ -432,17 +433,53 @@ size_t subid = 0;
        completion:(struct dk_diskio_completion *)completion
 {
 	struct nvme_sqe_io io = { 0 };
-	int		   stat;
+	int		   r;
+	vm_mdl_t		 *prpListMDL;
 
 	io.opcode = NVM_CMD_READ;
 	io.nsid = nsid;
 	io.slba = offset;
 	io.nlb = nBlocks - 1;
-	io.entry.prp[0] = (uint64_t)buf->pages[0]->paddr;
 
-	stat = [self polledSubmit:(struct nvme_sqe *)&io toQueue:ioqueue];
+	if (buf->nPages == 1) {
+		io.entry.prp[0] = (uint64_t)buf->pages[0]->paddr;
+	} else if (buf->nPages == 2) {
+		io.entry.prp[0] = (uint64_t)buf->pages[0]->paddr;
+		io.entry.prp[1] = (uint64_t)buf->pages[1]->paddr;
+	} else {
+		size_t nPRPPerList = PGSIZE / sizeof(void *) - 1;
+		size_t nPRPLists = ROUNDUP((buf->nPages - 1), nPRPPerList) /
+		    nPRPPerList + 1;
+		size_t iPRPList = 0;
 
-	return stat;
+		r = vm_mdl_new_with_capacity(&prpListMDL, nPRPLists * PGSIZE);
+		assert(r >= 0);
+
+		for (int i = 1; i < buf->nPages; i++) {
+			void **entry = prpListMDL->pages[iPRPList]->paddr +
+			    (i - 1) * sizeof(void *);
+
+			entry = P2V(entry);
+
+			if (i > 1 && (i - 1) % nPRPPerList == 0) {
+				/* place the pointer to next PRP list */
+				*entry = prpListMDL->pages[++iPRPList]->paddr;
+				i--;
+				continue;
+			}
+
+			*entry = buf->pages[i]->paddr;
+		}
+
+		io.entry.prp[0] = (uint64_t)buf->pages[0]->paddr;
+		io.entry.prp[1] = (uint64_t)prpListMDL->pages[0]->paddr;
+	}
+
+	r = [self polledSubmit:(struct nvme_sqe *)&io toQueue:ioqueue];
+
+	// vm_mdl_release(prpListMDL);
+
+	return r;
 	/* TODO implement rest; make async */
 }
 

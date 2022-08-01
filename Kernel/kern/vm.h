@@ -172,7 +172,7 @@ TAILQ_HEAD(vm_pregion_queue, vm_pregion);
  * @todo vm_mdl_new_with_range(map, object, start, end)
  */
 typedef struct vm_mdl {
-	size_t	   size;
+	size_t	   nPages;
 	vm_page_t *pages[0];
 } vm_mdl_t;
 
@@ -345,12 +345,28 @@ void vm_map_release(vm_map_t *map);
 /** @} */
 
 /*!
- * Create an MDL covering a set of newly-allocated pages large enough to store
- * \p bytes bytes. By default, the pages will be released when the MDL is
- * deallocated.
+ * Expand (if necessary) a buffer MDL such that it's large enough to store
+ * \p nBytes bytes.
+ *
+ * @returns -ENOMEM if there wasn't enough memory to expand it.
+ */
+int vm_mdl_expand(vm_mdl_t **mdl, size_t nBytes);
+
+/*!
+ * Create a buffer MDL large enough to store \p nBytes bytes.
  * @todo accept options to be given to vm_pagealloc
  */
-int vm_mdl_new_with_capacity(vm_mdl_t **mdl, size_t bytes);
+int vm_mdl_new_with_capacity(vm_mdl_t **mdl, size_t nBytes);
+
+/*!
+ * Get the capacity in bytes of an MDL.
+ */
+size_t vm_mdl_capacity(vm_mdl_t *mdl);
+
+/*!
+ * Copy data from an MDL into a buffer.
+ */
+void vm_mdl_copy(vm_mdl_t *mdl, void *buf, size_t nBytes,  off_t off);
 
 /**
  * Allocate a single page; optionally sleep to wait for one to become available.
