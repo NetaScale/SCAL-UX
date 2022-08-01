@@ -1,0 +1,3 @@
+libkern/lz4.* linguist-vendored
+libkern/nanoprintf.h linguist-vendored
+libkern/uuid* linguist-vendored

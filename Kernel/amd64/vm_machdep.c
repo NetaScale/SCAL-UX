@@ -451,6 +451,7 @@ pmap_unenter_kern(vm_map_t *map, vaddr_t vaddr)
 	vm_page_t *page;
 
 	assert(pte);
+	pte = P2V(pte);
 	paddr = pte_get_addr(*pte);
 	assert(*pte != 0x0);
 	*pte = 0x0;

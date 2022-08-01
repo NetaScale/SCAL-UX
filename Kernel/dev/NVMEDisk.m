@@ -40,7 +40,7 @@
 
 - (int)readBlocks:(blksize_t)nBlocks
 	       at:(blkoff_t)offset
-       intoBuffer:(char *)buf
+       intoBuffer:(vm_mdl_t *)buf
        completion:(struct dk_diskio_completion *)completion
 {
 	return [[self getController] readBlocks:nBlocks
@@ -52,7 +52,7 @@
 
 - (int)writeBlocks:(blksize_t)nBlocks
 		at:(blkoff_t)offset
-	fromBuffer:(char *)buf
+	fromBuffer:(vm_mdl_t *)buf
 	completion:(struct dk_diskio_completion *)completion
 {
 }

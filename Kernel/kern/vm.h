@@ -159,6 +159,23 @@ SPLAY_PROTOTYPE(vm_amap_entry_tree, vm_amap_entry, stree,
 TAILQ_HEAD(vm_page_queue, vm_page);
 TAILQ_HEAD(vm_pregion_queue, vm_pregion);
 
+/*!
+ * A Memory Descriptor List (MDL) - handle to a set of pages which represent a
+ * virtually contiguous object of some sort. The pages are busied while
+ * referenced by an MDL (XXX so a page can only belong to one MDL at a time? is
+ * that a good policy, and how do we ensure it; just test for page busyness?)
+ * guaranteeing they remain resident.
+ *
+ * An MDL is the only means by which busy pages contents may legitimately be
+ * written to.
+ *
+ * @todo vm_mdl_new_with_range(map, object, start, end)
+ */
+typedef struct vm_mdl {
+	size_t	   size;
+	vm_page_t *pages[0];
+} vm_mdl_t;
+
 /**
  * Represents a pager-backed virtual memory object.
  */
@@ -326,6 +343,14 @@ int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 void vm_map_release(vm_map_t *map);
 
 /** @} */
+
+/*!
+ * Create an MDL covering a set of newly-allocated pages large enough to store
+ * \p bytes bytes. By default, the pages will be released when the MDL is
+ * deallocated.
+ * @todo accept options to be given to vm_pagealloc
+ */
+int vm_mdl_new_with_capacity(vm_mdl_t **mdl, size_t bytes);
 
 /**
  * Allocate a single page; optionally sleep to wait for one to become available.

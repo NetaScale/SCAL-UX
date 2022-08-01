@@ -11,7 +11,7 @@
 
 - (int)readBytes:(size_t)nBytes
 	      at:(off_t)offset
-      intoBuffer:(char *)buf
+      intoBuffer:(vm_mdl_t *)buf
       completion:(struct dk_diskio_completion *)completion
 {
 	if (offset % m_blockSize == 0 && nBytes % m_blockSize == 0)
@@ -26,7 +26,7 @@
 
 - (int)writeBytes:(size_t)nBytes
 	       at:(off_t)offset
-       fromBuffer:(char *)buf
+       fromBuffer:(vm_mdl_t *)buf
        completion:(struct dk_diskio_completion *)completion
 {
 	if (offset % m_blockSize == 0 && nBytes % m_blockSize == 0)

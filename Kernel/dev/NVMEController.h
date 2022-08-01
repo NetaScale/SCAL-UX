@@ -25,7 +25,7 @@ struct dk_diskio_completion;
 - (int)readBlocks:(blksize_t)nBlocks
 	       at:(blkoff_t)offset
 	     nsid:(uint16_t)nsid
-       intoBuffer:(char *)buf
+       intoBuffer:(vm_mdl_t *)buf
        completion:(struct dk_diskio_completion *)completion;
 
 @end

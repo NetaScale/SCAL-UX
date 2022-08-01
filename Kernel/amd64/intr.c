@@ -14,6 +14,7 @@
 #include "kern/ksrv.h"
 #include "machine/intr.h"
 #include "machine/spl.h"
+#include "machine/vm_machdep.h"
 #include "posix/proc.h"
 #include "posix/sys.h"
 #include "sys/queue.h"
@@ -334,7 +335,8 @@ md_intr_frame_trace(intr_frame_t *frame)
 			ksrv_backtrace((vaddr_t)aframe->rip, &name, &offs);
 			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name,
 			    offs);
-		} while ((aframe = aframe->rbp) && aframe->rip != 0x0);
+		} while ((aframe = aframe->rbp) && aframe >= KERN_BASE &&
+		    aframe->rip != 0x0);
 }
 
 /**

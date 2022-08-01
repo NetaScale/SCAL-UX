@@ -111,6 +111,7 @@ Several third-party components are used. These are some of them:
 - Managarm LAI (`kernel/dev/acpi/lai`): Lightweight ACPI Implementation used by
   Acpi* drivers.
 - LZ4 (`Kernel/libkern/lz4.{c,h}`): Used by VM Compressor to compress pages.
+- libuuid (`Kernel/libkern/uuid*`)
 
 Licence
 -------

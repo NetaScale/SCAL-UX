@@ -111,6 +111,7 @@
  *
  */
 
+#include <errno.h>
 #include <stdatomic.h>
 
 #include "kern/lock.h"
@@ -645,6 +646,25 @@ vm_map_release(vm_map_t *map)
 	vmem_destroy(&map->vmem);
 	pmap_free(map->pmap);
 	kfree(map);
+}
+
+int
+vm_mdl_new_with_capacity(vm_mdl_t **out, size_t bytes)
+{
+	size_t	  nPages = PGROUNDUP(bytes) / PGSIZE;
+	vm_mdl_t *mdl = kmalloc(sizeof *mdl + sizeof(vm_page_t *) * nPages);
+
+	if (!mdl)
+		return -ENOMEM;
+
+	for (int i = 0; i < nPages; i++) {
+		mdl->pages[i] = vm_pagealloc_zero(true);
+		assert(mdl->pages[i] != NULL);
+	}
+
+	*out = mdl;
+
+	return 0;
 }
 
 void

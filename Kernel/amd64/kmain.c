@@ -242,7 +242,8 @@ void
 ap_init(struct limine_smp_info *smpi)
 {
 	common_init(smpi);
-	done(); /* idle */
+	/* this is now that CPU's idle thread loop */
+	done();
 }
 
 static void
@@ -294,11 +295,28 @@ testfun2(void *arg)
 	}
 }
 
+static void
+init(void *unused)
+{
+	(void)unused;
+	ksrv_parsekern(kernel_file_request.response->kernel_file->address);
+
+	void posix_main(void *initrd, size_t initrd_size);
+	posix_main(module_request.response->modules[0]->address,
+	    module_request.response->modules[0]->size);
+
+#if 0
+	swapper();
+#else
+	done();
+#endif
+}
+
 // The following will be our kernel's entry point.
 void
 _start(void)
 {
-	thread_t *swapthr, *nothing, *nothing2;
+	thread_t *swapthr;
 
 	serial_init();
 
@@ -316,21 +334,6 @@ _start(void)
 	setup_cpus();
 
 #if 0
-	swapthr = thread_new(&task0, true);
-	thread_goto(swapthr, swapper, NULL);
-	thread_run(swapthr);
-#endif
-
-#if 0
-	nothing = thread_new(&task0, true);
-	thread_goto(nothing, testfun, NULL);
-	thread_run(nothing);
-
-	nothing2 = thread_new(&task0, true);
-	thread_goto(nothing2, testfun2, NULL);
-	thread_run(nothing2);
-#endif
-
 	vm_object_t *aobj1, *aobj2;
 
 	vaddr_t anonaddr = VADDR_MAX, anon2addr = VADDR_MAX;
@@ -353,13 +356,17 @@ _start(void)
 	    "Pages Wired: %lu\tOf Which Kmem: %lu\tOf Which Pagetables: %lu\n",
 	    vmstat.pgs_free, vmstat.pgs_special, vmstat.pgs_active,
 	    vmstat.pgs_wired, vmstat.pgs_kmem, vmstat.pgs_pgtbl);
+#endif
 
-	ksrv_parsekern(kernel_file_request.response->kernel_file->address);
+	/*
+	 * the next steps of initialisation expect to run in a thread proper;
+	 * it's carried out in the swapper thread prior to that becoming the
+	 * actual swapper.
+	 */
+	swapthr = thread_new(&task0, true);
+	thread_goto(swapthr, init, NULL);
+	thread_run(swapthr);
 
-	void posix_main(void *initrd, size_t initrd_size);
-	posix_main(module_request.response->modules[0]->address,
-	    module_request.response->modules[0]->size);
-
-	// We're done, just hang...
+	/* this is now the BSP's idle thread loop */
 	done();
 }

@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include "NVMEController.h"
+#include "dev/GPTVolumeManager.h"
 #include "dev/NVMEDisk.h"
 #include "kern/vm.h"
 #include "nvmereg.h"
@@ -414,7 +415,7 @@ size_t subid = 0;
 		NVMEDisk *disk = [[NVMEDisk alloc]
 		    initWithAttachmentInfo:&diskAttachInfo];
 
-		[disk readBlocks:8 at:0 intoBuffer:NULL completion:NULL];
+		[GPTVolumeManager probe:disk];
 	}
 
 	write32(regs + NVME_INTMC, 0x1);
@@ -427,22 +428,21 @@ size_t subid = 0;
 - (int)readBlocks:(blksize_t)nBlocks
 	       at:(blkoff_t)offset
 	     nsid:(uint16_t)nsid
-       intoBuffer:(char *)buf
+       intoBuffer:(vm_mdl_t *)buf
        completion:(struct dk_diskio_completion *)completion
 {
 	struct nvme_sqe_io io = { 0 };
-	vm_page_t	  *page = vm_pagealloc_zero(1);
 	int		   stat;
 
 	io.opcode = NVM_CMD_READ;
 	io.nsid = nsid;
 	io.slba = offset;
 	io.nlb = nBlocks - 1;
-	io.entry.prp[0] = page->paddr;
+	io.entry.prp[0] = (uint64_t)buf->pages[0]->paddr;
 
 	stat = [self polledSubmit:(struct nvme_sqe *)&io toQueue:ioqueue];
-	(void)stat;
 
+	return stat;
 	/* TODO implement rest; make async */
 }
 
