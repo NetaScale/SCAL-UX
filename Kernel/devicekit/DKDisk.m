@@ -1,18 +1,41 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+/*
+ * Copyright 2022 NetaScale Systems Ltd.
+ * All rights reserved.
+ */
+
 #include <errno.h>
 
 #include "DKDisk.h"
 
-#define selfDelegate ((DKDisk<DKDiskMethods> *)self)
+#define selfDelegate ((DKPhysicalDisk<DKDiskMethods> *)self)
 
 typedef enum dk_strategy {
 	kDKRead,
 	kDKWrite,
 } dk_strategy_t;
 
-@implementation DKDisk
+static int driveIDCounter = 0;
 
+@implementation DKPhysicalDisk
+
+@synthesize driveID = m_driveID;
 @synthesize blockSize = m_blockSize;
 @synthesize nBlocks = m_nBlocks;
+@synthesize maxBlockTransfer = m_maxBlockTransfer;
+
+- init
+{
+	self = [super init];
+	if (self) {
+		m_driveID = driveIDCounter++;
+	}
+	return self;
+}
 
 - (int)strategy:(dk_strategy_t)strategy
 	  bytes:(size_t)nBytes
@@ -20,7 +43,6 @@ typedef enum dk_strategy {
 	 buffer:(vm_mdl_t *)buf
      completion:(struct dk_diskio_completion *)completion
 {
-
 	if (nBytes > m_maxBlockTransfer * m_blockSize) {
 		DKDevLog(self, "Excessive request received - not yet handled.");
 		return -EOPNOTSUPP;

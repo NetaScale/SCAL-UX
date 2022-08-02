@@ -68,7 +68,7 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 {
 	self = [super init];
 
-	ksnprintf(name, sizeof name, "PS2Keyboard0");
+	ksnprintf(m_name, sizeof m_name, "PS2Keyboard0");
 	[self registerDevice];
 
 	DKDevLog(self, "I/O port A %d, port B %d, GSI %d\n", portA, portB, gsi);

@@ -5,7 +5,7 @@
 
 - (const char *)name
 {
-	return name;
+	return m_name;
 }
 
 - (void)addToTree
@@ -19,7 +19,9 @@
 {
 	[self addToTree];
 	if (parent)
-		DKDevLog(self, "Registered at %s\n", parent->name);
+		DKDevLog(self,
+		    "Registered at " kAnsiYellow "%s" kAnsiReset "\n",
+		    parent->m_name);
 	else
 		DKDevLog(self, "Registered\n");
 }

@@ -13,14 +13,14 @@
 #define DKLogAttachExtra(DEV, FMT, ...)                        \
 	kprintf(kAnsiYellow "%s" kAnsiReset " at " kAnsiYellow \
 			    "%s" kAnsiReset FMT,               \
-	    DEV->name, DEV->parent->name, ##__VA_ARGS__);
+	    [dev name], DEV -> parent -> name, ##__VA_ARGS__);
 #define DKPrint(...) kprintf(__VA_ARGS__)
 #define DKLog(SUB, ...)                                      \
 	({                                                   \
 		kprintf(kAnsiYellow "%s: " kAnsiReset, SUB); \
 		kprintf(__VA_ARGS__);                        \
 	})
-#define DKDevLog(dev, ...) DKLog(dev->name, __VA_ARGS__)
+#define DKDevLog(dev, ...) DKLog(dev->m_name, __VA_ARGS__)
 
 @class DKDevice;
 
@@ -38,7 +38,7 @@ typedef _SLIST_ENTRY(DKDevice, ) DKDevice_slist_entry_t;
  * Represents any sort of device.
  */
 @interface DKDevice : OFObject {
-	char		       name[32];
+	char		       m_name[32];
 	DKDevice		 *parent;
 	DKDevice_queue_t       subdevs;
 	DKDevice_queue_entry_t subdev_entries;

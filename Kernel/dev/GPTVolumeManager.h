@@ -6,7 +6,7 @@
 
 @interface GPTVolumeManager : DKDevice
 
-+ (BOOL)probe:(DKDisk *)disk;
++ (BOOL)probe:(DKLogicalDisk *)disk;
 
 @end
 

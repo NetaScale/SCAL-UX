@@ -219,7 +219,7 @@ doFunction(PCIBus *bus, uint16_t seg, uint8_t busNum, uint8_t slot, uint8_t fun)
 {
 	self = [super init];
 
-	ksnprintf(name, sizeof name, "PCIBus%d@%d", seg, bus);
+	ksnprintf(m_name, sizeof m_name, "PCIBus%d@%d", seg, bus);
 	[self registerDevice];
 
 	for (int slot = 0; slot < 32; slot++) {

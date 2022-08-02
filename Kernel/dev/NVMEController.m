@@ -95,7 +95,8 @@ struct nvme_queue {
 	uint8_t phase;
 };
 
-static int controller_id = 0;
+static int nvmeId = 0;
+static int cmdId = 0;
 
 static void
 copy32(void *dst, void *src, size_t nbytes)
@@ -200,14 +201,17 @@ disable(vaddr_t regs)
 	}
 }
 
-size_t subid = 0;
+- (const char *)controllerName
+{
+	return cident->mn;
+}
 
 - (int)polledSubmit:(struct nvme_sqe *)cmd toQueue:(struct nvme_queue *)queue
 {
 	int    flags;
 	size_t cnt = 0;
 
-	cmd->cid = subid++;
+	cmd->cid = cmdId++;
 	__sync_synchronize();
 	assert(queue && queue->sq);
 	queue->sq[queue->sqtail++] = *cmd;
@@ -371,7 +375,7 @@ size_t subid = 0;
 	vm_page_t	  *page = vm_pagealloc_zero(1);
 
 	self = [super init];
-	ksnprintf(name, sizeof name, "NVMeController%d", controller_id++);
+	ksnprintf(m_name, sizeof m_name, "NVMeController%d", nvmeId++);
 
 	[self registerDevicePCIInfo:pciInfo];
 
@@ -419,8 +423,6 @@ size_t subid = 0;
 
 		NVMEDisk *disk = [[NVMEDisk alloc]
 		    initWithAttachmentInfo:&diskAttachInfo];
-
-		[GPTVolumeManager probe:disk];
 	}
 
 	write32(regs + NVME_INTMC, 0x1);
@@ -456,7 +458,8 @@ size_t subid = 0;
 	} else {
 		size_t nPRPPerList = PGSIZE / sizeof(void *) - 1;
 		size_t nPRPLists = ROUNDUP((buf->nPages - 1), nPRPPerList) /
-		    nPRPPerList + 1;
+			nPRPPerList +
+		    1;
 		size_t iPRPList = 0;
 
 		r = vm_mdl_new_with_capacity(&prpListMDL, nPRPLists * PGSIZE);

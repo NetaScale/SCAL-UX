@@ -21,7 +21,7 @@ struct nvme_disk_attach {
 	struct nvm_identify_namespace *nsident;
 };
 
-@interface NVMEDisk : DKDisk <DKDiskMethods> {
+@interface NVMEDisk : DKPhysicalDisk <DKDiskMethods> {
 	uint16_t		       nsid;
 }
 

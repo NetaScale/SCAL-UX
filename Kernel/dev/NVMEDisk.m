@@ -10,6 +10,8 @@
 
 #include "NVMEController.h"
 #include "NVMEDisk.h"
+#include "dev/GPTVolumeManager.h"
+#include "devicekit/DKDisk.h"
 #include "nvmereg.h"
 
 @implementation NVMEDisk
@@ -22,8 +24,10 @@
 - (id)initWithAttachmentInfo:(struct nvme_disk_attach *)info
 {
 	self = [super init];
+
 	parent = info->controller;
-	ksnprintf(name, sizeof name, "NVMEDisk0"); /* xxx  */
+	ksnprintf(m_name, sizeof m_name, "%sNS%hu", [info->controller name],
+	    info -> nsid);
 	nsid = info->nsid;
 	m_nBlocks = info->nsident->nsze;
 	m_blockSize = 1 << info->nsident
@@ -35,6 +39,13 @@
 	DKDevLog(self, "NSID %d; %lu MiB (blocksize %ld, blocks %ld)\n",
 	    info->nsid, m_nBlocks * m_blockSize / 1024 / 1024, m_blockSize,
 	    m_nBlocks);
+
+	[[DKLogicalDisk alloc]
+	    initWithUnderlyingDisk:self
+			      base:0
+			      size:m_nBlocks * m_blockSize
+			      name:[info->controller controllerName]
+			  location:0];
 
 	return self;
 }

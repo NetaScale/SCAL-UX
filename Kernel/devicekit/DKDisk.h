@@ -36,6 +36,9 @@ struct dk_diskio_completion {
  */
 @protocol DKAbstractDiskMethods
 
+/*! block size in byets */
+@property (readonly) blksize_t blockSize;
+
 - (int)readBytes:(size_t)nBytes
 	      at:(off_t)offset
       intoBuffer:(vm_mdl_t *)buf
@@ -71,20 +74,70 @@ struct dk_diskio_completion {
  * Implementors must implement the DKDiskMethods protocol; its methods carry out
  * the actual I/O.
  */
-@interface DKDisk : DKDevice <DKAbstractDiskMethods> {
+@interface DKPhysicalDisk : DKDevice <DKAbstractDiskMethods> {
+	int	  m_driveID;
 	blksize_t m_blockSize;
 	blkcnt_t  m_nBlocks;
-	blkcnt_t m_maxBlockTransfer;
+	blkcnt_t  m_maxBlockTransfer;
 }
 
-/** block size in byets */
-@property (readonly) blksize_t blockSize;
+/*! Unique drive identifier. TODO: move into DKDrive */
+@property (readonly) int driveID;
 
-/** total size in unit blockSize */
+/*! total size in unit blockSize */
 @property (readonly) blkcnt_t nBlocks;
 
 /*! Maximum number of blocks transferrable in a single operation. */
-@property (readonly) blkcnt_t m_maxBlockTransfer;
+@property (readonly) blkcnt_t maxBlockTransfer;
+
+@end
+
+/*!
+ * Provides an abstract interface to a logical disk; a logical disk may refer to
+ * a physical disk, or to a partition, or any other sort of random-access media.
+ * It also provides a node in the POSIX DevFS and adapts operations to
+ * the DeviceKit interface.
+ *
+ * By default it passes all operations up to an underlying disk object, with an
+ * offset. The class is thus suitable for immediate use to adapt a
+ * DKPhysicalDisk, both for the whole disk and for simple volume management
+ * schemes, e.g. GPT or FDisk. More complex schemes will need to subclass.
+ */
+@interface DKLogicalDisk : DKDevice <DKAbstractDiskMethods> {
+	DKDevice<DKAbstractDiskMethods> *m_underlying;
+	off_t				 m_base;
+	size_t				 m_size;
+	size_t				 m_location;
+}
+
+/*!
+ * Underlying disk device.
+ */
+@property (readonly) DKDevice<DKAbstractDiskMethods> *underlying;
+
+/*!
+ * Offset (in bytes) from the underlying disk device.
+ */
+@property (readonly) off_t base;
+
+/*!
+ * Size (in bytes) of the logical disk.
+ */
+@property (readonly) size_t size;
+
+/*!
+ * Logical location relative to parent. If 0, this is regarded as being the root
+ * of a particular tree of devices (i.e. it represents the physical disk
+ * itself).
+ * @todo adapt to be flexible & move this into DKDevice
+ */
+@property (readonly) size_t location;
+
+- initWithUnderlyingDisk:(DKDevice<DKAbstractDiskMethods> *)underlying
+		    base:(off_t)base
+		    size:(size_t)size
+		    name:(const char *)name
+		location:(size_t)location;
 
 @end
 

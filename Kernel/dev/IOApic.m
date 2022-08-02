@@ -82,7 +82,7 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 
 	TAILQ_INSERT_TAIL(&ioapics, self, _ioapics_entries);
 
-	ksnprintf(name, sizeof name, "IOApic%d", id);
+	ksnprintf(m_name, sizeof m_name, "IOApic%d", id);
 	[self registerDevice];
 
 	return self;

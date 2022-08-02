@@ -9,6 +9,7 @@
  */
 
 #include "GPTVolumeManager.h"
+#include "devicekit/DKDisk.h"
 #include "libkern/uuid.h"
 
 struct gpt_header {
@@ -40,7 +41,7 @@ struct gpt_entry {
 
 @implementation GPTVolumeManager
 
-+ (BOOL)probe:(DKDisk *)disk
++ (BOOL)probe:(DKLogicalDisk *)disk
 {
 	vm_mdl_t	 *mdl;
 	struct gpt_header hdrGpt;
@@ -82,6 +83,7 @@ struct gpt_entry {
 		struct gpt_entry ent;
 		char		 parttype[UUID_STRING_LENGTH + 1] = { 0 };
 		char		 partname[37];
+		DKLogicalDisk   *ld;
 
 		vm_mdl_copy(mdl, &ent, sizeof(ent), hdrGpt.sizEntry * i);
 
@@ -93,7 +95,13 @@ struct gpt_entry {
 			partname[i] = ent.name[i] > 127 ? '?' : ent.name[i];
 		uuid_unparse(ent.type, parttype);
 
-		kprintf("partition %s, type %s\n", partname, parttype);
+		ld = [[DKLogicalDisk alloc]
+		    initWithUnderlyingDisk:disk
+				      base:blockSize * ent.lbaStart
+				      size:(ent.lbaEnd - ent.lbaStart) *
+				      blockSize
+				      name:partname
+				  location:i + 1];
 	}
 
 	for (;;)

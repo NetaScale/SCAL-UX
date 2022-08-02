@@ -19,6 +19,7 @@ struct dk_diskio_completion;
 	struct nvme_queue		  *ioqueue;
 }
 
+@property (readonly) const char *controllerName;
 @property (readonly) blkcnt_t maxBlockTransfer;
 
 + (BOOL)probeWithPCIInfo:(dk_device_pci_info_t *)pciInfo;

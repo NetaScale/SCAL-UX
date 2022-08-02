@@ -65,7 +65,7 @@ static int fbtputch(void *data, int ch);
 	tty.putch = fbtputch;
 	tty.data = self;
 
-	ksnprintf(name, sizeof name, "FBTerm%d", termnum++);
+	ksnprintf(m_name, sizeof m_name, "FBTerm%d", termnum++);
 
 	term_init(&term, NULL, false);
 	term_vbe(&term, frm, font, style, back);

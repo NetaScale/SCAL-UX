@@ -23,7 +23,7 @@ LimineFB	 *sysfb = NULL;
 {
 	self = [super init];
 	parent = nil;
-	ksnprintf(name, sizeof name, "LimFB%d", fbNum++);
+	ksnprintf(m_name, sizeof m_name, "LimFB%d", fbNum++);
 	[self registerDevice];
 	width = fb->width;
 	height = fb->height;

@@ -459,6 +459,7 @@ parse_intrs(acpi_madt_entry_header_t *item, void *arg)
 	}
 }
 
+#if 0
 static void
 laiex_create_integer(lai_variable_t *var, uint64_t val)
 {
@@ -466,7 +467,6 @@ laiex_create_integer(lai_variable_t *var, uint64_t val)
 	var->integer = val;
 }
 
-#if 0
 static void
 do_osc(lai_nsnode_t *osc)
 {
@@ -515,7 +515,7 @@ do_osc(lai_nsnode_t *osc)
 
 	self = [super init];
 
-	ksnprintf(name, sizeof name, "AcpiPC0");
+	ksnprintf(m_name, sizeof m_name, "AcpiPC0");
 	[self registerDevice];
 
 	madt = laihost_scan("APIC", 0);
