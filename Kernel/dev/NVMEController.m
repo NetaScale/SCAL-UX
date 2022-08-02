@@ -375,7 +375,7 @@ disable(vaddr_t regs)
 	vm_page_t	  *page = vm_pagealloc_zero(1);
 
 	self = [super init];
-	ksnprintf(m_name, sizeof m_name, "NVMeController%d", nvmeId++);
+	ksnprintf(m_name, sizeof m_name, "NVMe%d", nvmeId++);
 
 	[self registerDevicePCIInfo:pciInfo];
 
@@ -423,6 +423,8 @@ disable(vaddr_t regs)
 
 		NVMEDisk *disk = [[NVMEDisk alloc]
 		    initWithAttachmentInfo:&diskAttachInfo];
+
+		(void)disk; /* TODO: keep track of it? */
 	}
 
 	write32(regs + NVME_INTMC, 0x1);

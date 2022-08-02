@@ -12,7 +12,7 @@
 
 #include "DKDisk.h"
 
-#define selfDelegate ((DKPhysicalDisk<DKDiskMethods> *)self)
+#define selfDelegate ((DKDrive<DKDriveMethods> *)self)
 
 typedef enum dk_strategy {
 	kDKRead,
@@ -21,7 +21,7 @@ typedef enum dk_strategy {
 
 static int driveIDCounter = 0;
 
-@implementation DKPhysicalDisk
+@implementation DKDrive
 
 @synthesize driveID = m_driveID;
 @synthesize blockSize = m_blockSize;
@@ -37,7 +37,7 @@ static int driveIDCounter = 0;
 	return self;
 }
 
-- (int)strategy:(dk_strategy_t)strategy
+- (int)commonIO:(dk_strategy_t)strategy
 	  bytes:(size_t)nBytes
 	     at:(off_t)offset
 	 buffer:(vm_mdl_t *)buf
@@ -70,7 +70,7 @@ static int driveIDCounter = 0;
       intoBuffer:(vm_mdl_t *)buf
       completion:(struct dk_diskio_completion *)completion
 {
-	return [self strategy:kDKRead
+	return [self commonIO:kDKRead
 			bytes:nBytes
 			   at:offset
 		       buffer:buf
@@ -82,7 +82,7 @@ static int driveIDCounter = 0;
        fromBuffer:(vm_mdl_t *)buf
        completion:(struct dk_diskio_completion *)completion
 {
-	return [self strategy:kDKWrite
+	return [self commonIO:kDKWrite
 			bytes:nBytes
 			   at:offset
 		       buffer:buf

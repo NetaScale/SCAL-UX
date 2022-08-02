@@ -1,24 +1,23 @@
 @startuml
 abstract DKDevice
-class PCIBus
 abstract PCIDevice
 class NVMEController
-abstract DKDisk
-abstract DKLogicalDisk
+abstract DKDrive
+class DKLogicalDisk
 protocol DKAbstractDiskMethods
 class NVMEDisk
 class GPTPartitionMapper
-class GPTPartition
 protocol DKAbstractDiskMethods
+protocol DKDriveDelegateMethods
 @enduml
 
-DKDevice <|-- PCIBus
 DKDevice <|-- PCIDevice
-DKDevice <|-- DKDisk
+DKDevice <|-- DKDrive
 DKDevice <|-- DKLogicalDisk
 DKDevice <|-- GPTPartitionMapper
 PCIDevice <|-- NVMEController
-DKDisk <|-- NVMEDisk
+DKDrive <|-- NVMEDisk
 DKLogicalDisk <|-- GPTPartition
 DKAbstractDiskMethods <|.. DKLogicalDisk
-DKAbstractDiskMethods <|.. DKDisk
+DKAbstractDiskMethods <|.. DKDrive
+DKDriveDelegateMethods <|.left.. NVMEDisk

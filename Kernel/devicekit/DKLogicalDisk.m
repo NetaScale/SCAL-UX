@@ -30,13 +30,9 @@
 {
 	int r;
 
-	if ([m_underlying isKindOfClass:[DKPhysicalDisk class]]) {
-		DKPhysicalDisk *phys;
-		int		r;
-
-		phys = (DKPhysicalDisk *)parent;
-		return ksnprintf(buffer, size, "dk%d", [phys driveID]);
-	}
+	if ([m_underlying isKindOfClass:[DKDrive class]])
+		return ksnprintf(buffer, size, "dk%d",
+		    [(DKDrive *)m_underlying driveID]);
 
 	r = [(id)m_underlying buildPosixDeviceName:buffer withMaxSize:size];
 	buffer += r;
@@ -51,6 +47,7 @@
 		    size:(size_t)size
 		    name:(const char *)aname
 		location:(size_t)location
+		provider:(DKDevice *)provider
 {
 	self = [super init];
 	if (self) {
@@ -61,7 +58,7 @@
 		m_base = base;
 		m_size = size;
 		m_location = location;
-		parent = underlying;
+		parent = provider;
 		[self registerDevice];
 
 		[self buildPosixDeviceName:nameBuf withMaxSize:63];

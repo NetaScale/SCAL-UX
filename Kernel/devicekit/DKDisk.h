@@ -53,7 +53,7 @@ struct dk_diskio_completion {
 /*!
  * Physical disk methods. @see DKDisk
  */
-@protocol DKDiskMethods
+@protocol DKDriveMethods
 
 - (int)readBlocks:(blksize_t)nBlocks
 	       at:(blkoff_t)offset
@@ -71,10 +71,10 @@ struct dk_diskio_completion {
  * drive. The class provides methods which handle the generic aspects of block
  * I/O, such as deblocking.
  *
- * Implementors must implement the DKDiskMethods protocol; its methods carry out
+ * Implementors must implement the DKDriveMethods protocol; its methods carry out
  * the actual I/O.
  */
-@interface DKPhysicalDisk : DKDevice <DKAbstractDiskMethods> {
+@interface DKDrive : DKDevice <DKAbstractDiskMethods> {
 	int	  m_driveID;
 	blksize_t m_blockSize;
 	blkcnt_t  m_nBlocks;
@@ -100,7 +100,7 @@ struct dk_diskio_completion {
  *
  * By default it passes all operations up to an underlying disk object, with an
  * offset. The class is thus suitable for immediate use to adapt a
- * DKPhysicalDisk, both for the whole disk and for simple volume management
+ * DKDrive, both for the whole disk and for simple volume management
  * schemes, e.g. GPT or FDisk. More complex schemes will need to subclass.
  */
 @interface DKLogicalDisk : DKDevice <DKAbstractDiskMethods> {
@@ -137,7 +137,8 @@ struct dk_diskio_completion {
 		    base:(off_t)base
 		    size:(size_t)size
 		    name:(const char *)name
-		location:(size_t)location;
+		location:(size_t)location
+		provider:(DKDevice*)provider;
 
 @end
 

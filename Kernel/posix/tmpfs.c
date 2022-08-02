@@ -10,6 +10,7 @@
 
 #include <sys/param.h>
 
+#include <dirent.h>
 #include <errno.h>
 #include <string.h>
 
@@ -298,6 +299,18 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	return nbyte /* FIXME: */;
 }
 
+int
+tmp_readdir(vnode_t *dvn, void *buf, size_t nbyte, size_t *bytesRead)
+{
+	tmpnode_t	  *n = VNTOTN(dvn);
+	tmpdirent_t *tdent;
+
+	assert(n->type == VDIR);
+
+	TAILQ_FOREACH (tdent, &n->dir.entries, entries) {
+	}
+}
+
 /*
  * spec ops
  */
@@ -333,6 +346,7 @@ struct vnops tmpfs_vnops = {
 	.mknod = tmp_mknod,
 	.read = tmp_read,
 	.write = tmp_write,
+	.readdir = tmp_readdir,
 };
 
 struct vnops tmpfs_spec_vnops = {

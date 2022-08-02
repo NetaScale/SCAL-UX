@@ -45,7 +45,8 @@
 			      base:0
 			      size:m_nBlocks * m_blockSize
 			      name:[info->controller controllerName]
-			  location:0];
+			  location:0
+			  provider:self];
 
 	return self;
 }

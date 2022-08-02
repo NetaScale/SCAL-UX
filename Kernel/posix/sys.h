@@ -26,6 +26,7 @@ enum {
 	kPXSysSeek,
 	kPXSysPSelect,
 	kPXSysIsATTY,
+	kPXSysReadDir,
 
 	kPXSysSetFSBase,
 	kPXSysExecVE,
