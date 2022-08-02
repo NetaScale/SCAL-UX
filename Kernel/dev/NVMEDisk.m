@@ -29,6 +29,7 @@
 	m_blockSize = 1 << info->nsident
 			       ->lbaf[NVME_ID_NS_FLBAS(info->nsident->flbas)]
 			       .lbads;
+	m_maxBlockTransfer = [info->controller maxBlockTransfer];
 	[self registerDevice];
 
 	DKDevLog(self, "NSID %d; %lu MiB (blocksize %ld, blocks %ld)\n",

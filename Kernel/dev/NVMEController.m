@@ -152,6 +152,8 @@ static void nvme_intr(intr_frame_t *frame, void *arg);
 
 @implementation NVMEController
 
+@synthesize maxBlockTransfer = maxBlockTransfer;
+
 + (BOOL)probeWithPCIInfo:(dk_device_pci_info_t *)pciInfo
 {
 	volatile vaddr_t bar0;
@@ -274,6 +276,8 @@ size_t subid = 0;
 	TRIMSPACES(cident->mn);
 	TRIMSPACES(cident->fr);
 	TRIMSPACES(cident->sn);
+	/* TODO(low): non 512 byte block size */
+	maxBlockTransfer = (1 << cident->mdts) * PGSIZE / 512;
 
 	DKDevLog(self, "%s, firmware %s, serial %s\n", cident->mn, cident->fr,
 	    cident->sn);
@@ -440,6 +444,9 @@ size_t subid = 0;
 	io.nsid = nsid;
 	io.slba = offset;
 	io.nlb = nBlocks - 1;
+
+	/* TODO(low): block size other than 512 bytes */
+	assert(nBlocks < maxBlockTransfer);
 
 	if (buf->nPages == 1) {
 		io.entry.prp[0] = (uint64_t)buf->pages[0]->paddr;

@@ -74,6 +74,7 @@ struct dk_diskio_completion {
 @interface DKDisk : DKDevice <DKAbstractDiskMethods> {
 	blksize_t m_blockSize;
 	blkcnt_t  m_nBlocks;
+	blkcnt_t m_maxBlockTransfer;
 }
 
 /** block size in byets */
@@ -81,6 +82,9 @@ struct dk_diskio_completion {
 
 /** total size in unit blockSize */
 @property (readonly) blkcnt_t nBlocks;
+
+/*! Maximum number of blocks transferrable in a single operation. */
+@property (readonly) blkcnt_t m_maxBlockTransfer;
 
 @end
 

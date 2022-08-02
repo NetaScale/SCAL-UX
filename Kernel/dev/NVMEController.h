@@ -11,12 +11,15 @@ struct dk_diskio_completion;
     @private
 	volatile vaddr_t regs;
 
+	blkcnt_t maxBlockTransfer;
 	size_t dstrd;
 
 	struct nvm_identify_controller *cident; /* a dedicated page */
 	struct nvme_queue		  *adminq;
 	struct nvme_queue		  *ioqueue;
 }
+
+@property (readonly) blkcnt_t maxBlockTransfer;
 
 + (BOOL)probeWithPCIInfo:(dk_device_pci_info_t *)pciInfo;
 

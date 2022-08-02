@@ -121,6 +121,7 @@
 #include "machine/spl.h"
 #include "machine/vm_machdep.h"
 #include "sys/queue.h"
+#include "sys/vm.h"
 #include "vm.h"
 #include "vmem.h"
 
@@ -658,6 +659,8 @@ vm_mdl_expand(vm_mdl_t **mdl, size_t bytes)
 	if (!newmdl)
 		return -ENOMEM;
 
+	newmdl->offset = 0;
+	newmdl->nBytes = bytes;
 	newmdl->nPages = nPages;
 	for (int i = 0; i < (*mdl)->nPages; i++)
 		newmdl->pages[i] = (*mdl)->pages[i];
@@ -682,6 +685,8 @@ vm_mdl_new_with_capacity(vm_mdl_t **out, size_t bytes)
 	if (!mdl)
 		return -ENOMEM;
 
+	mdl->offset = 0;
+	mdl->nBytes = bytes;
 	mdl->nPages = nPages;
 	for (int i = 0; i < nPages; i++) {
 		mdl->pages[i] = vm_pagealloc_zero(true);
@@ -702,6 +707,7 @@ vm_mdl_capacity(vm_mdl_t *mdl)
 void
 vm_mdl_copy(vm_mdl_t *mdl, void *buf, size_t nBytes, off_t off)
 {
+	off += mdl->offset;
 	voff_t base = PGROUNDDOWN(off);
 	voff_t pageoff = off - base;
 	size_t firstpage = base / PGSIZE;
