@@ -22,13 +22,12 @@ typedef struct tmpdirent {
 
 typedef struct tmpnode {
 	/** Type of node. */
-	vtype_t type;
+	//vtype_t type;
 
 	/** Associated vnode; may be null. It shares its vmobj with this. */
 	vnode_t *vn;
 
-	/* size */
-	size_t size;
+	vattr_t attr;
 
 	union {
 		/* VDIR case */

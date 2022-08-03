@@ -20,7 +20,9 @@
 
 struct knote;
 struct proc;
+struct stat;
 typedef enum vtype { VNON, VREG, VDIR, VCHR } vtype_t;
+typedef struct vattr vattr_t;
 typedef struct vnode vnode_t;
 typedef struct file  file_t;
 
@@ -42,6 +44,11 @@ struct vnops {
 	 * @param len length in bytes to allocate
 	 */
 	int (*fallocate)(vnode_t *vn, off_t off, size_t len);
+
+	/*!
+	 * Get attributes.
+	 */
+	int (*getattr)(vnode_t *vn, vattr_t *out);
 
 	/**
 	 * Lookup the vnode corresponding to the given file name in the given
@@ -96,13 +103,21 @@ struct vnops {
 
 	int (*write)(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
-	int (*readdir)(vnode_t *dvn, void *buf, size_t nbyte,
-	    size_t *bytesRead);
+	/*!
+	 * Read directory entries into a buffer.
+	 *
+	 * @returns -errno for an error condition
+	 * @returns 0 for no more entries available
+	 * @returns >= 1 sequence number
+	 */
+	int (*readdir)(vnode_t *dvn, void *buf, size_t nbyte, size_t *bytesRead,
+	    off_t seqno);
 
 	int (*kqfilter)(vnode_t *vn, struct knote *kn);
 };
 
 typedef struct vattr {
+	vtype_t type;
 	size_t size;
 } vattr_t;
 
@@ -112,7 +127,6 @@ typedef struct vnode {
 	vm_object_t  *vmobj; /* page cache */
 	void	     *data;  /* fs-private data */
 	struct vnops *ops;
-	vattr_t	      attr;
 	dev_t	      dev;
 	spinlock_t    interlock;
 } vnode_t;
@@ -181,7 +195,9 @@ int sys_pselect(struct proc *proc, int nfds, fd_set *readfds, fd_set *writefds,
     uintptr_t *errp);
 int sys_isatty(struct proc *proc, int fd, uintptr_t *errp);
 int sys_readdir(struct proc *proc, int fd, void *buf, size_t nbyte,
-    size_t *bytesRead);
+    size_t *bytesRead, uintptr_t *errp);
+int sys_stat(struct proc *proc, int fd, const char *path, int flags,
+    struct stat *out, uintptr_t *errp);
 
 extern vnode_t *root_vnode;
 extern vnode_t *root_dev;

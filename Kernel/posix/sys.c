@@ -14,6 +14,7 @@
 #include "amd64/amd64.h"
 #include "kern/vm.h"
 #include "libkern/klib.h"
+#include "posix/vfs.h"
 #include "proc.h"
 #include "sys.h"
 #include "vm_posix.h"
@@ -135,6 +136,18 @@ posix_syscall(intr_frame_t *frame)
 		break;
 	}
 
+	case kPXSysReadDir: {
+		RET = sys_readdir(proc, ARG1, (void *)ARG2, ARG3,
+		    (size_t *)ARG4, &err);
+		break;
+	}
+
+	case kPXSysStat: {
+		RET = sys_stat(proc, ARG1, (char *)ARG2, ARG3,
+		    (struct stat *)ARG4, &err);
+		break;
+	}
+
 	case kPXSysSetFSBase: {
 		thread->pcb.fs = ARG1;
 		wrmsr(kAMD64MSRFSBase, ARG1);
@@ -144,7 +157,8 @@ posix_syscall(intr_frame_t *frame)
 
 	case kPXSysExecVE: {
 		kprintf("PXSYS_execve: %s\n", (char *)ARG1);
-		assert(sys_exec(proc, (char*)ARG1, (const char **)ARG2, (const char **)ARG3, frame) == 0);
+		assert(sys_exec(proc, (char *)ARG1, (const char **)ARG2,
+			   (const char **)ARG3, frame) == 0);
 		break;
 	}
 

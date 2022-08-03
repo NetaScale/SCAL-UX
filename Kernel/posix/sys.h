@@ -27,6 +27,7 @@ enum {
 	kPXSysPSelect,
 	kPXSysIsATTY,
 	kPXSysReadDir,
+	kPXSysStat,
 
 	kPXSysSetFSBase,
 	kPXSysExecVE,
@@ -88,6 +89,24 @@ syscall3(intptr_t num, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3,
 	asm volatile("int $0x80"
 		     : "=a"(ret), "=D"(err)
 		     : "a"(num), "D"(arg1), "S"(arg2), "d"(arg3)
+		     : "memory");
+
+	if (errp)
+		*errp = err;
+
+	return ret;
+}
+
+static inline uintptr_t
+syscall4(intptr_t num, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4,
+    uintptr_t *errp)
+{
+	register uintptr_t r10 asm("r10") = arg4;
+	uintptr_t ret, err;
+
+	asm volatile("int $0x80"
+		     : "=a"(ret), "=D"(err)
+		     : "a"(num), "D"(arg1), "S"(arg2), "d"(arg3), "r"(r10)
 		     : "memory");
 
 	if (errp)

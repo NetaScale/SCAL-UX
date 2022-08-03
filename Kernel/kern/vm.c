@@ -302,6 +302,8 @@ vm_dump(vm_map_t *map)
 	vm_map_entry_t *ent;
 
 	TAILQ_FOREACH (ent, &map->entries, queue) {
+		assert (ent != NULL);
+		assert(ent->obj != NULL);
 		kprintf("%p-%p type %d\n", ent->start, ent->end,
 		    ent->obj->type);
 	}

@@ -20,6 +20,7 @@
 #include "posix/dev.h"
 #include "posix/tmpfs.h"
 #include "posix/vfs.h"
+#include "sys/queue.h"
 
 extern struct vnops tmpfs_vnops;
 extern struct vnops tmpfs_spec_vnops;
@@ -41,12 +42,11 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		vnode_t *vn = kmalloc(sizeof *vn);
 		node->vn = vn;
 		vn->refcnt = 1;
-		vn->type = node->type;
+		vn->type = node->attr.type;
 		vn->ops = vn->type == VCHR ? &tmpfs_spec_vnops : &tmpfs_vnops;
-		vn->attr.size = node->size;
-		if (node->type == VREG) {
+		if (node->attr.type == VREG) {
 			vn->vmobj = node->reg.vmobj;
-		} else if (node->type == VCHR)
+		} else if (node->attr.type == VCHR)
 			vn->dev = node->chr.dev;
 		vn->data = node;
 		*vout = vn;
@@ -59,7 +59,7 @@ tmpfs_mountroot()
 {
 	tmpnode_t *root = kmalloc(sizeof *root);
 
-	root->type = VDIR;
+	root->attr.type = VDIR;
 	root->vn = NULL;
 	TAILQ_INIT(&root->dir.entries);
 
@@ -91,8 +91,8 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
 
 	td->name = strdup(name);
 	td->node = n;
-	n->type = type;
-	n->size = 0;
+	n->attr.type = type;
+	n->attr.size = 0;
 	n->vn = NULL;
 
 	switch (type) {
@@ -141,10 +141,8 @@ tmp_fallocate(vnode_t *vn, off_t off, size_t len)
 	if (vn->type != VREG)
 		return -ENOTSUP;
 
-	if (off + len > n->size) {
-		vn->attr.size = off + len;
-		n->size = off + len;
-	}
+	if (off + len > n->attr.size) 
+		n->attr.size = off + len;
 
 	return 0;
 }
@@ -156,7 +154,7 @@ tmp_lookup(vnode_t *vn, vnode_t **out, const char *pathname)
 	tmpdirent_t *tdent;
 	int	     r;
 
-	assert(node->type == VDIR);
+	assert(node->attr.type == VDIR);
 
 	if (strcmp(pathname, "..") == 0) {
 		*out = node->dir.parent->vn;
@@ -170,6 +168,14 @@ tmp_lookup(vnode_t *vn, vnode_t **out, const char *pathname)
 	r = tmpfs_vget(NULL, out, (ino_t)tdent->node);
 
 	return r;
+}
+
+int
+tmp_getattr(vnode_t *vn, vattr_t *out)
+{
+	tmpnode_t *tn = VNTOTN(vn);
+	*out = tn->attr;
+	return 0;
 }
 
 int
@@ -206,8 +212,14 @@ int
 tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
 	vaddr_t vaddr = VADDR_MAX;
+	tmpnode_t *tn = VNTOTN(vn);
 
-	assert(off + nbyte <= vn->attr.size);
+	if (off + nbyte > tn->attr.size)
+		nbyte = tn->attr.size - off;
+	if (nbyte < 0)
+		nbyte = 0;
+	if (nbyte == 0)
+		return 0;
 
 	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
 		   false) == 0);
@@ -253,9 +265,10 @@ int
 tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
 	vaddr_t vaddr = VADDR_MAX;
+	tmpnode_t *tn = VNTOTN(vn);
 
-	if (off + nbyte > vn->attr.size)
-		vn->attr.size = off + nbyte;
+	if (off + nbyte > tn->attr.size)
+		tn->attr.size = off + nbyte;
 
 	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
 		   false) == 0);
@@ -299,16 +312,53 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	return nbyte /* FIXME: */;
 }
 
+#define DIRENT_RECLEN(NAMELEN) \
+	ROUNDUP(offsetof(struct dirent, d_name[0]) + 1 + NAMELEN, 8)
+
 int
-tmp_readdir(vnode_t *dvn, void *buf, size_t nbyte, size_t *bytesRead)
+tmp_readdir(vnode_t *dvn, void *buf, size_t nbyte, size_t *bytesRead,
+    off_t seqno)
 {
 	tmpnode_t	  *n = VNTOTN(dvn);
-	tmpdirent_t *tdent;
+	tmpdirent_t	    *tdent;
+	struct dirent     *dentp = buf;
+	size_t		   nwritten = 0;
+	size_t		   i;
 
-	assert(n->type == VDIR);
+	assert(n->attr.type == VDIR);
 
-	TAILQ_FOREACH (tdent, &n->dir.entries, entries) {
+	tdent = TAILQ_FIRST(&n->dir.entries);
+
+	for (i = 0;; i++) {
+		if (!tdent) {
+			i = INT32_MAX;
+			goto finish;
+		}
+
+		if (i >= seqno) {
+			size_t reclen = DIRENT_RECLEN(strlen(tdent->name));
+
+			if ((void *)dentp + reclen > buf + nbyte - 1) {
+				i--;
+				goto finish;
+			}
+
+			dentp->d_ino = (uint64_t)tdent->node;
+			dentp->d_off = i++;
+			dentp->d_reclen = reclen;
+			dentp->d_type = DT_UNKNOWN;
+			strcpy(dentp->d_name, tdent->name);
+
+			nwritten += reclen;
+			dentp = (void *)dentp + reclen;
+		}
+
+		tdent = TAILQ_NEXT(tdent, entries);
 	}
+
+finish:
+	*bytesRead = nwritten;
+	return i;
 }
 
 /*
@@ -342,6 +392,7 @@ struct vnops tmpfs_vnops = {
 	.create = tmp_create,
 	.fallocate = tmp_fallocate,
 	.lookup = tmp_lookup,
+	.getattr = tmp_getattr,
 	.mkdir = tmp_mkdir,
 	.mknod = tmp_mknod,
 	.read = tmp_read,

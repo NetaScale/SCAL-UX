@@ -327,13 +327,16 @@ md_intr_frame_trace(intr_frame_t *frame)
 	const char *name;
 	size_t	    offs;
 
+
 	ksrv_backtrace((vaddr_t)frame->rip, &name, &offs);
-	kprintf(" - %p %s+%lu\n", (void *)frame->rip, name, offs);
+	kprintf("Begin stack trace:\n");
+	kprintf(" - %p %s+%lu\n", (void *)frame->rip, name ? name : "???", offs);
+
 
 	if (aframe != NULL)
 		do {
 			ksrv_backtrace((vaddr_t)aframe->rip, &name, &offs);
-			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name,
+			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name ? name : "???",
 			    offs);
 		} while ((aframe = aframe->rbp) && aframe >= KERN_BASE &&
 		    aframe->rip != 0x0);

@@ -9,6 +9,7 @@
  */
 
 #include <sys/select.h>
+#include <sys/stat.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -177,7 +178,9 @@ sys_open(struct proc *proc, const char *path, int mode)
 	int	 r;
 	int	 fd = -1;
 
+#if DEBUG_SYSCALLS == 1
 	kprintf("sys_open(%s,%d)\n", path, mode);
+#endif
 
 	for (int i = 0; i < countof(proc->files); i++) {
 		if (proc->files[i] == NULL) {
@@ -191,14 +194,18 @@ sys_open(struct proc *proc, const char *path, int mode)
 
 	r = vfs_lookup(root_vnode, &vn, path, 0);
 	if (r < 0) {
+#if DEBUG_SYSCALLS == 1
 		kprintf("lookup returned %d\n", r);
+#endif
 		return r;
 	}
 
 	if (vn->ops->open) {
 		r = vn->ops->open(vn, mode, proc);
 		if (r < 0) {
-			kprintf("lookup returned %d\n", r);
+#if DEBUG_SYSCALLS == 1
+			kprintf("open returned %d\n", r);
+#endif
 			return r;
 		}
 	}
@@ -210,7 +217,6 @@ sys_open(struct proc *proc, const char *path, int mode)
 	proc->files[fd]->fops = NULL;
 	proc->files[fd]->pos = 0;
 
-	kprintf("yielded fd %d\n", fd);
 	return fd;
 }
 
@@ -353,4 +359,106 @@ sys_isatty(struct proc *proc, int fd, uintptr_t *errp)
 	}
 
 	return 1;
+}
+
+int
+sys_readdir(struct proc *proc, int fd, void *buf, size_t nbyte,
+    size_t *bytesRead, uintptr_t *errp)
+{
+	file_t *file;
+	int	r;
+
+#if DEBUG_SYSCALLS == 1
+	kprintf("SYS_READDIR\n");
+#endif
+
+	file = proc->files[fd];
+	if (file == NULL || file->vn->type != VDIR) {
+		*errp = EBADF;
+		return 0;
+	}
+
+	r = file->vn->ops->readdir(file->vn, buf, nbyte, bytesRead, file->pos);
+	if (r < 0) {
+		*errp = -r;
+		return -1;
+	}
+
+	file->pos = r;
+
+	return 0;
+}
+
+int
+sys_stat(struct proc *proc, int fd, const char *path, int flags,
+    struct stat *out, uintptr_t *errp)
+{
+	int	 r = 0;
+	vnode_t *vn;
+	vattr_t	 vattr = { 0 };
+
+#if DEBUG_SYSCALLS == 1
+	kprintf("SYS_STAT(%d, %p, %d, %p)\n", fd, path, flags, out);
+#endif
+
+	if (fd == AT_FDCWD) {
+		r = vfs_lookup(root_vnode, &vn, path, 0);
+		if (r < 0) {
+			*errp = -r;
+			r = -1;
+			goto finish;
+		}
+	} else {
+		file_t *file;
+
+		assert(fd >= 0 && fd < 64) file = proc->files[fd];
+
+		if (path && strlen(path) != 0) {
+			r = vfs_lookup(file->vn, &vn, path, 0);
+
+			if (r < 0) {
+				*errp = -r;
+				r = -1;
+				goto finish;
+			}
+		} else {
+			vn = file->vn;
+		}
+	}
+
+	if (vn->ops->getattr)
+		r = vn->ops->getattr(vn, &vattr);
+	if (r < 0) {
+		*errp = -r;
+		r = -1;
+		goto finish;
+	}
+
+	memset(out, 0x0, sizeof *out);
+
+	switch (vattr.type) {
+	case VREG:
+		out->st_mode |= S_IFREG;
+		break;
+
+	case VDIR:
+		out->st_mode |= S_IFDIR;
+		break;
+
+	case VCHR:
+		out->st_mode |= S_IFCHR;
+		break;
+
+	default:
+		/* nothing */
+		kprintf("sys_stat: unexpected vattr type %d\n", vattr.type);
+		break;
+	}
+
+	out->st_size = vattr.size;
+	out->st_blocks = vattr.size / 512;
+	out->st_blksize = 512;
+
+finish:
+	return r;
 }
