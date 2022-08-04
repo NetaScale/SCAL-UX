@@ -727,11 +727,11 @@ bool gterm_init(struct gterm_t *gterm, struct term_t *term, struct framebuffer_t
     gterm->glyph_width = gterm->vga_font_width * gterm->vga_font_scale_x;
     gterm->glyph_height = gterm->vga_font_height * gterm->vga_font_scale_y;
 
-    gterm->cols = term->cols = (gterm->framebuffer.width - gterm->margin * 2) / gterm->glyph_width;
-    gterm->rows = term->rows = (gterm->framebuffer.height - gterm->margin - gterm->margin_top) / gterm->glyph_height;
+    gterm->cols = term->cols = (gterm->framebuffer.width - 8 - gterm->margin * 2) / gterm->glyph_width;
+    gterm->rows = term->rows = (gterm->framebuffer.height - 8 - gterm->margin - gterm->margin_top) / gterm->glyph_height;
 
-    gterm->offset_x = gterm->margin + ((gterm->framebuffer.width - gterm->margin * 2) % gterm->glyph_width) / 2;
-    gterm->offset_y = gterm->margin_top + ((gterm->framebuffer.height - gterm->margin - gterm->margin_top) % gterm->glyph_height) / 2;
+    gterm->offset_x = gterm->margin + ((gterm->framebuffer.width - gterm->margin * 2) % gterm->glyph_width) / 2 + 4;
+    gterm->offset_y = gterm->margin_top + ((gterm->framebuffer.height - gterm->margin - gterm->margin_top) % gterm->glyph_height) / 2 + 4;
 
     gterm->grid_size = gterm->rows * gterm->cols * sizeof(struct gterm_char);
     gterm->grid = alloc_mem(gterm->grid_size);
