@@ -15,11 +15,13 @@
 
 #include <signal.h>
 
-#include "kern/vm.h"
 #include "kern/lock.h"
+#include "kern/vm.h"
+#include "specfs.h"
 
 struct knote;
 struct proc;
+struct specnode;
 struct stat;
 typedef enum vtype { VNON, VREG, VDIR, VCHR } vtype_t;
 typedef struct vattr vattr_t;
@@ -118,7 +120,7 @@ struct vnops {
 
 typedef struct vattr {
 	vtype_t type;
-	size_t size;
+	size_t	size;
 } vattr_t;
 
 typedef struct vnode {
@@ -127,8 +129,13 @@ typedef struct vnode {
 	vm_object_t  *vmobj; /* page cache */
 	void	     *data;  /* fs-private data */
 	struct vnops *ops;
-	dev_t	      dev;
-	spinlock_t    interlock;
+	union {
+		struct {
+			struct specdev   *specdev;
+			LIST_ENTRY(vnode) spec_list; /** specdev::vnodes */
+		};
+	};
+	spinlock_t interlock;
 } vnode_t;
 
 /**

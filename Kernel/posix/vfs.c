@@ -329,7 +329,7 @@ sys_pselect(struct proc *proc, int nfds, fd_set *readfds, fd_set *writefds,
     uintptr_t *errp)
 {
 	kqueue_t *kq = kqueue_new();
-	int r;
+	int	  r;
 
 #if DEBUG_SYSCALLS == 1
 	kprintf("SYS_PSELECT\n");
@@ -362,7 +362,7 @@ sys_isatty(struct proc *proc, int fd, uintptr_t *errp)
 
 #if DEBUG_SYSCALLS == 1
 	kprintf("SYS_ISATTY(%d/type %d/cdevsw %d)\n", fd, file->vn->type,
-	    cdevsw[major(file->vn->dev)].is_tty);
+	    cdevsw[major(file->vn->specdev->dev)].is_tty);
 #endif
 
 	if (file == NULL) {
@@ -370,7 +370,8 @@ sys_isatty(struct proc *proc, int fd, uintptr_t *errp)
 		return -1;
 	}
 
-	if (file->vn->type != VCHR || !cdevsw[major(file->vn->dev)].is_tty) {
+	if (file->vn->type != VCHR ||
+	    !cdevsw[major(file->vn->specdev->dev)].is_tty) {
 		*errp = ENOTTY;
 		return -1;
 	}
@@ -465,7 +466,7 @@ sys_stat(struct proc *proc, int fd, const char *path, int flags,
 
 	case VCHR:
 		out->st_mode |= S_IFCHR;
-		out->st_rdev = vn->dev;
+		out->st_rdev = vn->specdev->dev;
 		break;
 
 	default:

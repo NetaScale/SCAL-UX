@@ -21,6 +21,7 @@
 #include "posix/tmpfs.h"
 #include "posix/vfs.h"
 #include "sys/queue.h"
+#include "posix/specfs.h"
 
 extern struct vnops tmpfs_vnops;
 extern struct vnops tmpfs_spec_vnops;
@@ -47,7 +48,7 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		if (node->attr.type == VREG) {
 			vn->vmobj = node->reg.vmobj;
 		} else if (node->attr.type == VCHR) {
-			vn->dev = node->chr.dev;
+			spec_setup_vnode(vn, node->chr.dev);
 		}
 		vn->data = node;
 		*vout = vn;
@@ -365,33 +366,6 @@ finish:
 	return i;
 }
 
-/*
- * spec ops
- */
-int
-tmp_spec_open(vnode_t *vn, int mode, struct proc *proc)
-{
-	return cdevsw[major(vn->dev)].open(vn->dev, mode, proc);
-}
-
-int
-tmp_spec_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
-{
-	return cdevsw[major(vn->dev)].read(vn->dev, buf, nbyte, off);
-}
-
-int
-tmp_spec_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
-{
-	return cdevsw[major(vn->dev)].write(vn->dev, buf, nbyte, off);
-}
-
-int
-tmp_spec_kqfilter(vnode_t *vn, struct knote *kn)
-{
-	return cdevsw[major(vn->dev)].kqfilter(vn->dev, kn);
-}
-
 struct vnops tmpfs_vnops = {
 	.create = tmp_create,
 	.fallocate = tmp_fallocate,
@@ -406,8 +380,8 @@ struct vnops tmpfs_vnops = {
 
 struct vnops tmpfs_spec_vnops = {
 	.getattr = tmp_getattr,
-	.open = tmp_spec_open,
-	.read = tmp_spec_read,
-	.write = tmp_spec_write,
-	.kqfilter = tmp_spec_kqfilter,
+	.open = spec_open,
+	.read = spec_read,
+	.write = spec_write,
+	.kqfilter = spec_kqfilter,
 };
