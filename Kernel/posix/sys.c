@@ -58,8 +58,8 @@ posix_syscall(intr_frame_t *frame)
 
 	case kPXSysExec: {
 		kprintf("PXSYS_exec: %s\n", (char *)ARG1);
-		const char *args[] = { "bash", NULL };
-		const char *envs[] = { "VAR=42", NULL };
+		const char *args[] = { "bash", "-l", NULL };
+		const char *envs[] = {  NULL };
 		assert(sys_exec(proc, "/bash", args, envs, frame) == 0);
 		break;
 	}
@@ -156,7 +156,6 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysExecVE: {
-		kprintf("PXSYS_execve: %s\n", (char *)ARG1);
 		assert(sys_exec(proc, (char *)ARG1, (const char **)ARG2,
 			   (const char **)ARG3, frame) == 0);
 		break;

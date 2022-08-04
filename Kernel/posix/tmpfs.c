@@ -46,8 +46,9 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		vn->ops = vn->type == VCHR ? &tmpfs_spec_vnops : &tmpfs_vnops;
 		if (node->attr.type == VREG) {
 			vn->vmobj = node->reg.vmobj;
-		} else if (node->attr.type == VCHR)
+		} else if (node->attr.type == VCHR) {
 			vn->dev = node->chr.dev;
+		}
 		vn->data = node;
 		*vout = vn;
 		return 0;
@@ -202,6 +203,8 @@ tmp_mknod(vnode_t *dvn, vnode_t **out, const char *pathname, dev_t dev)
 
 	assert(dvn->type == VDIR);
 
+	kprintf("mknode dev %lx\n", dev);
+
 	n = tmakenode(VNTOTN(dvn), VCHR, pathname, dev);
 	assert(n != NULL);
 
@@ -214,10 +217,11 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 	vaddr_t vaddr = VADDR_MAX;
 	tmpnode_t *tn = VNTOTN(vn);
 
+	if (tn->attr.type != VREG)
+		return -EINVAL;
+
 	if (off + nbyte > tn->attr.size)
-		nbyte = tn->attr.size - off;
-	if (nbyte < 0)
-		nbyte = 0;
+		nbyte = tn->attr.size <= off ? 0 : tn->attr.size - off;
 	if (nbyte == 0)
 		return 0;
 
@@ -401,6 +405,7 @@ struct vnops tmpfs_vnops = {
 };
 
 struct vnops tmpfs_spec_vnops = {
+	.getattr = tmp_getattr,
 	.open = tmp_spec_open,
 	.read = tmp_spec_read,
 	.write = tmp_spec_write,

@@ -13,6 +13,11 @@
 #include "DKDisk.h"
 #include "dev/GPTVolumeManager.h"
 #include "libkern/klib.h"
+#include "posix/dev.h"
+#include "posix/vfs.h"
+
+static int major = -1;
+static int minor = 0;
 
 @implementation DKLogicalDisk
 
@@ -20,6 +25,12 @@
 @synthesize base = m_base;
 @synthesize size = m_size;
 @synthesize location = m_location;
+
++ (void)initialize
+{
+	cdevsw_t cdev;
+	major = cdevsw_attach(&cdev);
+}
 
 - (blksize_t)blockSize
 {
@@ -52,6 +63,7 @@
 	self = [super init];
 	if (self) {
 		char nameBuf[64];
+		vnode_t *node;
 
 		ksnprintf(m_name, 32, "%s Disk", aname);
 		m_underlying = underlying;
@@ -64,6 +76,8 @@
 		[self buildPosixDeviceName:nameBuf withMaxSize:63];
 
 		DKDevLog(self, "POSIX DevFS node: %s\n", nameBuf);
+		assert(root_dev->ops->mknod(root_dev, &node, nameBuf,
+			   makedev(major, minor++)) == 0);
 
 		if (location == 0) {
 			[GPTVolumeManager probe:self];

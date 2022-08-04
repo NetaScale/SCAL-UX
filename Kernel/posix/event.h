@@ -62,7 +62,7 @@ typedef struct kqueue {
 /** create and initialise a new empty kqueue */
 kqueue_t *kqueue_new();
 /** wait on a kqueue */
-int kqueue_wait(kqueue_t *kq);
+int kqueue_wait(kqueue_t *kq, int nanosecs);
 /** register a single kevent with a kqueue */
 int kqueue_register(kqueue_t *kq, struct kevent *kev);
 /** notify knote condition change */

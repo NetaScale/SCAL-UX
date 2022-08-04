@@ -56,7 +56,7 @@ kqueue_register(kqueue_t *kq, struct kevent *kev)
 }
 
 int
-kqueue_wait(kqueue_t *kq)
+kqueue_wait(kqueue_t *kq, int nanosecs)
 {
 	int r;
 	knote_t *kn;
@@ -67,7 +67,7 @@ kqueue_wait(kqueue_t *kq)
 	}
 
 	kq->sleeping = true;
-	r =  waitq_await(&kq->wq, 1, 25000000000);
+	r =  waitq_await(&kq->wq, 1, nanosecs);
 	kq->sleeping = false;
 	return r;
 }

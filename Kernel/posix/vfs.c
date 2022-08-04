@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <string.h>
 
+#include "abi-bits/seek-whence.h"
 #include "dev.h"
 #include "event.h"
 #include "kern/buildconf.h"
@@ -260,9 +261,9 @@ sys_read(struct proc *proc, int fd, void *buf, size_t nbyte)
 		return r;
 	}
 
-	file->pos += nbyte;
+	file->pos += r;
 
-	return nbyte;
+	return r;
 }
 
 int
@@ -294,18 +295,32 @@ sys_seek(struct proc *proc, int fd, off_t offset, int whence)
 {
 	file_t *file = proc->files[fd];
 
+#if DEBUG_SYSCALLS == 1
+	kprintf("SYS_SEEK(offset: %ld)\n", offset);
+#endif
+
 	if (file == NULL)
 		return -EBADF;
 
 	if (file->vn->type != VREG)
 		return -ESPIPE;
 
-	assert(whence == SEEK_SET);
+	if (whence == SEEK_SET)
+		file->pos = offset;
+	else if (whence == SEEK_CUR)
+		file->pos += offset;
+	else if (whence == SEEK_END) {
+		vattr_t attr;
+		int	r;
 
-	kprintf("SYS_SEEK(offset: %ld)\n", offset);
+		r = file->vn->ops->getattr(file->vn, &attr);
+		if (r < 0)
+			return -1;
 
-	file->pos = offset;
-	return offset;
+		file->pos = attr.size + offset;
+	}
+
+	return file->pos;
 }
 
 int
@@ -334,11 +349,8 @@ sys_pselect(struct proc *proc, int nfds, fd_set *readfds, fd_set *writefds,
 		kqueue_register(kq, &kev);
 	}
 
-	r = kqueue_wait(kq);
-	(void)r;
-	//kprintf("X: %d\n", x);
-
-	return 1;
+	r = kqueue_wait(kq, 0);
+	return r == kWaitQResultTimeout ? 0 : 1;
 }
 
 int
@@ -348,14 +360,19 @@ sys_isatty(struct proc *proc, int fd, uintptr_t *errp)
 
 	file = proc->files[fd];
 
+#if DEBUG_SYSCALLS == 1
+	kprintf("SYS_ISATTY(%d/type %d/cdevsw %d)\n", fd, file->vn->type,
+	    cdevsw[major(file->vn->dev)].is_tty);
+#endif
+
 	if (file == NULL) {
 		*errp = EBADF;
-		return 0;
+		return -1;
 	}
 
 	if (file->vn->type != VCHR || !cdevsw[major(file->vn->dev)].is_tty) {
 		*errp = ENOTTY;
-		return 0;
+		return -1;
 	}
 
 	return 1;
@@ -398,7 +415,8 @@ sys_stat(struct proc *proc, int fd, const char *path, int flags,
 	vattr_t	 vattr = { 0 };
 
 #if DEBUG_SYSCALLS == 1
-	kprintf("SYS_STAT(%d, %p, %d, %p)\n", fd, path, flags, out);
+	kprintf("SYS_STAT(%d, %s, %d, %p)\n", fd, path ? path : "<null>", flags,
+	    out);
 #endif
 
 	if (fd == AT_FDCWD) {
@@ -447,6 +465,7 @@ sys_stat(struct proc *proc, int fd, const char *path, int flags,
 
 	case VCHR:
 		out->st_mode |= S_IFCHR;
+		out->st_rdev = vn->dev;
 		break;
 
 	default:

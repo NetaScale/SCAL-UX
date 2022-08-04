@@ -381,7 +381,9 @@ arch_resched(void *arg)
 			callout_enqueue(&curthr->wqtimeout);
 	} else if (curthr->state == kExiting) {
 		task_t *task = curthr->task;
+#if DEBUG_SCHED == 1
 		kprintf("May exit thread %p!\n", curthr);
+#endif
 		vm_deallocate(task->map, curthr->stack - USER_STACK_SIZE,
 		    USER_STACK_SIZE);
 		LIST_REMOVE(curthr, threads);

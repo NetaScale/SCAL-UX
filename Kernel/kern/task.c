@@ -339,7 +339,8 @@ void
 thread_clearwait_locked(struct thread *thread, waitq_event_t ev,
     waitq_result_t res)
 {
-	callout_dequeue(&thread->wqtimeout);
+	if (thread->wqtimeout.nanosecs != 0)
+		callout_dequeue(&thread->wqtimeout);
 	TAILQ_REMOVE(&thread->wq->waiters, thread, waitqueue);
 	unlock(&thread->wq->lock);
 	thread->wq = NULL;

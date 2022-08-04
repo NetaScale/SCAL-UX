@@ -58,7 +58,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	}
 
 	if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0) {
-		fatal("exec: bad e_ident in %s\n", path);
+		kprintf("exec: bad e_ident in %s\n", path);
 		return -ENOEXEC;
 	}
 
@@ -207,6 +207,10 @@ sys_exec(proc_t *proc, const char *u_path, const char *u_argp[],
 	vm_map_t	 *oldmap = proc->task->map;
 
 	/* TODO: end all other threads of the process.... */
+
+#if DEBUG_SYSCALLS == 1
+	kprintf("SYS_EXEC(%s)\n", u_path);
+#endif
 
 	assert(proc->task->map != &kmap);
 	pkg.map = rtldpkg.map = vm_map_new();

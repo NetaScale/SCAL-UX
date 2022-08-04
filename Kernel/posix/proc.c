@@ -24,7 +24,9 @@ sys_exit(proc_t *proc, int code)
 
 	thread_t *curthread, *thread;
 
+#if DEBUG_SYSCALLS == 1
 	kprintf("SYS_EXIT(%d)\n", code);
+#endif
 
 	proc->status = kProcExiting;
 	proc->wstat = W_EXITCODE(code, 0);
