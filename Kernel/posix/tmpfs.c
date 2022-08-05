@@ -231,7 +231,7 @@ tmp_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		return 0;
 
 	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
-		   false) == 0);
+		   0, false) == 0);
 	memcpy(buf, vaddr + off, nbyte);
 	vm_deallocate(&kmap, vaddr, PGROUNDUP(nbyte + off));
 
@@ -280,7 +280,7 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 		tn->attr.size = off + nbyte;
 
 	assert(vm_map_object(&kmap, vn->vmobj, &vaddr, PGROUNDUP(nbyte + off),
-		   false) == 0);
+		   0, false) == 0);
 	memcpy(vaddr + off, buf, nbyte);
 	vm_deallocate(&kmap, vaddr, PGROUNDUP(nbyte + off));
 

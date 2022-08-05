@@ -214,6 +214,7 @@ typedef struct vm_object {
 typedef struct vm_map_entry {
 	TAILQ_ENTRY(vm_map_entry) queue;
 	vaddr_t			  start, end;
+	voff_t			     offset;
 	vm_object_t		    *obj;
 } vm_map_entry_t;
 
@@ -333,13 +334,14 @@ vm_map_t *vm_map_new();
  * @param size is the size of area to be mapped in bytes - it must be a multiple
  * of the PAGESIZE.
  * @param obj the object to be mapped. It is retained.
+ * @param offset offset into object at which to map (must be PGSIZE aligned)
  * @param[in,out] vaddrp points to a vaddr_t describing the preferred address.
  * If VADDR_MAX, then anywhere is fine. The result is written to its referent.
  * @param copy whether to copy \p obj instead of mapping it shared
  * (copy-on-write optimisation may be employed.)
  */
 int vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
-    bool copy) LOCK_REQUIRES(obj->lock);
+    voff_t offset, bool copy) LOCK_REQUIRES(obj->lock);
 
 /** Release a reference to a map. The map may be fully freed. */
 void vm_map_release(vm_map_t *map);

@@ -24,17 +24,14 @@ vm_mmap(proc_t *proc, void **addr, size_t len, int prot, int flags, int fd,
 	else if (PGROUNDDOWN(offset) != offset)
 		return -EINVAL;
 
-#if DEBUG_SYSCALLS == 1
-	kprintf("mmap request: addr %p, len %lu, prot %d, flags %d, fd %d, "
+#if DEBUG_SYSCALLS == 0
+	kprintf("VM_POSIX: mmap addr %p, len %lu, prot %d, flags %d, fd %d, "
 		"offs %ld\n",
 	    *addr, len, prot, flags, fd, offset);
 #endif
 
 	if (!(flags & MAP_ANON)) {
-#if 0
 		file_t *file;
-		vm_object_t *obj;
-		int r;
 
 		if (fd == -1 || fd > 64)
 			return -EBADF;
@@ -43,18 +40,10 @@ vm_mmap(proc_t *proc, void **addr, size_t len, int prot, int flags, int fd,
 		if (!file)
 			return -EBADF;
 
-		if (!file->fops->mmap)
-			return -ENODEV;
+		/* TODO(low): introduce a vnode mmap operation (for devices) */
 
-		r = file->fops->mmap(file, offset, len, flags & MAP_PRIVATE,
-		    &obj);
-		if (r < 0)
-			return r;
-
-		return vm_map_object(proc->proc->map, obj, addr, len,
-		    flags & MAP_PRIVATE);
-#endif
-		return -ENOTSUP;
+		return vm_map_object(proc->task->map, file->vn->vmobj, addr,
+		    len, offset, flags & MAP_PRIVATE);
 	} else {
 		return vm_allocate(proc->task->map, NULL, addr, len);
 	}

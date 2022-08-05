@@ -52,7 +52,7 @@ posix_syscall(intr_frame_t *frame)
 
 	switch (frame->rax) {
 	case kPXSysDebug: {
-		//kprintf("PXSYS_dbg: %s\n", (char *)ARG1);
+		kprintf("SYS_POSIX: %s\n", (char *)ARG1);
 		break;
 	}
 

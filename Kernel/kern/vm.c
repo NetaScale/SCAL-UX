@@ -211,7 +211,7 @@ vm_allocate(vm_map_t *map, vm_object_t **out, vaddr_t *vaddrp, size_t size)
 
 	obj = vm_aobj_new(size);
 
-	r = vm_map_object(map, obj, vaddrp, size, false);
+	r = vm_map_object(map, obj, vaddrp, size, 0, false);
 	if (r < 0)
 		goto finish;
 
@@ -523,7 +523,7 @@ vm_fault(intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
 
 	obj_off = vaddr - ent->start;
 
-	return fault_aobj(map, ent->obj, vaddr, obj_off, flags);
+	return fault_aobj(map, ent->obj, vaddr, obj_off + ent->offset, flags);
 }
 
 vm_map_t *
@@ -552,7 +552,7 @@ vm_map_fork(vm_map_t *map)
 		assert(newobj != NULL);
 
 		r = vm_map_object(newmap, newobj, &start, ent->end - ent->start,
-		    false);
+		    ent->offset, false);
 		assert(r == 0)
 
 		    vm_object_release(newobj);
@@ -576,7 +576,7 @@ vm_map_new()
 
 int
 vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
-    bool copy)
+    voff_t offset, bool copy)
 {
 	bool		exact = *vaddrp != VADDR_MAX;
 	vmem_addr_t	addr = *vaddrp == VADDR_MAX ? 0 : (vmem_addr_t)*vaddrp;
@@ -584,16 +584,20 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	int		r;
 
 	assert(map);
-	assert(!copy);
+
+	if (copy)
+		obj = vm_object_copy(obj);
 
 	r = vmem_xalloc(&map->vmem, size, 0, 0, 0, exact ? addr : 0, 0,
 	    exact ? kVMemExact : 0, &addr);
 	if (r < 0)
 		return r;
 
+//kprintf("vm_map_object %p offset %lx\n", obj, offset);
 	entry = kmalloc(sizeof *entry);
 	entry->start = (vaddr_t)addr;
 	entry->end = (vaddr_t)addr + size;
+	entry->offset = offset;
 	entry->obj = obj;
 	obj->refcnt++;
 
