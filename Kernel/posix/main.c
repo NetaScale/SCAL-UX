@@ -14,6 +14,7 @@
 
 #include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "amd64/amd64.h"
 #include "kern/task.h"
@@ -122,7 +123,7 @@ posix_main(void *initbin, size_t size)
 
 	tmpfs_mountroot();
 
-	root_vnode->ops->mkdir(root_vnode, &root_dev, "dev");
+	root_vnode->ops->mkdir(root_vnode, &root_dev, "dev", NULL);
 
 	void autoconf();
 	autoconf();
@@ -131,11 +132,16 @@ posix_main(void *initbin, size_t size)
 	for (size_t i = 0; i < size;) {
 		ustar_hdr_t *star = initbin + i;
 		int	     fsize = oct2i((unsigned char *)star->size, 11);
+		vattr_t	     attr;
 
 		if (!*star->filename)
 			break;
 		else if (!*(star->filename + 2))
 			goto next;
+
+		attr.mode = oct2i((unsigned char *)star->mode,
+		    sizeof(star->mode) - 1);
+		attr.mode = attr.mode & ~(S_IFMT);
 
 		switch (star->type) {
 		case kUStarDirectory: {
@@ -143,7 +149,7 @@ posix_main(void *initbin, size_t size)
 			vnode_t *vn;
 
 			r = vfs_lookup(root_vnode, &vn, star->filename,
-			    kLookupMkdir);
+			    kLookupMkdir, &attr);
 			if (r < 0) {
 				kprintf("failed to make dir: %d\n", -r);
 			}
@@ -155,7 +161,7 @@ posix_main(void *initbin, size_t size)
 			vnode_t *vn;
 
 			r = vfs_lookup(root_vnode, &vn, star->filename,
-			    kLookupCreat);
+			    kLookupCreat, &attr);
 			if (r < 0) {
 				kprintf("failed to make file: %d\n", -r);
 			}

@@ -30,9 +30,11 @@ vnode_t *root_dev = NULL;
 	vnode->ops->read(vnode, buf, nbyte, off)
 #define VOP_WRITE(vnode, buf, nbyte, off) \
 	vnode->ops->write(vnode, buf, nbyte, off)
-#define VOP_CREAT(vnode, out, name) vnode->ops->create(vnode, out, name)
+#define VOP_CREAT(vnode, out, name, attr) \
+	vnode->ops->create(vnode, out, name, attr)
 #define VOP_LOOKUP(vnode, out, path) vnode->ops->lookup(vnode, out, path)
-#define VOP_MKDIR(vnode, out, name) vnode->ops->mkdir(vnode, out, name)
+#define VOP_MKDIR(vnode, out, name, attr) \
+	vnode->ops->mkdir(vnode, out, name, attr)
 
 #define countof(ARRAY) (sizeof(ARRAY) / sizeof(ARRAY[0]))
 
@@ -73,7 +75,8 @@ reduce(vnode_t *vn)
 }
 
 int
-vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname, int flags)
+vfs_lookup(vnode_t *cwd, vnode_t **out, const char *pathname, int flags,
+    vattr_t *attr)
 {
 	vnode_t *vn, *prevvn = NULL;
 	char	 path[255], *sub, *next;
@@ -132,9 +135,9 @@ loop:
 		// kprintf("lookup %s in %p\n", sub, vn);
 		r = VOP_LOOKUP(vn, &vn, sub);
 	} else if (flags & kLookupMkdir)
-		r = VOP_MKDIR(vn, &vn, sub);
+		r = VOP_MKDIR(vn, &vn, sub, attr);
 	else if (flags & kLookupCreat)
-		r = VOP_CREAT(vn, &vn, sub);
+		r = VOP_CREAT(vn, &vn, sub, attr);
 
 	if (prevvn != vn)
 		// vn_unref(vn); TODO:
@@ -193,7 +196,7 @@ sys_open(struct proc *proc, const char *path, int mode)
 	if (fd == -1)
 		return -ENFILE;
 
-	r = vfs_lookup(root_vnode, &vn, path, 0);
+	r = vfs_lookup(root_vnode, &vn, path, 0, NULL);
 	if (r < 0) {
 #if DEBUG_SYSCALLS == 1
 		kprintf("lookup returned %d\n", r);
@@ -421,7 +424,7 @@ sys_stat(struct proc *proc, int fd, const char *path, int flags,
 #endif
 
 	if (fd == AT_FDCWD) {
-		r = vfs_lookup(root_vnode, &vn, path, 0);
+		r = vfs_lookup(root_vnode, &vn, path, 0, NULL);
 		if (r < 0) {
 			*errp = -r;
 			r = -1;
@@ -433,7 +436,7 @@ sys_stat(struct proc *proc, int fd, const char *path, int flags,
 		assert(fd >= 0 && fd < 64) file = proc->files[fd];
 
 		if (path && strlen(path) != 0) {
-			r = vfs_lookup(file->vn, &vn, path, 0);
+			r = vfs_lookup(file->vn, &vn, path, 0, NULL);
 
 			if (r < 0) {
 				*errp = -r;
@@ -454,6 +457,8 @@ sys_stat(struct proc *proc, int fd, const char *path, int flags,
 	}
 
 	memset(out, 0x0, sizeof *out);
+
+	out->st_mode = vattr.mode;
 
 	switch (vattr.type) {
 	case VREG:

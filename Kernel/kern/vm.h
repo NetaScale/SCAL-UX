@@ -375,6 +375,11 @@ size_t vm_mdl_capacity(vm_mdl_t *mdl);
  */
 void vm_mdl_copy(vm_mdl_t *mdl, void *buf, size_t nBytes, off_t off);
 
+/*!
+ * Zero out an entire MDL.
+ */
+void vm_mdl_zero(vm_mdl_t *mdl);
+
 /** @} */
 
 /**

@@ -52,15 +52,14 @@ posix_syscall(intr_frame_t *frame)
 
 	switch (frame->rax) {
 	case kPXSysDebug: {
-		kprintf("PXSYS_dbg: %s\n", (char *)ARG1);
+		//kprintf("PXSYS_dbg: %s\n", (char *)ARG1);
 		break;
 	}
 
 	case kPXSysExec: {
-		kprintf("PXSYS_exec: %s\n", (char *)ARG1);
 		const char *args[] = { "bash", "-l", NULL };
 		const char *envs[] = {  NULL };
-		assert(sys_exec(proc, "/bash", args, envs, frame) == 0);
+		assert(sys_exec(proc, "/usr/bin/bash", args, envs, frame) == 0);
 		break;
 	}
 

@@ -274,7 +274,7 @@ static void generate_canvas(struct gterm_t *gterm)
 
     /* fill white background */
     for (int i = titlebar_end_y ; i < gterm->framebuffer.height - margin; i++)
-        HLINE(i, titlebar_start_x + 1, titlebar_end_x, 0xffffffff);
+        HLINE(i, titlebar_start_x + 1, titlebar_end_x, 0x00DDDDDD);
 
     for (size_t y = 0; y < gterm->framebuffer.height; y++)
     {

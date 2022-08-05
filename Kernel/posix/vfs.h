@@ -36,7 +36,8 @@ struct vnops {
 	 * @param out [out] resultant vnode (add a ref for caller)
 	 * @param name new file name
 	 */
-	int (*create)(vnode_t *dvn, vnode_t **out, const char *name);
+	int (*create)(vnode_t *dvn, vnode_t **out, const char *name,
+	    vattr_t *attr);
 
 	/**
 	 * Allocate backing store.
@@ -69,7 +70,8 @@ struct vnops {
 	 * @param out [out] resultant vnode (add a ref for caller)
 	 * @param name filename
 	 */
-	int (*mkdir)(vnode_t *dvn, vnode_t **out, const char *name);
+	int (*mkdir)(vnode_t *dvn, vnode_t **out, const char *name,
+	    vattr_t *attr);
 
 	/**
 	 * Create a new directory in the given directory.
@@ -120,6 +122,7 @@ struct vnops {
 
 typedef struct vattr {
 	vtype_t type;
+	mode_t	mode;
 	size_t	size;
 } vattr_t;
 
@@ -177,9 +180,11 @@ void tmpfs_mountroot();
 /**
  * Lookup path \p path relative to @locked \p cwd and store the result in
  * \p out. Refcount of the vnode is incremented.
+ * @param attr for the lookup modes that create, the mode to set.
  * If \p last2 is set, then returns the second-to-last component of the path.
  */
-int vfs_lookup(vnode_t *cwd, vnode_t **out, const char *path, int flags);
+int vfs_lookup(vnode_t *cwd, vnode_t **out, const char *path, int flags,
+    vattr_t *attr);
 
 /**
  * Read from @locked \p vn \p nbyte bytes at offset \p off into buffer \p buf.

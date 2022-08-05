@@ -368,6 +368,13 @@ disable(vaddr_t regs)
 	return queue;
 }
 
+/* for GDB debugging purposes */
+#undef malloc
+void *malloc(size_t size)
+{
+	return kmalloc(size);
+}
+
 - initWithPCIInfo:(dk_device_pci_info_t *)pciInfo
 {
 	struct nvme_cap cap;

@@ -100,7 +100,7 @@ GPTVolumeManager (Private)
 			assert(r >= 0);
 		}
 
-		r = [disk readBytes:blockSize
+		r = [disk readBytes:sizGptEntryArray
 				 at:blockSize * hdrGpt->lbaEntryArrayStart
 			 intoBuffer:mdl
 			 completion:NULL];

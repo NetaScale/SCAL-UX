@@ -86,13 +86,19 @@ tlookup(tmpnode_t *node, const char *filename)
 }
 
 static tmpnode_t *
-tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
+tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
+    vattr_t *attr)
 {
 	tmpnode_t	  *n = kmalloc(sizeof *n);
 	tmpdirent_t *td = kmalloc(sizeof *td);
 
 	td->name = strdup(name);
 	td->node = n;
+
+	if (attr) {
+		n->attr = *attr;
+	}
+
 	n->attr.type = type;
 	n->attr.size = 0;
 	n->vn = NULL;
@@ -123,13 +129,13 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev)
 }
 
 static int
-tmp_create(vnode_t *dvn, vnode_t **out, const char *pathname)
+tmp_create(vnode_t *dvn, vnode_t **out, const char *pathname, vattr_t *attr)
 {
 	tmpnode_t *n;
 
 	assert(dvn->type == VDIR);
 
-	n = tmakenode(VNTOTN(dvn), VREG, pathname, 0);
+	n = tmakenode(VNTOTN(dvn), VREG, pathname, 0, attr);
 	assert(n != NULL);
 
 	return tmpfs_vget(NULL, out, (ino_t)n);
@@ -181,7 +187,7 @@ tmp_getattr(vnode_t *vn, vattr_t *out)
 }
 
 int
-tmp_mkdir(vnode_t *dvn, vnode_t **out, const char *pathname)
+tmp_mkdir(vnode_t *dvn, vnode_t **out, const char *pathname, struct vattr *attr)
 {
 	tmpnode_t *n;
 
@@ -191,7 +197,7 @@ tmp_mkdir(vnode_t *dvn, vnode_t **out, const char *pathname)
 	kprintf("tmp_mkdir vnode %p path %s\n", dvn, pathname);
 #endif
 
-	n = tmakenode(VNTOTN(dvn), VDIR, pathname, 0);
+	n = tmakenode(VNTOTN(dvn), VDIR, pathname, 0, attr);
 	assert(n != NULL);
 
 	return tmpfs_vget(NULL, out, (ino_t)n);
@@ -204,9 +210,7 @@ tmp_mknod(vnode_t *dvn, vnode_t **out, const char *pathname, dev_t dev)
 
 	assert(dvn->type == VDIR);
 
-	kprintf("mknode dev %lx\n", dev);
-
-	n = tmakenode(VNTOTN(dvn), VCHR, pathname, dev);
+	n = tmakenode(VNTOTN(dvn), VCHR, pathname, dev, NULL);
 	assert(n != NULL);
 
 	return tmpfs_vget(NULL, out, (ino_t)n);

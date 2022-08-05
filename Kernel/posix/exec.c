@@ -45,7 +45,7 @@ loadelf(const char *path, vaddr_t base, exec_package_t *pkg)
 	Elf64_Phdr *phdrs;
 	int	    r;
 
-	r = vfs_lookup(root_vnode, &vn, path, 0);
+	r = vfs_lookup(root_vnode, &vn, path, 0, NULL);
 	if (r < 0) {
 		kprintf("exec: failed to lookup %s (errno %d)\n", path, -r);
 		return r;

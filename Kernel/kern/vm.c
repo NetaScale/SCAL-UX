@@ -668,7 +668,7 @@ vm_mdl_expand(vm_mdl_t **mdl, size_t bytes)
 		newmdl->pages[i] = (*mdl)->pages[i];
 
 	for (int i = (*mdl)->nPages; i < nPages; i++) {
-		newmdl->pages[i] = vm_pagealloc(1);
+		newmdl->pages[i] = vm_pagealloc_zero(1);
 		assert(newmdl->pages[i]);
 	}
 
@@ -731,6 +731,14 @@ vm_mdl_copy(vm_mdl_t *mdl, void *buf, size_t nBytes, off_t off)
 
 		nBytes -= tocopy;
 		pageoff = 0;
+	}
+}
+
+void
+vm_mdl_zero(vm_mdl_t *mdl)
+{
+	for (int i = 0; i < mdl->nBytes; i += PGSIZE) {
+		memset(P2V(mdl->pages[i / PGSIZE]->paddr), 0x0, PGSIZE);
 	}
 }
 
