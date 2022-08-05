@@ -134,7 +134,13 @@ vm_map_t kmap;
 vmstat_t vmstat;
 bool	 vm_debug_anon = false;
 
+/*!
+ * Hard-copy an anon, creating a new anon.
+ */
 vm_anon_t *anon_copy(vm_anon_t *anon);
+/*!
+ * Release a reference to an anon; must be called with lock held; releases lock.
+ */
 void	   anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock);
 
 /*
@@ -164,16 +170,20 @@ amap_copy(vm_amap_t *amap)
 
 		newamap->chunks[i] = kcalloc(1, sizeof **newamap->chunks);
 		for (int i2 = 0; i2 < ELEMENTSOF(amap->chunks[i]->anon); i2++) {
-			newamap->chunks[i]->anon[i2] =
-			    amap->chunks[i]->anon[i2];
+			vm_anon_t *oldanon = amap->chunks[i]->anon[i2];
+			newamap->chunks[i]->anon[i2] = oldanon;
 
-			if (amap->chunks[i]->anon[i2] == NULL)
+			if (oldanon== NULL)
 				continue;
 
 			/* TODO: copy-on-write */
-			// amap->chunks[i]->anon[i2]->refcnt++;
+#if 1
+			oldanon->refcnt++;
+			pmap_reenter_all_readonly(oldanon->physpage);
+#else
 			newamap->chunks[i]->anon[i2] = anon_copy(
 			    newamap->chunks[i]->anon[i2]);
+#endif
 			unlock(&newamap->chunks[i]->anon[i2]->lock);
 		}
 	}
@@ -548,7 +558,9 @@ vm_map_fork(vm_map_t *map)
 		if (ent->obj->type != kVMObjAnon)
 			fatal("vm_map_fork: only handles anon objects\n");
 
+		lock(&ent->obj->lock);
 		newobj = vm_object_copy(ent->obj);
+		unlock(&ent->obj->lock);
 		assert(newobj != NULL);
 
 		r = vm_map_object(newmap, newobj, &start, ent->end - ent->start,
@@ -593,7 +605,6 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	if (r < 0)
 		return r;
 
-//kprintf("vm_map_object %p offset %lx\n", obj, offset);
 	entry = kmalloc(sizeof *entry);
 	entry->start = (vaddr_t)addr;
 	entry->end = (vaddr_t)addr + size;

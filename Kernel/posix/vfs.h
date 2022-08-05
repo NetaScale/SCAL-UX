@@ -162,11 +162,15 @@ typedef struct fileops {
  * Kernel file descriptor, called on Linux a 'file description'.
  */
 typedef struct file {
+	void *magic;
 	size_t	   refcnt;
 	fileops_t *fops;
 	vnode_t	*vn;
 	size_t	   pos;
 } file_t;
+
+#define FILEMAGIC 0x112EF11E
+#define FILEGONEMAGIC 0xDEADF11E
 
 enum lookup_flags {
 	kLookupCreat = 1,

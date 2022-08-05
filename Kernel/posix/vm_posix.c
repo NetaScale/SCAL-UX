@@ -24,7 +24,7 @@ vm_mmap(proc_t *proc, void **addr, size_t len, int prot, int flags, int fd,
 	else if (PGROUNDDOWN(offset) != offset)
 		return -EINVAL;
 
-#if DEBUG_SYSCALLS == 0
+#if DEBUG_SYSCALLS == 1
 	kprintf("VM_POSIX: mmap addr %p, len %lu, prot %d, flags %d, fd %d, "
 		"offs %ld\n",
 	    *addr, len, prot, flags, fd, offset);

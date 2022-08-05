@@ -103,6 +103,8 @@ sys_fork(proc_t *proc, uintptr_t *errp)
 	newproc->task = newtask;
 	for (int i = 0; i < ELEMENTSOF(newproc->files); i++) {
 		newproc->files[i] = proc->files[i];
+		if (proc->files[i])
+			proc->files[i]->refcnt++;
 	}
 
 	newtask->pxproc = newproc;

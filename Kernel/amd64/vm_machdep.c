@@ -390,10 +390,25 @@ pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 	pti_virt = P2V(&pte[pti]);
 
 	if (pte_get_addr(*pti_virt) != NULL) {
-		fatal("pmap_enter_kern: address already has a mapping\n");
+		//fatal("pmap_enter_kern: address already has a mapping\n");
+		/* TODO(med): do we care about this case? */
 	}
 
 	pte_set(pti_virt, phys, vm_prot_to_i386(prot));
+}
+
+void
+pmap_reenter_all_readonly(vm_page_t *page)
+{
+	pv_entry_t *pv, *tmp;
+
+	lock(&page->lock);
+	LIST_FOREACH_SAFE(pv, &page->pv_table, pv_entries, tmp) {
+		//lock(pv->map->lock);
+		pmap_reenter(pv->map, page, pv->vaddr, kVMRead | kVMExecute);
+		global_invlpg(pv->vaddr);
+	}
+	unlock(&page->lock);
 }
 
 void

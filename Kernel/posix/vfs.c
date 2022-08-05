@@ -64,6 +64,7 @@ file_unref(file_t *file)
 {
 	if (--file->refcnt == 0) {
 		// vn_unref(file->vn);
+		file->magic = 0xDEADF11E;
 		kfree(file);
 	}
 }
@@ -172,6 +173,7 @@ vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 int
 vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
+	assert(vn && vn->ops && vn->ops->write);
 	return VOP_WRITE(vn, buf, nbyte, off);
 }
 
@@ -218,6 +220,7 @@ sys_open(struct proc *proc, const char *path, int mode)
 	assert(proc->files[fd] != NULL);
 	proc->files[fd]->vn = vn;
 	proc->files[fd]->refcnt = 1;
+	proc->files[fd]->magic = 0x112EF11E;
 	proc->files[fd]->fops = NULL;
 	proc->files[fd]->pos = 0;
 
@@ -371,6 +374,10 @@ sys_isatty(struct proc *proc, int fd, uintptr_t *errp)
 	if (file == NULL) {
 		*errp = EBADF;
 		return -1;
+	}
+
+	if (file->magic != FILEMAGIC) {
+		fatal("unexpected file magic\n");
 	}
 
 	if (file->vn->type != VCHR ||

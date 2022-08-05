@@ -261,6 +261,11 @@ pmap_t *pmap_new();
 void pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot);
 
 /**
+ * Reenter all mappings of a page read-only. Carries out TLB shootdowns.
+ */
+void pmap_reenter_all_readonly(vm_page_t *page);
+
+/**
  * Unmap a single page of a pageable mapping. CPU local TLB invalidated; not
  * others. TLB shootdown may therefore be required afterwards. Page's pv_table
  * updated accordingly.
