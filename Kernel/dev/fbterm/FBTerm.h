@@ -26,6 +26,8 @@
 - (void)putc:(int)c;
 /* accept a character */
 - (void)input:(int)c;
+/* accept multiple characters up till NULL byte */
+- (void)inputChars:(const char *)cs;
 
 @end
 #endif

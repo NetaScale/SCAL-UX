@@ -121,18 +121,23 @@ sys_waitpid(proc_t *proc, pid_t pid, int *status, int flags, uintptr_t *errp)
 {
 	proc_t *subproc;
 
+	assert((flags & WNOHANG) == 0);
 	if (pid != 0 && pid != -1) {
-		fatal("sys_waitpid: unsupported pid %d\n", pid);
+		// fatal("sys_waitpid: unsupported pid %d\n", pid);
 	}
 
-	LIST_FOREACH (subproc, &proc->subs, subentry) {
-		if (subproc->status == kProcCompleted) {
-			*status = subproc->wstat;
-			return subproc->task->pid;
+	for (;;) {
+		LIST_FOREACH (subproc, &proc->subs, subentry) {
+			asm("cli");
+			if (subproc->status == kProcCompleted) {
+				*status = subproc->wstat;
+				return subproc->task->pid;
+			}
+			asm("sti");
 		}
-	}
 
-	*errp = ENOSYS;
+		*errp = EINTR;
+	}
 
 	return -1;
 }

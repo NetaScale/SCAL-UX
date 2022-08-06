@@ -176,6 +176,8 @@ amap_copy(vm_amap_t *amap)
 			if (oldanon== NULL)
 				continue;
 
+			lock(&oldanon->lock);
+
 			/* TODO: copy-on-write */
 #if 1
 			oldanon->refcnt++;
@@ -183,8 +185,9 @@ amap_copy(vm_amap_t *amap)
 #else
 			newamap->chunks[i]->anon[i2] = anon_copy(
 			    newamap->chunks[i]->anon[i2]);
-#endif
 			unlock(&newamap->chunks[i]->anon[i2]->lock);
+#endif
+			unlock(&oldanon->lock);
 		}
 	}
 
@@ -360,6 +363,8 @@ anon_copy(vm_anon_t *anon)
 void
 anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock)
 {
+	spl_t spl;
+
 	if (--anon->refcnt > 0) {
 		unlock(&anon->lock);
 		return;
@@ -370,11 +375,16 @@ anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock)
 
 	assert(anon->physpage);
 
+	spl = splvm();
 	VM_PAGE_QUEUES_LOCK();
-	TAILQ_REMOVE(&pg_wireq, anon->physpage, queue);
+	if (anon->physpage->wirecnt)
+		TAILQ_REMOVE(&pg_wireq, anon->physpage, queue);
+	else
+		TAILQ_REMOVE(&pg_activeq, anon->physpage, queue);
 	vm_pagefree(anon->physpage);
 	VM_PAGE_QUEUES_UNLOCK();
 	kfree(anon);
+	splx(spl);
 }
 
 static vm_anon_t **
@@ -440,6 +450,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 
 				unlock(&anon->lock);
 				anon = *pAnon;
+				assert(!anon->physpage->free);
 				vm_page_unwire(anon->physpage);
 				pmap_enter(map, anon->physpage, vaddr, kVMAll);
 			} else {
@@ -597,13 +608,19 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 
 	assert(map);
 
-	if (copy)
-		obj = vm_object_copy(obj);
+	// lock(&obj->lock);
+
+	if (copy) {
+		vm_object_t *newobj = vm_object_copy(obj);
+		// unlock(&obj->lock);
+		obj = newobj;
+	}
 
 	r = vmem_xalloc(&map->vmem, size, 0, 0, 0, exact ? addr : 0, 0,
 	    exact ? kVMemExact : 0, &addr);
-	if (r < 0)
-		return r;
+	if (r < 0) {
+		goto finish;
+	}
 
 	entry = kmalloc(sizeof *entry);
 	entry->start = (vaddr_t)addr;
@@ -616,7 +633,9 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 
 	*vaddrp = (vaddr_t)addr;
 
-	return 0;
+finish:
+	unlock(&obj->lock);
+	return r;
 }
 
 vm_object_t *
@@ -761,6 +780,7 @@ void
 vm_page_unwire(vm_page_t *page)
 {
 	spl_t spl = splvm();
+	VM_PAGE_QUEUES_LOCK();
 	assert(page->wirecnt > 0);
 	if (--page->wirecnt == 0) {
 		TAILQ_REMOVE(&pg_wireq, page, queue);
@@ -768,5 +788,6 @@ vm_page_unwire(vm_page_t *page)
 		vmstat.pgs_wired--;
 		vmstat.pgs_active++;
 	}
+	VM_PAGE_QUEUES_UNLOCK();
 	splx(spl);
 }

@@ -4,7 +4,12 @@
 #include "devicekit/DKDevice.h"
 #include "lai/core.h"
 
-@interface PS2Keyboard : DKDevice
+@interface PS2Keyboard : DKDevice {
+        bool isShifted;
+        bool isCapsLocked;
+        bool isCtrl;
+        bool isExtended;
+}
 
 + (BOOL)probeWithAcpiNode:(lai_nsnode_t *)node;
 

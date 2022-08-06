@@ -38,15 +38,18 @@ unlock(spinlock_t *lock)
 
 /**
  * Try to lock a spinlock. If \p spin is true, then spin until it can be
- * locked. Returns 1 if locked, 0 if not.
+ * locked. Returns 1 if lock acquired, 0 if not.
  */
 static inline int
 spinlock_trylock(spinlock_t *lock, bool spin)
 {
 	if (atomic_flag_test_and_set(lock) == 0)
 		return 1;
-	while (atomic_flag_test_and_set(lock)) {
-		__asm__("pause");
+	if (spin) {
+		while (atomic_flag_test_and_set(lock)) {
+			__asm__("pause");
+		}
+		return 1;
 	}
 	return 0;
 }

@@ -101,6 +101,12 @@ static int fbtputch(void *data, int ch);
 	tty_input(&tty, c);
 }
 
+- (void)inputChars:(const char *)cs
+{
+	while (*cs != '\0')
+		tty_input(&tty, *cs++);
+}
+
 - (void)write:(void *)buf len:(size_t)len
 {
 	term_write(&term, (uint64_t)buf, len);

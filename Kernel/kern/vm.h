@@ -71,6 +71,8 @@ typedef struct vmstat {
  * \ingroup VMM
  */
 typedef struct vm_page {
+	void *magic;
+
 	/** Links to freelist, wired, inactive, or active queue. */
 	TAILQ_ENTRY(vm_page) queue;
 
@@ -403,7 +405,7 @@ vm_page_t *vm_pagealloc_zero(bool sleep);
 
 /**
  * Free a page. Page must have already been removed from its queue (for now.)
- * Obviously call at SPL VM.
+ * Obviously call at SPL VM. Needs VM_PAGE_QUEUES_LOCK()'d.
  */
 void vm_pagefree(vm_page_t *page);
 
@@ -467,9 +469,9 @@ void vm_kfree(vaddr_t addr, size_t pages);
 /** @} */
 
 /** lock the page queues; must be acquired at SPL VM */
-#define VM_PAGE_QUEUES_LOCK() lock(&vm_page_queues_lock)
+#define VM_PAGE_QUEUES_LOCK() ({  lock(&vm_page_queues_lock);})
 /** unlock the page queues */
-#define VM_PAGE_QUEUES_UNLOCK() unlock(&vm_page_queues_lock)
+#define VM_PAGE_QUEUES_UNLOCK() ({  unlock(&vm_page_queues_lock);})
 
 extern struct vm_page_queue    pg_freeq, pg_activeq, pg_inactiveq, pg_wireq;
 extern struct vm_pregion_queue vm_pregion_queue;

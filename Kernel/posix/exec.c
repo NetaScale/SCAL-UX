@@ -255,5 +255,6 @@ succ:
 	kfree(path);
 	strv_free(argp);
 	strv_free(envp);
+
 	return r;
 }

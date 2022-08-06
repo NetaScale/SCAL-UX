@@ -58,10 +58,11 @@ vm_pagealloc(bool sleep)
 	assert(page->free);
 	TAILQ_REMOVE(&pg_freeq, page, queue);
 	TAILQ_INSERT_TAIL(&pg_wireq, page, queue);
+	page->magic = 0x112E9A6E;
 	vmstat.pgs_free--;
 	vmstat.pgs_wired++;
 	page->wirecnt = 1;
-	page->free = 0;
+	page->free = false;
 
 	VM_PAGE_QUEUES_UNLOCK();
 	splx(spl);
@@ -72,9 +73,11 @@ vm_pagealloc(bool sleep)
 void
 vm_pagefree(vm_page_t *page)
 {
+	/*! page queues lock already held */
 	assert(!page->free);
+	page->magic = 0xDEAD9A6E;
 	page->anon = NULL;
-	page->free = 1;
+	page->free = true;
 	TAILQ_INSERT_HEAD(&pg_freeq, page, queue);
 }
 
@@ -132,6 +135,7 @@ void
 pmap_free_sub(uint64_t *table, int level)
 {
 	vm_page_t *page;
+	spl_t	   spl;
 
 	if (table == NULL)
 		return;
@@ -149,11 +153,17 @@ pmap_free_sub(uint64_t *table, int level)
 			pmap_free_sub(pte_get_addr(*entry), level - 1);
 		}
 
+	spl = splhigh();
+	VM_PAGE_QUEUES_LOCK();
 	page = vm_page_from_paddr(V2P(table));
 	vmstat.pgs_pgtbl--;
 	/* all pages go onto the wired queue by default right now, so remove */
 	TAILQ_REMOVE(&pg_wireq, page, queue);
+	/* sanity check: a pagetable page should never have an anon! */
+	assert(page->anon == NULL);
 	vm_pagefree(page);
+	VM_PAGE_QUEUES_UNLOCK();
+	splx(spl);
 }
 
 void
@@ -189,11 +199,24 @@ void	     arch_ipi_invlpg(cpu_t *cpu);
 vaddr_t	     invlpg_addr;
 volatile int invlpg_done_cnt;
 
+#pragma GCC push_options
+#pragma GCC optimize("O0")
 void
 global_invlpg(vaddr_t vaddr)
 {
 	spl_t spl = splhigh();
+#if 0
+	for (;;) {
+		asm("sti");
+		spl0();
+		splhigh();
+		asm("cli");
+		if (spinlock_trylock(&invlpg_global_lock, false) == 1)
+			break;
+	}
+#else
 	lock(&invlpg_global_lock);
+#endif
 	invlpg_addr = vaddr;
 	invlpg_done_cnt = 1;
 	for (int i = 0; i < ncpus; i++) {
@@ -208,6 +231,7 @@ global_invlpg(vaddr_t vaddr)
 	unlock(&invlpg_global_lock);
 	splx(spl);
 }
+#pragma GCC pop_options
 
 /* get the flags of a pte */
 uint64_t *
@@ -401,14 +425,29 @@ void
 pmap_reenter_all_readonly(vm_page_t *page)
 {
 	pv_entry_t *pv, *tmp;
+	spl_t	    spl = splhigh();
 
+#if 1
 	lock(&page->lock);
+#else
+	for (;;) {
+		asm("sti");
+		spl0();
+		splhigh();
+		asm("cli");
+		if (spinlock_trylock(&page->lock, false) == 1)
+			break;
+	}
+#endif
+
 	LIST_FOREACH_SAFE(pv, &page->pv_table, pv_entries, tmp) {
 		//lock(pv->map->lock);
 		pmap_reenter(pv->map, page, pv->vaddr, kVMRead | kVMExecute);
 		global_invlpg(pv->vaddr);
 	}
 	unlock(&page->lock);
+
+	splx(spl);
 }
 
 void

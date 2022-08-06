@@ -155,8 +155,14 @@ posix_syscall(intr_frame_t *frame)
 	}
 
 	case kPXSysExecVE: {
-		assert(sys_exec(proc, (char *)ARG1, (const char **)ARG2,
-			   (const char **)ARG3, frame) == 0);
+		int r = sys_exec(proc, (char *)ARG1, (const char **)ARG2,
+		    (const char **)ARG3, frame);
+
+		if (r < 0) {
+			RET = -1;
+			err = -r;
+		}
+
 		break;
 	}
 

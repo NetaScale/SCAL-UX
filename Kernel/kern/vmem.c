@@ -423,6 +423,8 @@ vmem_xalloc(vmem_t *vmem, vmem_size_t size, vmem_size_t align,
 	if (!(flags & kVMemBootstrap))
 		seg_refill(flags);
 
+	assert(size != 0);
+
 	/* preallocate new segments, they will be freed if necessary */
 	newlseg = seg_alloc(vmem, flags);
 	newrseg = seg_alloc(vmem, flags);
@@ -501,10 +503,12 @@ vmem_xfree(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 	return -ENOENT;
 
 free:
+#if 0
 	if (size != 0 && seg->size != size)
 		fatal(
 		    "vmem_xfree: mismatched size (given 0x%lx, actual 0x%lx)\n",
 		    size, seg->size);
+#endif
 
 	size = seg->size;
 

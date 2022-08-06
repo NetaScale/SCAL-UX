@@ -50,6 +50,8 @@ typedef struct ustar_hdr {
 
 enum {
 	kUStarNormal = '0',
+	kUStarHardLink = '1',
+	kUStarSymLink = '2',
 	kUStarDirectory = '5',
 };
 

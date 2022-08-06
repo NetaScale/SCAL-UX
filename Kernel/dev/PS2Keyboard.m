@@ -17,6 +17,12 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 	'k', 'l', ';', '\'', '`', '\0', '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm',
 	',', '.', '/', '\0', '\0', '\0', ' ', '\0' };
 
+static const char codes_shifted[] = { '\0', '\e', '!', '@', '#', '$', '%', '^',
+	'&', '*', '(', ')', '_', '+', '\b', '\t', 'Q', 'W', 'E', 'R', 'T', 'Y',
+	'U', 'I', 'O', 'P', '{', '}', '\n', '\0', 'A', 'S', 'D', 'F', 'G', 'H',
+	'J', 'K', 'L', ':', '"', '~', '\0', '|', 'Z', 'X', 'C', 'V', 'B', 'N',
+	'M', '<', '>', '?', '\0', '\0', '\0', ' ' };
+
 @implementation PS2Keyboard
 
 + (BOOL)probeWithAcpiNode:(lai_nsnode_t *)node
@@ -84,11 +90,51 @@ static const char codes[128] = { '\0', '\e', '1', '2', '3', '4', '5', '6', '7',
 
 - (void)handleCode:(uint8_t)code
 {
-	// kprintf("got code %d\n", code);
+	extern FBTerm *syscon;
+
+	switch (code) {
+	case 0x2a:
+	case 0x36:
+	case 0xaa:
+	case 0xb6:
+		isShifted = code & 0x80 ? false : true;
+		return;
+
+#if 0
+		/*
+		 * unreliable until scheduler made sane, we musn't switch till
+		 * intr done as we are interrupting ourselves? FIXME(high):
+		 * investigate this alternatively turn this into a threaded
+		 * interrupt
+		 */
+	case 0x4b: /* left */
+		return [syscon inputChars:"\e[D"];
+
+	case 0x4d: /* right */
+		return [syscon inputChars:"\e[C"];
+
+	case 0x48: /* up */
+		return [syscon inputChars:"\e[A"];
+
+	case 0x50: /* down */
+		return [syscon inputChars:"\e[B"];
+#endif
+
+	default:
+	    /* epsilon */
+	    ;
+	}
+
 	if (code & 0x80) {
 	} else {
-		extern FBTerm *syscon;
-		[syscon input:codes[code]];
+		int ch;
+
+		if (isShifted)
+			ch = codes_shifted[code];
+		else
+			ch = codes[code];
+
+		[syscon input:ch];
 	}
 }
 

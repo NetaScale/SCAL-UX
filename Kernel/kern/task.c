@@ -383,13 +383,14 @@ waitq_wake_one(waitq_t *wq, waitq_event_t ev)
 
 	lock(&wq->lock);
 	thrd = TAILQ_FIRST(&wq->waiters);
-	TAILQ_REMOVE(&wq->waiters, thrd, waitqueue);
+	if (thrd)
+		TAILQ_REMOVE(&wq->waiters, thrd, waitqueue);
 	unlock(&wq->lock);
 	splx(spl);
 
 	if (!thrd) {
-		kprintf("warning: waitq %p sent event %lu with no waiters\n",
-		    wq, ev);
+		//kprintf("warning: waitq %p sent event %lu with no waiters\n",
+		//    wq, ev);
 		return;
 	}
 

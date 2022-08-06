@@ -184,10 +184,6 @@ sys_open(struct proc *proc, const char *path, int mode)
 	int	 r;
 	int	 fd = -1;
 
-#if DEBUG_SYSCALLS == 1
-	kprintf("sys_open(%s,%d)\n", path, mode);
-#endif
-
 	for (int i = 0; i < countof(proc->files); i++) {
 		if (proc->files[i] == NULL) {
 			fd = i;
@@ -195,10 +191,18 @@ sys_open(struct proc *proc, const char *path, int mode)
 		}
 	}
 
+#if DEBUG_SYSCALLS == 1
+	kprintf("PID %d sys_open(%s,%d) to FD %d\n", proc->task->pid, path,
+	    mode, fd);
+#endif
+
 	if (fd == -1)
 		return -ENFILE;
 
 	r = vfs_lookup(root_vnode, &vn, path, 0, NULL);
+	if (r < 0 && mode & kLookupCreat)
+		r = vfs_lookup(root_vnode, &vn, path, kLookupCreat, NULL);
+
 	if (r < 0) {
 #if DEBUG_SYSCALLS == 1
 		kprintf("lookup returned %d\n", r);
@@ -279,7 +283,8 @@ sys_write(struct proc *proc, int fd, void *buf, size_t nbyte)
 	int	r;
 
 #if DEBUG_SYSCALLS == 1
-	kprintf("SYS_WRITE(%d, nbytes: %lu off: %lu)\n", fd, nbyte, file->pos);
+	kprintf("PID %d SYS_WRITE(%d, nbytes: %lu off: %lu)\n", proc->task->pid,
+	    fd, nbyte, file->pos);
 #endif
 
 	if (file == NULL)
@@ -366,7 +371,7 @@ sys_isatty(struct proc *proc, int fd, uintptr_t *errp)
 
 	file = proc->files[fd];
 
-#if DEBUG_SYSCALLS == 1
+#if 0 // DEBUG_SYSCALLS == 1
 	kprintf("SYS_ISATTY(%d/type %d/cdevsw %d)\n", fd, file->vn->type,
 	    cdevsw[major(file->vn->specdev->dev)].is_tty);
 #endif

@@ -97,6 +97,8 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
 
 	if (attr) {
 		n->attr = *attr;
+	} else {
+		memset(&n->attr, 0x0, sizeof(n->attr));
 	}
 
 	n->attr.type = type;
@@ -165,6 +167,9 @@ tmp_lookup(vnode_t *vn, vnode_t **out, const char *pathname)
 	assert(node->attr.type == VDIR);
 
 	if (strcmp(pathname, "..") == 0) {
+		if (!node->dir.parent)
+			*out = vn;
+			else
 		*out = node->dir.parent->vn;
 		return 0;
 	}
@@ -275,6 +280,9 @@ tmp_write(vnode_t *vn, void *buf, size_t nbyte, off_t off)
 {
 	vaddr_t vaddr = VADDR_MAX;
 	tmpnode_t *tn = VNTOTN(vn);
+
+	if (nbyte == 0)
+		return 0;
 
 	if (off + nbyte > tn->attr.size)
 		tn->attr.size = off + nbyte;
