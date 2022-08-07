@@ -597,7 +597,8 @@ void *PREFIX(malloc)(size_t req_size)
 
 
 
-
+#pragma GCC push_options
+#pragma GCC optimize("O0")
 void PREFIX(free)(void *ptr)
 {
 	struct liballoc_minor *min;
@@ -707,6 +708,7 @@ void PREFIX(free)(void *ptr)
 		if ( l_bestBet != NULL )
 		{
 			int bestSize = l_bestBet->size  - l_bestBet->usage;
+			assert(maj != NULL);
 			int majSize = maj->size - maj->usage;
 
 			if ( majSize > bestSize ) l_bestBet = maj;
@@ -722,7 +724,7 @@ void PREFIX(free)(void *ptr)
 	
 	liballoc_unlock();		// release the lock
 }
-
+#pragma GCC pop_options
 
 
 

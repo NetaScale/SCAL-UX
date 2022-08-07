@@ -352,14 +352,14 @@ task_complete(task_t *task)
 	task->pxproc->status = kProcCompleted;
 	vm_map_release(task->map);
 	task->map = NULL;
-#if 0
-	task_t *parent =  task->parent;
+#if 1
+	proc_t *parent =  task->pxproc->super;
 	
 	task->pxproc->status = kProcCompleted;
 
-	lock(&parent->lock);
-	waitq_wake_one(&parent->pxproc->waitwq, 0);
-	unlock(&parent->lock);
+	//lock(&parent->lock);
+	waitq_wake_one(&parent->waitwq, 0);
+	//unlock(&parent->lock);
 #endif
 }
 

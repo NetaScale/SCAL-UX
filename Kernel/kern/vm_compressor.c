@@ -30,10 +30,12 @@ page_lock_owner(vm_page_t *page, bool spin)
 {
 	assert(page->anon || page->obj);
 
+#if 0
 	if (page->anon)
 		return spinlock_trylock(&page->anon->lock, spin);
 	else
 		return spinlock_trylock(&page->obj->lock, spin);
+#endif
 }
 
 static void
@@ -41,10 +43,12 @@ page_unlock_owner(vm_page_t *page)
 {
 	assert(page->anon || page->obj);
 
+#if 0
 	if (page->anon)
 		unlock(&page->anon->lock);
 	else
 		unlock(&page->obj->lock);
+#endif
 }
 
 drumslot_t
@@ -202,7 +206,9 @@ loop:
 		unlock(&page->lock);
 
 	next:
+#if 0
 		unlock(&owner.anon->lock); /* FIXME */
+#endif
 	}
 
 	TAILQ_FOREACH_SAFE (page, &pg_activeq, queue, _next) {

@@ -4,7 +4,7 @@ kern_srcs = files(
 
     'kern/kmem.c', 'kern/ksrv.c', 'kern/liballoc_sysdep.c', 'kern/liballoc.c',
     'kern/task.c', 'kern/vm_compressor.c', 'kern/vm_kernel.c', 'kern/vm.c',
-    'kern/vmem.c',
+    'kern/vmem.c', 'kern/lock.c',
 
     'libkern/klib.c', 'libkern/lz4.c', 'libkern/uuid.c',
 

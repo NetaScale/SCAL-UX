@@ -141,7 +141,7 @@ vm_anon_t *anon_copy(vm_anon_t *anon);
 /*!
  * Release a reference to an anon; must be called with lock held; releases lock.
  */
-void	   anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock);
+void	   anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->mtx);
 
 /*
  * we use obj->anon.parent IFF there is no vm_amap_entry for an offset within
@@ -176,7 +176,7 @@ amap_copy(vm_amap_t *amap)
 			if (oldanon== NULL)
 				continue;
 
-			lock(&oldanon->lock);
+			vm_anon_lock(oldanon);
 
 			/* TODO: copy-on-write */
 #if 1
@@ -187,7 +187,7 @@ amap_copy(vm_amap_t *amap)
 			    newamap->chunks[i]->anon[i2]);
 			unlock(&newamap->chunks[i]->anon[i2]->lock);
 #endif
-			unlock(&oldanon->lock);
+			vm_anon_unlock(oldanon);
 		}
 	}
 
@@ -205,8 +205,19 @@ amap_release(vm_amap_t *amap)
 
 			if (anon == NULL)
 				continue;
+#if 1
+			vm_anon_lock(anon);
+#else
+			for (;;) {
+				asm("sti");
+				splx(kSPLSoft);
+				splhigh();
+				asm("cli");
+				if (spinlock_trylock(&anon->lock, false) == 1)
+					break;
+			}
+#endif
 
-			lock(&anon->lock);
 			anon_release(anon);
 		}
 		kfree(amap->chunks[i]);
@@ -338,8 +349,10 @@ anon_new(size_t offs)
 {
 	vm_anon_t *newanon = kmalloc(sizeof *newanon);
 	newanon->refcnt = 1;
-	spinlock_init(&newanon->lock);
-	lock(&newanon->lock);
+	//spinlock_init(&newanon->lock);
+	//lock(&newanon->lock);
+	mutex_init(&newanon->mtx);
+	vm_anon_lock(newanon);
 	newanon->resident = true;
 	newanon->offs = offs;
 	newanon->physpage = vm_pagealloc_zero(1);
@@ -361,12 +374,12 @@ anon_copy(vm_anon_t *anon)
 }
 
 void
-anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->lock)
+anon_release(vm_anon_t *anon) LOCK_RELEASE(anon->mtx)
 {
 	spl_t spl;
 
 	if (--anon->refcnt > 0) {
-		unlock(&anon->lock);
+		vm_anon_unlock(anon);
 		return;
 	}
 
@@ -422,13 +435,13 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 
 	if (*pAnon != NULL) {
 		anon = *pAnon;
-		lock(&anon->lock);
+		vm_anon_lock(anon);
 
 		if (!anon->resident) {
 			kprintf("vm_fault: paging in not yet supported\n");
 			/* paging in will set the page wired */
 			assert(!(flags & kVMFaultPresent));
-			unlock(&anon->lock);
+			vm_anon_unlock(anon);
 			return -1;
 		}
 
@@ -448,7 +461,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 					    NULL);
 				}
 
-				unlock(&anon->lock);
+				vm_anon_unlock(anon);
 				anon = *pAnon;
 				assert(!anon->physpage->free);
 				vm_page_unwire(anon->physpage);
@@ -480,7 +493,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 			}
 		}
 
-		unlock(&anon->lock);
+		vm_anon_unlock(anon);
 		return 0;
 	} else if (aobj->anon.parent) {
 		kprintf("vm_fault: fetch from parent is not yet supported\n");
@@ -503,7 +516,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 	/* now let it be subject to paging */
 	vm_page_unwire(anon->physpage);
 #endif
-	unlock(&anon->lock);
+	vm_anon_unlock(anon);
 
 	return 0;
 }
@@ -669,6 +682,7 @@ vm_object_release(vm_object_t *obj) LOCK_RELEASE(obj->lock)
 	}
 
 	if (obj->type == kVMObjAnon) {
+		kprintf("obj %p releasing anmap %p\n", obj, obj->anon.amap);
 		amap_release(obj->anon.amap);
 	} else
 		fatal("vm_object_release: only implemented for anons\n");
