@@ -2,7 +2,7 @@ project('SCAL/UX', ['c', 'cpp', 'objc'], default_options: [ 'cpp_std=c++20' ])
 
 arch = get_option('arch')
 
-executable('limine-deploy', 'Limine/limine-deploy.c', native: true)
+executable('limine-deploy', 'limine/limine-deploy.c', native: true)
 
 kernel_c_args = [ '-D_KERNEL' ]
 
@@ -17,7 +17,7 @@ endif
 
 kernel_objc_args = kernel_c_args
 #kernel_objc_args += [ '-mllvm', '-asan-globals=false']
-kernel_includes = [ include_directories('Kernel/' + arch, 'Limine', 'Kernel') ]
+kernel_includes = [ include_directories('kernel/' + arch, 'limine', 'kernel') ]
 
 kernel_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
   '-fsanitize=kernel-address'  ]
@@ -29,6 +29,6 @@ else
     libc_includes = [ '' ]
 endif
 
-subdir('Tools')
-subdir('ObjFW/src')
-subdir('Kernel')
+subdir('tools')
+subdir('Libobjfw/src')
+subdir('kernel')

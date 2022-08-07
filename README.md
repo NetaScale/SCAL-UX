@@ -102,16 +102,16 @@ Several third-party components are used. These are some of them:
 - nanoprintf: used for `kprintf`.
 - NetBSD: (`kernel/sys/queue.h`): NetBSD's `sys/queue.h`.
   - (`kernel/dev/fbterm/nbsdbold.psfu`): Bold8x16 font used for FBTerm.
-  - (`Kernel/dev/nvmereg.h`): NVMe register definitions.
+  - (`kernel/dev/nvmereg.h`): NVMe register definitions.
 - Solaris (`kernel/dev/fbterm/sun12x22.psfu`): Sun Demi Gallant font available
   for FBTerm
 - ObjFW: provides an Objective-C runtime.
-- Limine/`limine-terminal-port` (some files in`kernel/dev/fbterm/`): used by
+- limine/`limine-terminal-port` (some files in`kernel/dev/fbterm/`): used by
   FBTerm to provide a terminal.
 - Managarm LAI (`kernel/dev/acpi/lai`): Lightweight ACPI Implementation used by
   Acpi* drivers.
-- LZ4 (`Kernel/libkern/lz4.{c,h}`): Used by VM Compressor to compress pages.
-- libuuid (`Kernel/libkern/uuid*`)
+- LZ4 (`kernel/libkern/lz4.{c,h}`): Used by VM Compressor to compress pages.
+- libuuid (`kernel/libkern/uuid*`)
 
 Licence
 -------

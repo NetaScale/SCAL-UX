@@ -110,7 +110,8 @@ typedef struct vm_anon {
 	TAILQ_HEAD(, vm_map_entry) entries;
 #endif
 
-	spinlock_t lock;
+	mutex_t mtx;
+	//spinlock_t lock;
 	int refcnt : 24, /** number of amaps referencing it; if >1, must COW. */
 	    resident : 1; /** whether currently resident in memory */
 
@@ -120,6 +121,9 @@ typedef struct vm_anon {
 		drumslot_t drumslot;
 	};
 } vm_anon_t;
+
+#define vm_anon_lock(ANON) mutex_lock(&ANON->mtx)
+#define vm_anon_unlock(ANON) mutex_unlock(&ANON->mtx)
 
 #define kAMapChunkNPages 32
 

@@ -73,12 +73,15 @@ vm_pagealloc(bool sleep)
 void
 vm_pagefree(vm_page_t *page)
 {
+	spl_t spl = splhigh();
 	/*! page queues lock already held */
+	assert (page != NULL);
 	assert(!page->free);
 	page->magic = 0xDEAD9A6E;
 	page->anon = NULL;
 	page->free = true;
 	TAILQ_INSERT_HEAD(&pg_freeq, page, queue);
+	splx(spl);
 }
 
 vm_page_t *
@@ -205,7 +208,7 @@ void
 global_invlpg(vaddr_t vaddr)
 {
 	spl_t spl = splhigh();
-#if 0
+#if 1
 	for (;;) {
 		asm("sti");
 		spl0();
@@ -427,7 +430,7 @@ pmap_reenter_all_readonly(vm_page_t *page)
 	pv_entry_t *pv, *tmp;
 	spl_t	    spl = splhigh();
 
-#if 1
+#if 0
 	lock(&page->lock);
 #else
 	for (;;) {

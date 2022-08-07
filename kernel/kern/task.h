@@ -31,24 +31,6 @@
 
 #define NS_PER_MS 1000000
 
-/** A particular event identifier within a wait queue. */
-typedef uintptr_t waitq_event_t;
-
-/** Result of a wait operation on a wait queue. */
-typedef enum waitq_result {
-	kWaitQResultWaiting = -1,
-	kWaitQResultTimeout,
-	kWaitQResultInterrupted,
-	kWaitQResultEvent,
-} waitq_result_t;
-
-/**
- * A wait queue. Embedded in an object which may be waited on.
- */
-typedef struct waitq {
-	spinlock_t lock;
-	TAILQ_HEAD(, thread) waiters;
-} waitq_t;
 
 /*
  * Deferred Procedure Calls, inspired by those of Windows NT and playing a

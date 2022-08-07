@@ -8,13 +8,49 @@
  * All rights reserved.
  */
 
-#ifndef LOCKS_H_
-#define LOCKS_H_
+#ifndef LOCK_H_
+#define LOCK_H_
 
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/queue.h>
+
 
 typedef volatile atomic_flag spinlock_t;
+
+/** A particular event identifier within a wait queue. */
+typedef uintptr_t waitq_event_t;
+
+/** Result of a wait operation on a wait queue. */
+typedef enum waitq_result {
+	kWaitQResultWaiting = -1,
+	kWaitQResultTimeout,
+	kWaitQResultInterrupted,
+	kWaitQResultEvent,
+} waitq_result_t;
+
+/**
+ * A wait queue. Embedded in an object which may be waited on.
+ */
+typedef struct waitq {
+	spinlock_t lock;
+	TAILQ_HEAD(, thread) waiters;
+} waitq_t;
+
+
+struct mutex {
+	waitq_t	  waitq;
+	struct thread *holder;
+	size_t	  count;
+};
+
+typedef struct mutex	     mutex_t;
+
+void mutex_init(mutex_t *mtx);
+void mutex_lock(mutex_t *mtx);
+void mutex_unlock(mutex_t *mtx);
 
 static inline void
 spinlock_init(spinlock_t *lock)
@@ -56,4 +92,4 @@ spinlock_trylock(spinlock_t *lock, bool spin)
 
 #define SPINLOCK_INITIALISER ATOMIC_FLAG_INIT
 
-#endif /* LOCKS_H_ */
+#endif /* LOCK_H_ */

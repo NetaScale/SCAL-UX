@@ -127,17 +127,17 @@ sys_waitpid(proc_t *proc, pid_t pid, int *status, int flags, uintptr_t *errp)
 	}
 
 	for (;;) {
+		lock(&proc->fdlock);
 		LIST_FOREACH (subproc, &proc->subs, subentry) {
-			asm("cli");
 			if (subproc->status == kProcCompleted) {
 				*status = subproc->wstat;
 				return subproc->task->pid;
 			}
-			asm("sti");
 		}
+		unlock(&proc->fdlock);
 
-		*errp = EINTR;
+		waitq_await(&proc->waitwq, 0, 0);
 	}
 
-	return -1;
+	return 0;
 }

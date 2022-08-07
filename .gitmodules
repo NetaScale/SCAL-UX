@@ -2,12 +2,12 @@
 	path = subprojects/mlibc
 	url = ../mlibc
 [submodule "Limine"]
-	path = Limine
+	path = limine
 	url = https://github.com/limine-bootloader/limine.git
 	branch = v3.0-branch-binary
 [submodule "ObjFW"]
-	path = ObjFW
+	path = Libobjfw
 	url = ../ObjFW
-[submodule "Kernel/dev/acpi/lai"]
-	path = Kernel/dev/acpi/lai
+[submodule "kernel/dev/acpi/lai"]
+	path = kernel/dev/acpi/lai
 	url = ../lai

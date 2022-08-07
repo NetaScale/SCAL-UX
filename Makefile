@@ -7,10 +7,10 @@ all:
 iso: all
 	rm -rf build/iso_root
 	mkdir -p build/iso_root
-	cp build/Kernel/amd64/vxkern Kernel/amd64/limine.cfg \
+	cp build/kernel/amd64/vxkern kernel/amd64/limine.cfg \
 		build/initrd.tar \
-		Limine/limine.sys Limine/limine-cd.bin \
-		Limine/limine-cd-efi.bin build/iso_root/
+		limine/limine.sys limine/limine-cd.bin \
+		limine/limine-cd-efi.bin build/iso_root/
 	xorriso -as mkisofs -b limine-cd.bin \
 		-no-emul-boot -boot-load-size 4 -boot-info-table \
 		--efi-boot limine-cd-efi.bin \
@@ -20,7 +20,7 @@ iso: all
 	rm -rf build/iso_root
 
 configure:
-	meson --cross-file=Builddefs/amd64.ini --prefix /usr build
+	meson --cross-file=builddefs/amd64.ini -Dbuildtype='debugoptimized' --optimization=g --prefix /usr build
 
 run:
 	qemu-system-x86_64 build/barebones.iso  -cpu qemu64,sse,sse2,sse3 -serial stdio -smp 4 -s    -enable-kvm
