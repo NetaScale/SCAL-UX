@@ -1,0 +1,12 @@
+[binaries]
+c = '@TOOLCHAIN_ROOTDIR@/bin/@ARCH@-scalux-gcc'
+cpp = '@TOOLCHAIN_ROOTDIR@/bin/@ARCH@-scalux-g++'
+ar = '@TOOLCHAIN_ROOTDIR@/bin/@ARCH@-scalux-ar'
+strip = '@TOOLCHAIN_ROOTDIR@/bin/@ARCH@-scalux-strip'
+objc = '@TOOLCHAIN_ROOTDIR@/bin/@ARCH@-scalux-gcc'
+
+[host_machine]
+system = 'scalux'
+cpu_family = 'x86_64'
+endian = 'little'
+cpu = 'i686'

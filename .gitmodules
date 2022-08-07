@@ -1,0 +1,7 @@
+[submodule "Libc-1"]
+	path = Libc-1/dist
+	url = ../mlibc
+[submodule "limine-3/dist"]
+	path = limine-3/dist
+	url = git@github.com:limine-bootloader/limine.git
+	branch = v3.0-branch-binary

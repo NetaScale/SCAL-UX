@@ -1,0 +1,34 @@
+export S_BUILDDIR=@abs_builddir@
+export CROSSFILE=@abs_builddir@/build-aux/@ARCH@.ini
+export HOSTTOOLS=@HOSTTOOLS@
+export S_SYSROOT=@SYSROOT@
+
+cd @abs_srcdir@ && bmake
+
+#all: kernel
+
+#mlibc-headers:
+#	mkdir -p @builddir@/libc-headers
+#	meson setup --cross-file=$(CROSSFILE) --prefix /usr -Dheaders_only=true \
+#		libc-headers @abs_srcdir@/Libc-1
+#	ninja -C @builddir@/libc-headers
+#	DESTDIR=@SYSROOT@ ninja -C @builddir@/libc-headers install
+#
+#mlibc:
+#	mkdir -p @builddir@/libc
+#	meson setup --cross-file=$(CROSSFILE) --prefix /usr \
+#		libc @abs_srcdir@/Libc-1
+#	ninja -C @builddir@/libc
+#	DESTDIR=@SYSROOT@ ninja -C @builddir@/libc install
+#
+#kernel/.configured:
+#	mkdir -p @builddir@/kernel
+#	meson setup --cross-file=$(CROSSFILE) \
+#	  -Dbuildtype='debugoptimized' --optimization=g --prefix /usr kernel \
+#	  @abs_srcdir@/kernel-3
+#	touch $@
+
+#@builddir@/kernel/@ARCH@/vmscalux: @builddir@/kernel/.configured mlibc
+#	ninja -C @builddir@/kernel/
+#
+#kernel: @builddir@/kernel/@ARCH@/vmscalux
