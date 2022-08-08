@@ -9,7 +9,7 @@ Welcome to the SCAL/UX repository.
 ***The First Hobbyist's Operating System with Virtual Memory Compression***
 
 SCAL/UX is a Unix-like operating system targeting amd64 PCs. It is internally
-structured into three componentsL the core kernel, DeviceKit, and the POSIX
+structured into three components: the core kernel, DeviceKit, and the POSIX
 services. 
 
 The core kernel implements basic primitives: scheduling, virtual memory

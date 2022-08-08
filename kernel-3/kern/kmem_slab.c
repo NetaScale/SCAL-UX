@@ -1,0 +1,397 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+/*
+ * Copyright 2020-2022 NetaScale Systems Ltd.
+ * All rights reserved.
+ */
+
+/*!
+ * \page kmem_slab KMem Slab Allocator
+ *
+ * See: Bonwick, J. (1994). The Slab Allocator: An Object-Caching Kernel Memory
+ * Allocator.
+ *
+ * Overview
+ * ========
+ *
+ * Implementation
+ * ==============
+ *
+ * There are two formats of a slab: a small slab and a large slab.
+
+ * Small slabs are for objects smaller than or equal to PGSIZE / 16. They are
+ * one page in size, and consistent of objects densely packed, with the struct
+ * kmem_slab header occupying the top bytes of the page.
+ *
+ * Objects and slab_bufctls are united in small slabs - since a slab is always
+ * exactly PGSIZE in length, there is no need to look up a bufctl in the zone;
+ * instead it can be calculated trivially. So an object slot in a small slab is
+ * a bufctl linked into the freelist when it is free; otherwise it is the
+ * object. This saves on memory expenditure (and means that bufctls for large
+ * slabs can themselves be slab-allocated).
+ *
+ * Large slabs have out-of-line slab headers and bufctls, and their bufctls have
+ * a back-pointer to their containing slab as well as their base address. To
+ * free an object in a large zone requires to look up the bufctl; their bufctls
+ * are therefore linked into a list of allocated bufctls in the kmem_slab_zone.
+ * [in the future this will be a hash table.]
+ */
+#include <sys/queue.h>
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef _KERNEL
+#include <kern/kmem_slab.h>
+#include <kern/vm.h>
+#else
+#include <sys/mman.h>
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "kmem_slab.h"
+
+#define PGSIZE 4096
+#define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
+#define ROUNDDOWN(addr, align) ((((uintptr_t)addr)) & ~(align - 1))
+#define PGROUNDUP(addr) ROUNDUP(addr, PGSIZE)
+#define PGROUNDDOWN(addr) ROUNDDOWN(addr, PGSIZE)
+#define kVMKSleep 0
+
+#define mutex_lock(...)
+#define mutex_unlock(...)
+
+#define kprintf(...) printf(__VA_ARGS__)
+#define fatal(...)                   \
+	({                           \
+		printf(__VA_ARGS__); \
+		exit(1);             \
+	})
+
+static inline void *
+vm_kalloc(int npages, int unused)
+{
+	void *ret;
+	assert(posix_memalign(&ret, PGSIZE * npages, PGSIZE) == 0);
+	return ret;
+}
+#endif
+
+/*!
+ * Bufctl entry. These are stored inline for small slabs (and are replaced by
+ * the object when an object is allocated) and out-of-line for large slabs (this
+ * enables denser packing, since the data in the slab is now possible to pack
+ * densely; it also facilitates alignment.)
+ *
+ * Note that only the first entry is present in all bufctls; only large bufctls
+ * have the other two.
+ */
+struct kmem_bufctl {
+	/*!
+	 * Linkage either for free list (only case for small slab); or for large
+	 * slabs, kmem_slab_zone::bufctllist
+	 */
+	SLIST_ENTRY(kmem_bufctl) entrylist;
+
+	/*! slab to which bufctl belongs */
+	struct kmem_slab *slab;
+	/*! absolute address of entry */
+	char *base;
+};
+
+/*!
+ * A single slab.
+ */
+struct kmem_slab {
+	/*! linkage kmem_slab_zone::slablist */
+	SIMPLEQ_ENTRY(kmem_slab) slablist;
+	/*! zone to which it belongs */
+	struct kmem_slab_zone *zone;
+	/*! number of free entries */
+	uint32_t nfree;
+	/*! first free bufctl */
+	struct kmem_bufctl *firstfree;
+	/*!
+	 * For a small slab, slab contents precede this structure. Large slabs
+	 * however have a pointer to their data here.
+	 */
+	void *data[0];
+};
+
+/*!
+ * Get the address of a small slab's header from the base address of the slab.
+ */
+#define SMALL_SLAB_HDR(BASE) ((BASE) + PGSIZE - sizeof(struct kmem_slab))
+
+/*! Maximum size of object that will be stored in a small slab. */
+const size_t kSmallSlabMax = 256;
+
+/*!
+ * 8-byte granularity <= 64 byte;
+ * 16-byte granularity <= 128 byte;
+ * 32-byte granularity <= 256 byte;
+ * 64-byte granularity <= 512 byte;
+ * 128-byte granularity <= 1024 byte;
+ * 256-byte granularity <= 2048 byte;
+ * 512-byte granularity <= 4096 byte;
+ */
+#define SLAB_SIZES(X)         \
+	X(8, kmem_slab_8)     \
+	X(16, kmem_slab_16)   \
+	X(24, kmem_slab_24)   \
+	X(32, kmem_slab_32)   \
+	X(40, kmem_slab_40)   \
+	X(48, kmem_slab_48)   \
+	X(56, kmem_slab_56)   \
+	X(64, kmem_slab_64)   \
+	X(80, kmem_slab_80)   \
+	X(96, kmem_slab_96)   \
+	X(112, kmem_slab_112) \
+	X(128, kmem_slab_128) \
+	X(160, kmem_slab_160) \
+	X(192, kmem_slab_192) \
+	X(224, kmem_slab_224) \
+	X(256, kmem_slab_256) \
+	X(320, kmem_slab_320) \
+	X(384, kmem_slab_384) \
+	X(448, kmem_slab_448) \
+	X(512, kmem_slab_512) \
+	X(640, kmem_slab_640) \
+	X(768, kmem_slab_768) \
+	X(896, kmem_slab_896) \
+	X(1024, kmem_slab_1024)
+
+#define DEFINE_SLAB(SIZE, NAME) static struct kmem_slab_zone NAME;
+
+/*! struct kmem_slab's for large slabs */
+static struct kmem_slab_zone kmem_slab_slab;
+/*! struct kmem_bufctl's for large slabs */
+static struct kmem_slab_zone kmem_slab_bufctl;
+/* general-purpose slabs for kmalloc */
+SLAB_SIZES(DEFINE_SLAB);
+
+/*!
+ * @param name name to identify the slab (not copied nor freed! must be managed
+ * by zone creator if not a constant string).
+ */
+void
+kmem_slab_zone_init(struct kmem_slab_zone *zone, const char *name, size_t size)
+{
+	zone->name = name;
+	zone->size = size;
+	SIMPLEQ_INIT(&zone->slablist);
+	SLIST_INIT(&zone->bufctllist);
+}
+
+void
+kmem_init(void)
+{
+	kmem_slab_zone_init(&kmem_slab_slab, "kmem_slab_slab",
+	    sizeof(struct kmem_slab) + sizeof(void *));
+	kmem_slab_zone_init(&kmem_slab_bufctl, "kmem_slab_bufctl",
+	    sizeof(struct kmem_slab) + sizeof(void *));
+#define SMALL_SLAB_INIT(SIZE, NAME) kmem_slab_zone_init(&NAME, #NAME, SIZE);
+	SLAB_SIZES(SMALL_SLAB_INIT);
+}
+
+/* return the size in bytes held in a slab of a given zone*/
+static size_t
+slabsize(kmem_slab_zone_t *zone)
+{
+	if (zone->size <= kSmallSlabMax) {
+		return PGSIZE;
+	} else {
+		/* aim for at least 16 entries */
+		return PGROUNDUP(zone->size * 16);
+	}
+}
+
+/* return the capacity in number of objects of a slab of this zone */
+static size_t
+slabcapacity(kmem_slab_zone_t *zone)
+{
+	if (zone->size <= kSmallSlabMax) {
+		return (slabsize(zone) - sizeof(struct kmem_slab)) / zone->size;
+	} else {
+		return slabsize(zone) / zone->size;
+	}
+}
+
+static struct kmem_slab *
+small_slab_new(kmem_slab_zone_t *zone)
+{
+	struct kmem_slab	 *slab;
+	struct kmem_bufctl *entry;
+	void	       *base;
+
+	/* create a new slab */
+	base = vm_kalloc(1, kVMKSleep);
+	slab = SMALL_SLAB_HDR(base);
+
+	SIMPLEQ_INSERT_HEAD(&zone->slablist, slab, slablist);
+	slab->zone = zone;
+	slab->nfree = slabcapacity(zone);
+
+	/* set up the freelist */
+	for (size_t i = 0; i < slabcapacity(zone); i++) {
+		entry = (struct kmem_bufctl *)(base + i * zone->size);
+		entry->entrylist.sle_next = (struct kmem_bufctl *)(base +
+		    (i + 1) * zone->size);
+	}
+	entry->entrylist.sle_next = NULL;
+	slab->firstfree = (struct kmem_bufctl *)(base);
+
+	return slab;
+}
+
+static struct kmem_slab *
+large_slab_new(kmem_slab_zone_t *zone)
+{
+	struct kmem_slab	 *slab;
+	struct kmem_bufctl *entry, *prev = NULL;
+
+	slab = kmem_slaballoc(&kmem_slab_slab);
+
+	SIMPLEQ_INSERT_HEAD(&zone->slablist, slab, slablist);
+	slab->zone = zone;
+	slab->nfree = slabcapacity(zone);
+	slab->data[0] = vm_kalloc(slabsize(zone) / PGSIZE, kVMKSleep);
+
+	/* set up the freelist */
+	for (size_t i = 0; i < slabcapacity(zone); i++) {
+		entry = kmem_slaballoc(&kmem_slab_bufctl);
+		entry->slab = slab;
+		entry->base = slab->data[0] + zone->size * i;
+		if (prev)
+			prev->entrylist.sle_next = entry;
+		else {
+			/* this is the first entry */
+			slab->firstfree = entry;
+		}
+		prev = entry;
+	}
+	entry->entrylist.sle_next = NULL;
+
+	return slab;
+}
+
+void *
+kmem_slaballoc(kmem_slab_zone_t *zone)
+{
+	struct kmem_bufctl *entry, *next;
+	struct kmem_slab	 *slab;
+	void	       *ret;
+
+	mutex_lock(&zone->lock);
+
+	slab = SIMPLEQ_FIRST(&zone->slablist);
+	if (!slab || slab->nfree == 0) {
+		/* no slabs or all full (full slabs always at tail of queue) */
+		if (zone->size > kSmallSlabMax) {
+			slab = large_slab_new(zone);
+		} else {
+			slab = small_slab_new(zone);
+		}
+	}
+
+	slab->nfree--;
+	entry = slab->firstfree;
+
+	next = entry->entrylist.sle_next;
+	if (next == NULL) {
+		/* slab is now empty; put it to the back of the slab queue */
+		SIMPLEQ_REMOVE(&zone->slablist, slab, kmem_slab, slablist);
+		SIMPLEQ_INSERT_TAIL(&zone->slablist, slab, slablist);
+		slab->firstfree = NULL;
+	} else {
+		slab->firstfree = next;
+	}
+
+	if (zone->size <= kSmallSlabMax) {
+		ret = (void *)entry;
+	} else {
+		SLIST_INSERT_HEAD(&zone->bufctllist, entry, entrylist);
+		ret = entry->base;
+	}
+
+	mutex_unlock(&zone->lock);
+	return ret;
+}
+
+void
+kmem_slabfree(kmem_slab_zone_t *zone, void *ptr)
+{
+	struct kmem_slab	 *slab;
+	struct kmem_bufctl *newfree;
+
+	mutex_lock(&zone->lock);
+
+	if (zone->size <= kSmallSlabMax) {
+		slab = (struct kmem_slab *)SMALL_SLAB_HDR(PGROUNDDOWN(ptr));
+		newfree = (struct kmem_bufctl *)ptr;
+	} else {
+		struct kmem_bufctl *iter;
+
+		SLIST_FOREACH(iter, &zone->bufctllist, entrylist)
+		{
+			if (iter->base == ptr) {
+				newfree = iter;
+				break;
+			}
+		}
+
+		if (!newfree) {
+			fatal("kmem_slabfree: invalid pointer %p", ptr);
+			return;
+		}
+
+		SLIST_REMOVE(&zone->bufctllist, newfree, kmem_bufctl,
+		    entrylist);
+		slab = iter->slab;
+	}
+
+	slab->nfree++;
+	/* TODO: push slab to front; if nfree == slab capacity, free the slab */
+	newfree->entrylist.sle_next = slab->firstfree;
+	slab->firstfree = newfree;
+
+	mutex_unlock(&zone->lock);
+}
+
+#ifndef _KERNEL
+int
+main(int argc, char *argv[])
+{
+	void *two;
+	kmem_init();
+
+	printf("alloc 8/1: %p\n", kmem_slaballoc(&kmem_slab_8));
+	two = kmem_slaballoc(&kmem_slab_8);
+	printf("alloc 8/2: %p\n", two);
+	printf("alloc 8/3: %p\n", kmem_slaballoc(&kmem_slab_8));
+
+	kprintf("free 8/2\n");
+	kmem_slabfree(&kmem_slab_8, two);
+
+	printf("alloc 8/4 (should match 8/2): %p\n",
+	    kmem_slaballoc(&kmem_slab_8));
+
+	printf("alloc 1024/1: %p\n", kmem_slaballoc(&kmem_slab_1024));
+	two = kmem_slaballoc(&kmem_slab_1024);
+	printf("alloc 1024/2: %p\n", two);
+	printf("alloc 1024/3: %p\n", kmem_slaballoc(&kmem_slab_1024));
+
+	kprintf("free 1024/2\n");
+	kmem_slabfree(&kmem_slab_1024, two);
+
+	printf("alloc 1024/4 (should match 1024/2): %p\n",
+	    kmem_slaballoc(&kmem_slab_1024));
+
+	return 2;
+}
+#endif
