@@ -26,6 +26,14 @@ accommodate inadequate scheduling, synchronisation, and intercommunication
 primitives. This iteration aims to address these flaws. The previous iteration
 is in the `old-22-08-07` branch.
 
+Building
+--------
+
+The SCAL/UX operating system has a BSD Make based meta-build system loosely
+inspired by pkgsrc. You need an existing SCAL/UX toolchain for now and mlibc
+headers installed into a sysroot.
+Other tools required to build are Meson, xorriso...
+
 <!--
 Third-party components
 ----------------------

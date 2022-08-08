@@ -83,25 +83,25 @@ IncludeCategories:
     SortPriority: 24
   - Regex: '^<vm/vm\.h>'
     Priority: 3
-    SortPriority: 30
+    SortPriority: 40
   - Regex: '^<vm/'
     Priority: 3
     SortPriority: 31
-  - Regex: '^<machine/'
-    Priority: 4
+  - Regex: '^<(machine|kern|libkern)/'
+    Priority: 3
     SortPriority: 40
-  - Regex: '^<(x86|amd64|i386|xen)/'
-    Priority: 5
-    SortPriority: 50
+  - Regex: '^<(x86|amd64|i386|xen|x86_64)/'
+    Priority: 3
+    SortPriority: 40
   - Regex: '^<dev/'
-    Priority: 6
-    SortPriority: 60
+    Priority: 3
+    SortPriority: 40
   - Regex: '^<net.*/'
     Priority: 7
-    SortPriority: 70
+    SortPriority: 40
   - Regex: '^<protocols/'
     Priority: 7
-    SortPriority: 71
+    SortPriority: 41
   - Regex: '^<(fs|nfs(|client|server)|ufs)/'
     Priority: 8
     SortPriority: 80
@@ -157,3 +157,6 @@ TypenameMacros:
   - TAILQ_CLASS_HEAD
   - TAILQ_ENTRY
   - TAILQ_HEAD
+
+StatementMacros:
+ - X
