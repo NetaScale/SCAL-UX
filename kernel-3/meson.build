@@ -8,8 +8,8 @@ kern_c_args = [ '-ffreestanding', '-fno-stack-protector', '-nostdlib',
 	'-mcmodel=kernel', '-D_KERNEL' ]
 kern_objc_args = [ kern_c_args ]
 
-kern_srcs = files('kern/kmem.c', 'kern/vmem.c',
-	'libkern/klib.c',
+kern_srcs = files('kern/kmem_slab.c', 'kern/vm_kernel.c', 'kern/vm.c',
+    'kern/vmem.c', 'libkern/klib.c',
 )
 kern_incs = include_directories(arch + '/include', './')
 subdir(arch)

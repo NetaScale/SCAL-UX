@@ -45,8 +45,9 @@
 #include <stdint.h>
 
 #ifdef _KERNEL
-#include <kern/kmem_slab.h>
+#include <kern/kmem.h>
 #include <kern/vm.h>
+#include <libkern/klib.h>
 #else
 #include <sys/mman.h>
 
@@ -54,7 +55,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "kmem_slab.h"
+#include "kmem.h"
 
 #define PGSIZE 4096
 #define ROUNDUP(addr, align) (((addr) + align - 1) & ~(align - 1))
@@ -138,7 +139,9 @@ const size_t kSmallSlabMax = 256;
  * 64-byte granularity <= 512 byte;
  * 128-byte granularity <= 1024 byte;
  * 256-byte granularity <= 2048 byte;
- * 512-byte granularity <= 4096 byte;
+ * 512-byte granularity < 4096 byte;
+ * >=4096 byte allocations are directly carried out by vm_kalloc() so
+ * granularity is 4096 bytes.
  */
 #define SLAB_SIZES(X)         \
 	X(8, kmem_slab_8)     \
@@ -226,7 +229,7 @@ static struct kmem_slab *
 small_slab_new(kmem_slab_zone_t *zone)
 {
 	struct kmem_slab	 *slab;
-	struct kmem_bufctl *entry;
+	struct kmem_bufctl *entry = NULL;
 	void	       *base;
 
 	/* create a new slab */
@@ -253,9 +256,9 @@ static struct kmem_slab *
 large_slab_new(kmem_slab_zone_t *zone)
 {
 	struct kmem_slab	 *slab;
-	struct kmem_bufctl *entry, *prev = NULL;
+	struct kmem_bufctl *entry = NULL, *prev = NULL;
 
-	slab = kmem_slaballoc(&kmem_slab_slab);
+	slab = kmem_zonealloc(&kmem_slab_slab);
 
 	SIMPLEQ_INSERT_HEAD(&zone->slablist, slab, slablist);
 	slab->zone = zone;
@@ -264,7 +267,7 @@ large_slab_new(kmem_slab_zone_t *zone)
 
 	/* set up the freelist */
 	for (size_t i = 0; i < slabcapacity(zone); i++) {
-		entry = kmem_slaballoc(&kmem_slab_bufctl);
+		entry = kmem_zonealloc(&kmem_slab_bufctl);
 		entry->slab = slab;
 		entry->base = slab->data[0] + zone->size * i;
 		if (prev)
@@ -281,7 +284,7 @@ large_slab_new(kmem_slab_zone_t *zone)
 }
 
 void *
-kmem_slaballoc(kmem_slab_zone_t *zone)
+kmem_zonealloc(kmem_slab_zone_t *zone)
 {
 	struct kmem_bufctl *entry, *next;
 	struct kmem_slab	 *slab;
@@ -324,7 +327,7 @@ kmem_slaballoc(kmem_slab_zone_t *zone)
 }
 
 void
-kmem_slabfree(kmem_slab_zone_t *zone, void *ptr)
+kmem_zonefree(kmem_slab_zone_t *zone, void *ptr)
 {
 	struct kmem_slab	 *slab;
 	struct kmem_bufctl *newfree;

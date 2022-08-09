@@ -1,6 +1,6 @@
 ldscript = meson.current_source_dir()/'linker.ld'
 
-kern_srcs += files ('intr.c', 'kmain.c', 'locore.S')
+kern_srcs += files ('intr.c', 'kmain.c', 'locore.S', 'vm.c')
 
 vxkern = executable('vxkern', kern_srcs,
     c_args : [ kern_c_args ],

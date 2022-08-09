@@ -96,16 +96,48 @@ spinlock_trylock(spinlock_t *lock, bool spin)
  */
 
 /*!
+ * @name Waitqueues
+ * @{
+ */
+
+/**
+ * A wait queue. Typically embedded in an object which is to be waited on, or in
+ * an object which will want to wait.
+ */
+typedef struct waitq {
+	spinlock_t lock;
+	TAILQ_HEAD(, thread) waiters;
+} waitq_t;
+
+#define WAITQ_INITIALIZER(WAITQ)                                  \
+	{                                                         \
+		.lock = SPINLOCK_INITIALISER,                     \
+		.waiters = TAILQ_HEAD_INITIALIZER(WAITQ.waiters) \
+	}
+
+/*!
+ * @}
+ */
+
+/*!
  * @name Mutexes
  * @{
  */
 
 typedef struct mutex {
-
+	waitq_t	       waitq;
+	struct thread *owner;
+	size_t	       count;
 } mutex_t;
 
+#define MUTEX_INITIALISER(MUTEX)                                           \
+	{                                                                  \
+		.waitq = WAITQ_INITIALIZER((MUTEX)->waitq), .owner = NULL, \
+		.count = 0                                                 \
+	}
+
+static inline void mutex_init(mutex_t *mtx) {};
 static inline void mutex_lock(mutex_t *mtx) {};
-static inline void mutex_unlock(mutex_t *mtx) {};
 static inline void mutex_unlock(mutex_t *mtx) {};
 #define ASSERT_MUTEX_HELD(PMTX) \
 	assert(true)

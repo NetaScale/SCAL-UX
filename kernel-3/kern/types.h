@@ -13,6 +13,7 @@
 
 #include <sys/types.h>
 
-typedef void * vaddr_t;
+typedef void * vaddr_t, *paddr_t;
+typedef size_t voff_t;
 
 #endif /* KERN_TYPES_H_ */
