@@ -239,6 +239,9 @@ void vm_page_changequeue(vm_page_t *page, nullable vm_pagequeue_t *from,
 extern vm_pagequeue_t vm_pgfreeq, vm_pgkmemq, vm_pgwiredq, vm_pgactiveq,
     vm_pginactiveq, vm_pgpmapq;
 
+/*! Page region queue. */
+extern vm_pregion_queue_t vm_pregion_queue;
+
 /*!
  * @}
  */
