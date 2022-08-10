@@ -140,7 +140,7 @@ static inline void mutex_init(mutex_t *mtx) {};
 static inline void mutex_lock(mutex_t *mtx) {};
 static inline void mutex_unlock(mutex_t *mtx) {};
 #define ASSERT_MUTEX_HELD(PMTX) \
-	assert(true)
+	assert((PMTX)->owner == curthread())
 /*!
  * @}
  */

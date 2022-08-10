@@ -9,6 +9,7 @@
  */
 
 #include <kern/task.h>
+#include <kern/kmem.h>
 
 task_t task0  = {
         .name ="[kernel]",
@@ -23,3 +24,8 @@ cpu_t cpu0 = {
         .num = 0,
         .curthread = &thread0
 };
+
+void task_init(void)
+{
+
+}

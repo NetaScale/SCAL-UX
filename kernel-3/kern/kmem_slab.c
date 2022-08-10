@@ -36,7 +36,7 @@
  * Large slabs have out-of-line slab headers and bufctls, and their bufctls have
  * a back-pointer to their containing slab as well as their base address. To
  * free an object in a large zone requires to look up the bufctl; their bufctls
- * are therefore linked into a list of allocated bufctls in the kmem_slab_zone.
+ * are therefore linked into a list of allocated bufctls in the kmem_zone.
  * [in the future this will be a hash table.]
  */
 #include <sys/queue.h>
@@ -95,7 +95,7 @@ vm_kalloc(int npages, int unused)
 struct kmem_bufctl {
 	/*!
 	 * Linkage either for free list (only case for small slab); or for large
-	 * slabs, kmem_slab_zone::bufctllist
+	 * slabs, kmem_zone::bufctllist
 	 */
 	SLIST_ENTRY(kmem_bufctl) entrylist;
 
@@ -109,10 +109,10 @@ struct kmem_bufctl {
  * A single slab.
  */
 struct kmem_slab {
-	/*! linkage kmem_slab_zone::slablist */
+	/*! linkage kmem_zone::slablist */
 	SIMPLEQ_ENTRY(kmem_slab) slablist;
 	/*! zone to which it belongs */
-	struct kmem_slab_zone *zone;
+	struct kmem_zone *zone;
 	/*! number of free entries */
 	uint32_t nfree;
 	/*! first free bufctl */
@@ -143,68 +143,81 @@ const size_t kSmallSlabMax = 256;
  * >=4096 byte allocations are directly carried out by vm_kalloc() so
  * granularity is 4096 bytes.
  */
-#define SLAB_SIZES(X)         \
-	X(8, kmem_slab_8)     \
-	X(16, kmem_slab_16)   \
-	X(24, kmem_slab_24)   \
-	X(32, kmem_slab_32)   \
-	X(40, kmem_slab_40)   \
-	X(48, kmem_slab_48)   \
-	X(56, kmem_slab_56)   \
-	X(64, kmem_slab_64)   \
-	X(80, kmem_slab_80)   \
-	X(96, kmem_slab_96)   \
-	X(112, kmem_slab_112) \
-	X(128, kmem_slab_128) \
-	X(160, kmem_slab_160) \
-	X(192, kmem_slab_192) \
-	X(224, kmem_slab_224) \
-	X(256, kmem_slab_256) \
-	X(320, kmem_slab_320) \
-	X(384, kmem_slab_384) \
-	X(448, kmem_slab_448) \
-	X(512, kmem_slab_512) \
-	X(640, kmem_slab_640) \
-	X(768, kmem_slab_768) \
-	X(896, kmem_slab_896) \
-	X(1024, kmem_slab_1024)
+#define ZONE_SIZES(X)      \
+	X(8, kmem_8)       \
+	X(16, kmem_16)     \
+	X(24, kmem_24)     \
+	X(32, kmem_32)     \
+	X(40, kmem_40)     \
+	X(48, kmem_48)     \
+	X(56, kmem_56)     \
+	X(64, kmem_64)     \
+	X(80, kmem_80)     \
+	X(96, kmem_96)     \
+	X(112, kmem_112)   \
+	X(128, kmem_128)   \
+	X(160, kmem_160)   \
+	X(192, kmem_192)   \
+	X(224, kmem_224)   \
+	X(256, kmem_256)   \
+	X(320, kmem_320)   \
+	X(384, kmem_384)   \
+	X(448, kmem_448)   \
+	X(512, kmem_512)   \
+	X(640, kmem_640)   \
+	X(768, kmem_768)   \
+	X(896, kmem_896)   \
+	X(1024, kmem_1024) \
+	X(1280, kmem_1280) \
+	X(1536, kmem_1536) \
+	X(1792, kmem_1792) \
+	X(2048, kmem_2048) \
+	X(2560, kmem_2560) \
+	X(3072, kmem_3072) \
+	X(3584, kmem_3584) \
+	X(4096, kmem_4096)
 
-#define DEFINE_SLAB(SIZE, NAME) static struct kmem_slab_zone NAME;
+/*! struct kmem_slab's for large-slab zones */
+static struct kmem_zone kmem_slab;
+/*! struct kmem_bufctl's for large-slab zones */
+static struct kmem_zone kmem_bufctl;
+/* general-purpose zones for kmem_alloc */
+#define DEFINE_ZONE(SIZE, NAME) static struct kmem_zone NAME;
+ZONE_SIZES(DEFINE_ZONE);
+#undef DEFINE_ZONE
+/*! array of the kmem_alloc zones for convenience*/
+#define REFERENCE_ZONE(SIZE, NAME) &NAME,
+static kmem_zone_t *kmem_alloc_zones[] = { ZONE_SIZES(REFERENCE_ZONE) };
+#undef REFERENCE_ZONE
+/*! list of all zones; TODO(med): protect with a lock */
+struct kmem_zones kmem_zones = SIMPLEQ_HEAD_INITIALIZER(kmem_zones);
 
-/*! struct kmem_slab's for large slabs */
-static struct kmem_slab_zone kmem_slab_slab;
-/*! struct kmem_bufctl's for large slabs */
-static struct kmem_slab_zone kmem_slab_bufctl;
-/* general-purpose slabs for kmalloc */
-SLAB_SIZES(DEFINE_SLAB);
 
-/*!
- * @param name name to identify the slab (not copied nor freed! must be managed
- * by zone creator if not a constant string).
- */
 void
-kmem_slab_zone_init(struct kmem_slab_zone *zone, const char *name, size_t size)
+kmem_zone_init(struct kmem_zone *zone, const char *name, size_t size)
 {
 	zone->name = name;
 	zone->size = size;
 	SIMPLEQ_INIT(&zone->slablist);
 	SLIST_INIT(&zone->bufctllist);
+	SIMPLEQ_INSERT_TAIL(&kmem_zones, zone, zonelist);
 }
 
 void
 kmem_init(void)
 {
-	kmem_slab_zone_init(&kmem_slab_slab, "kmem_slab_slab",
+	kmem_zone_init(&kmem_slab, "kmem_slab",
 	    sizeof(struct kmem_slab) + sizeof(void *));
-	kmem_slab_zone_init(&kmem_slab_bufctl, "kmem_slab_bufctl",
-	    sizeof(struct kmem_slab) + sizeof(void *));
-#define SMALL_SLAB_INIT(SIZE, NAME) kmem_slab_zone_init(&NAME, #NAME, SIZE);
-	SLAB_SIZES(SMALL_SLAB_INIT);
+	kmem_zone_init(&kmem_bufctl, "kmem_bufctl",
+	    sizeof(struct kmem_bufctl));
+#define ZONE_INIT(SIZE, NAME) kmem_zone_init(&NAME, #NAME, SIZE);
+	ZONE_SIZES(ZONE_INIT);
+#undef ZONE_INIT
 }
 
 /* return the size in bytes held in a slab of a given zone*/
 static size_t
-slabsize(kmem_slab_zone_t *zone)
+slabsize(kmem_zone_t *zone)
 {
 	if (zone->size <= kSmallSlabMax) {
 		return PGSIZE;
@@ -216,7 +229,7 @@ slabsize(kmem_slab_zone_t *zone)
 
 /* return the capacity in number of objects of a slab of this zone */
 static size_t
-slabcapacity(kmem_slab_zone_t *zone)
+slabcapacity(kmem_zone_t *zone)
 {
 	if (zone->size <= kSmallSlabMax) {
 		return (slabsize(zone) - sizeof(struct kmem_slab)) / zone->size;
@@ -226,7 +239,7 @@ slabcapacity(kmem_slab_zone_t *zone)
 }
 
 static struct kmem_slab *
-small_slab_new(kmem_slab_zone_t *zone)
+small_slab_new(kmem_zone_t *zone)
 {
 	struct kmem_slab	 *slab;
 	struct kmem_bufctl *entry = NULL;
@@ -253,12 +266,12 @@ small_slab_new(kmem_slab_zone_t *zone)
 }
 
 static struct kmem_slab *
-large_slab_new(kmem_slab_zone_t *zone)
+large_slab_new(kmem_zone_t *zone)
 {
 	struct kmem_slab	 *slab;
 	struct kmem_bufctl *entry = NULL, *prev = NULL;
 
-	slab = kmem_zonealloc(&kmem_slab_slab);
+	slab = kmem_zonealloc(&kmem_slab);
 
 	SIMPLEQ_INSERT_HEAD(&zone->slablist, slab, slablist);
 	slab->zone = zone;
@@ -267,7 +280,7 @@ large_slab_new(kmem_slab_zone_t *zone)
 
 	/* set up the freelist */
 	for (size_t i = 0; i < slabcapacity(zone); i++) {
-		entry = kmem_zonealloc(&kmem_slab_bufctl);
+		entry = kmem_zonealloc(&kmem_bufctl);
 		entry->slab = slab;
 		entry->base = slab->data[0] + zone->size * i;
 		if (prev)
@@ -284,7 +297,7 @@ large_slab_new(kmem_slab_zone_t *zone)
 }
 
 void *
-kmem_zonealloc(kmem_slab_zone_t *zone)
+kmem_zonealloc(kmem_zone_t *zone)
 {
 	struct kmem_bufctl *entry, *next;
 	struct kmem_slab	 *slab;
@@ -327,7 +340,7 @@ kmem_zonealloc(kmem_slab_zone_t *zone)
 }
 
 void
-kmem_zonefree(kmem_slab_zone_t *zone, void *ptr)
+kmem_zonefree(kmem_zone_t *zone, void *ptr)
 {
 	struct kmem_slab	 *slab;
 	struct kmem_bufctl *newfree;
@@ -366,34 +379,117 @@ kmem_zonefree(kmem_slab_zone_t *zone, void *ptr)
 	mutex_unlock(&zone->lock);
 }
 
+void
+kmem_dump()
+{
+	kmem_zone_t *zone;
+
+	kprintf("\033[7m%-24s%-6s%-6s\033[m\n", "name", "size", "objs");
+
+	SIMPLEQ_FOREACH(zone, &kmem_zones, zonelist)
+	{
+		size_t		  cap;
+		size_t		  nSlabs = 0;
+		size_t		  totalFree = 0;
+		struct kmem_slab *slab;
+
+		mutex_lock(&zone->lock);
+
+		cap = slabcapacity(zone);
+
+		SIMPLEQ_FOREACH(slab, &zone->slablist, slablist)
+		{
+			nSlabs++;
+			totalFree += slab->nfree;
+		}
+
+		kprintf("%-24s%-6zu%-6lu\n", zone->name, zone->size,
+		    cap * nSlabs - totalFree);
+
+		mutex_unlock(&zone->lock);
+	}
+}
+
+static inline int
+zonenum(size_t size)
+{
+	if (size <= 64)
+		return ROUNDUP(size, 8) / 8 - 1;
+	else if (size <= 128)
+		return ROUNDUP(size - 64, 16) / 16 + 7;
+	else if (size <= 256)
+		return ROUNDUP(size - 128, 32) / 32 + 11;
+	else if (size <= 512)
+		return ROUNDUP(size - 256, 64) / 64 + 15;
+	else if (size <= 1024)
+		return ROUNDUP(size - 512, 128) / 128 + 19;
+	else if (size <= 2048)
+		return ROUNDUP(size - 1024, 256) / 256 + 23;
+	else if (size <= 4096)
+		return ROUNDUP(size - 2048, 512) / 512 + 27;
+	else
+		/* use vm_kalloc() directly */
+		return -1;
+}
+
+void *
+kmem_alloc(size_t size)
+{
+	int zoneidx;
+
+	assert(size > 0);
+	zoneidx = zonenum(size);
+
+	if (zoneidx == -1) {
+		size_t realsize = PGROUNDUP(size);
+		return vm_kalloc(realsize / PGSIZE, kVMKSleep);
+	} else
+		return kmem_zonealloc(kmem_alloc_zones[zoneidx]);
+}
+
+void
+kmem_free(void *ptr, size_t size)
+{
+	int zoneidx = zonenum(size);
+
+	assert(size > 0);
+
+	if (zoneidx == -1) {
+		size_t realsize = PGROUNDUP(size);
+		return vm_kfree(ptr, realsize / PGSIZE);
+	} else
+		return kmem_zonefree(kmem_alloc_zones[zoneidx], ptr);
+}
+
 #ifndef _KERNEL
 int
 main(int argc, char *argv[])
 {
 	void *two;
+
 	kmem_init();
 
-	printf("alloc 8/1: %p\n", kmem_slaballoc(&kmem_slab_8));
-	two = kmem_slaballoc(&kmem_slab_8);
+	printf("alloc 8/1: %p\n", kmem_zonealloc(&kmem_slab_8));
+	two = kmem_zonealloc(&kmem_slab_8);
 	printf("alloc 8/2: %p\n", two);
-	printf("alloc 8/3: %p\n", kmem_slaballoc(&kmem_slab_8));
+	printf("alloc 8/3: %p\n", kmem_zonealloc(&kmem_slab_8));
 
 	kprintf("free 8/2\n");
 	kmem_slabfree(&kmem_slab_8, two);
 
 	printf("alloc 8/4 (should match 8/2): %p\n",
-	    kmem_slaballoc(&kmem_slab_8));
+	    kmem_zonealloc(&kmem_slab_8));
 
-	printf("alloc 1024/1: %p\n", kmem_slaballoc(&kmem_slab_1024));
-	two = kmem_slaballoc(&kmem_slab_1024);
+	printf("alloc 1024/1: %p\n", kmem_zonealloc(&kmem_slab_1024));
+	two = kmem_zonealloc(&kmem_slab_1024);
 	printf("alloc 1024/2: %p\n", two);
-	printf("alloc 1024/3: %p\n", kmem_slaballoc(&kmem_slab_1024));
+	printf("alloc 1024/3: %p\n", kmem_zonealloc(&kmem_slab_1024));
 
 	kprintf("free 1024/2\n");
 	kmem_slabfree(&kmem_slab_1024, two);
 
 	printf("alloc 1024/4 (should match 1024/2): %p\n",
-	    kmem_slaballoc(&kmem_slab_1024));
+	    kmem_zonealloc(&kmem_slab_1024));
 
 	return 2;
 }

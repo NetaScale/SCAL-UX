@@ -26,9 +26,12 @@
 #endif
 
 /*!
- * A KMem slab zone - provides slab allocation for a particular size of object.
+ * A KMem zone - provides slab allocation for a particular size of object. In
+ * the future it will incorporate per-CPU caches.
  */
-typedef struct kmem_slab_zone {
+typedef struct kmem_zone {
+	/*! linkage for kmem_zones */
+	SIMPLEQ_ENTRY(kmem_zone) zonelist;
 	/*! identifier name */
 	const char *name;
 	/*! size of contained objects */
@@ -39,22 +42,36 @@ typedef struct kmem_slab_zone {
 	mutex_t lock;
 
 	/*! the below are applicable only to large slabs */
-	/*! list of allocated bufctls. TODO(med): Use a hash table? */
+	/*! list of allocated bufctls, used TODO(med): Use a hash table? */
 	SLIST_HEAD(, kmem_bufctl) bufctllist;
-} kmem_slab_zone_t;
+} kmem_zone_t;
+
+SIMPLEQ_HEAD(kmem_zones, kmem_zone);
 
 /*! Initialise the KMem system. */
 void kmem_init(void);
 
-/*!
- * Allocate from a slab zone.
- */
-void *kmem_zonealloc(kmem_slab_zone_t *zone);
+/*! Dump information about all zones. */
+void kmem_dump(void);
 
 /*!
- * Release memory previously allocated with kmem_slaballoc().
+ * Initialise a new zone.
+ *
+ * @param name zone identifier. This is assumed to be a constant string, so it
+ * is not copied.
+ * @param size size of the objects which it will hold.
  */
-void kmem_zonefree(kmem_slab_zone_t *zone, void *ptr);
+void kmem_zone_init(struct kmem_zone *zone, const char *name, size_t size);
+
+/*!
+ * Allocate from a zone.
+ */
+void *kmem_zonealloc(kmem_zone_t *zone);
+
+/*!
+ * Release memory previously allocated with kmem_zonealloc().
+ */
+void kmem_zonefree(kmem_zone_t *zone, void *ptr);
 
 /*!
  * Allocate kernel wired memory. Memory will be aligned to zone's size (thus
@@ -79,5 +96,7 @@ void *kmem_genalloc(size_t size);
  * Release memory allocated by kmem_genalloc().
  */
 void kmem_genfree(size_t size);
+
+extern struct kmem_zones kmem_zones;
 
 #endif /* KMEM_SLAB_H_ */

@@ -1,3 +1,4 @@
+#include <kern/kmem.h>
 #include <kern/task.h>
 #include <kern/vm.h>
 #include <libkern/klib.h>
@@ -163,6 +164,8 @@ _start(void)
 
 	mem_init();
 	vm_kernel_init();
+	kmem_init();
+	kmem_dump();
 
 	*(double *)11 = 48000000.12f;
 
