@@ -113,8 +113,7 @@ struct vm_page *pmap_unenter_kern(struct vm_map *map, vaddr_t virt);
  * Invalidate a page mapping for the virtual address \p addr in the current
  * address space.
  */
-void
-pmap_invlpg(vaddr_t addr);
+void pmap_invlpg(vaddr_t addr);
 
 /*!
  * @}
@@ -144,6 +143,9 @@ typedef struct vm_map {
 	vmem_t	     vmem;
 	struct pmap *pmap;
 } vm_map_t;
+
+/*! Activate a given map. */
+void vm_activate(vm_map_t *map);
 
 /*! Global kernel map. */
 extern vm_map_t kmap;

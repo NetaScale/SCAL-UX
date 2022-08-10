@@ -1,8 +1,19 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+/*
+ * Copyright 2020-2022 NetaScale Systems Ltd.
+ * All rights reserved.
+ */
 
+#include <kern/task.h>
 #include <kern/types.h>
+#include <libkern/klib.h>
 #include <machine/intr.h>
 #include <x86_64/asmintr.h>
-#include <libkern/klib.h>
+#include <x86_64/cpu.h>
 
 typedef struct {
 	uint16_t isr_low;
@@ -62,7 +73,25 @@ idt_init()
 void
 handle_int(md_intr_frame_t *frame, uintptr_t num)
 {
-        kprintf("Interrupt number %zu!\n", num);
-        for (;;) ;
+	if (num == 240) {
+		/* context switch */
+		thread_t *old = curcpu()->md.old, *next = curcpu()->curthread;
+		extern spinlock_t sched_lock;
+
+		old->md.frame = *frame;
+		old->md.fs = rdmsr(kAMD64MSRFSBase);
+
+		*frame = next->md.frame;
+		wrmsr(kAMD64MSRFSBase, next->md.fs);
+
+		spinlock_unlock(&sched_lock);
+		return;
+	}
+
+	kprintf("Interrupt number %zu!\n", num);
+
+	for (;;)
+		;
+
 	return;
 }

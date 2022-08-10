@@ -1,3 +1,13 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+/*
+ * Copyright 2020-2022 NetaScale Systems Ltd.
+ * All rights reserved.
+ */
+
 #include <kern/kmem.h>
 #include <kern/task.h>
 #include <kern/vm.h>
@@ -7,6 +17,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include "kern/sync.h"
 
 void idt_init();
 void idt_load();
@@ -144,6 +156,59 @@ mem_init()
 	x64_vm_init((paddr_t)kernel_address_request.response->physical_base);
 }
 
+/* can't rely on mutexes until scheduling is up, so this must be used instead */
+static spinlock_t early_lock = SPINLOCK_INITIALISER;
+
+static void
+common_init(struct limine_smp_info *smpi, cpu_t *cpu)
+{
+	cpu->num = smpi->extra_argument;
+	cpus[smpi->extra_argument] = cpu;
+
+	spinlock_lock(&early_lock);
+	SLIST_INSERT_HEAD(&task0.threads, cpu->curthread, taskthreads);
+	spinlock_unlock(&early_lock);
+
+	cpu->idlethread = cpu->curthread;
+}
+
+static void
+ap_init(struct limine_smp_info *smpi)
+{
+	cpu_t    *cpu;
+	thread_t *thread;
+
+	spinlock_lock(&early_lock);
+	cpu = kmem_alloc(sizeof *cpu);
+	thread = kmem_alloc(sizeof *thread);
+	spinlock_unlock(&early_lock);
+
+	cpu->curthread = thread;
+	thread->task = &task0;
+
+	common_init(smpi, cpu);
+	/* this is now that CPU's idle thread loop */
+	done();
+}
+
+static void
+smp_init()
+{
+	struct limine_smp_response *smpr = smp_request.response;
+
+	cpus = kmem_alloc(sizeof *cpus * smpr->cpu_count);
+
+	kprintf("%lu cpus\n", smpr->cpu_count);
+	for (size_t i = 0; i < smpr->cpu_count; i++) {
+		struct limine_smp_info *smpi = smpr->cpus[i];
+		smpi->extra_argument = i;
+		if (smpi->lapic_id == smpr->bsp_lapic_id) {
+			common_init(smpi, &cpu0);
+		} else
+			smpi->goto_address = ap_init;
+	}
+}
+
 // The following will be our kernel's entry point.
 void
 _start(void)
@@ -165,9 +230,12 @@ _start(void)
 	mem_init();
 	vm_kernel_init();
 	kmem_init();
+
+	smp_init();
+
 	kmem_dump();
 
-	*(double *)11 = 48000000.12f;
+	//*(double *)11 = 48000000.12f;
 
 	// We're done, just hang...
 	done();
