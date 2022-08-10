@@ -8,11 +8,14 @@
  * All rights reserved.
  */
 
+#include <sys/param.h>
 #include <sys/queue.h>
 
 #include <kern/kmem.h>
 #include <kern/task.h>
 #include <libkern/klib.h>
+
+#include "machine/machdep.h"
 
 task_t task0 = {
         .name = "[kernel]",
@@ -30,6 +33,118 @@ cpu_t cpu0 = {
 
 spinlock_t sched_lock = SPINLOCK_INITIALISER;
 cpu_t    **cpus;
+
+void
+callout_enqueue(callout_t *callout)
+{
+	__auto_type queue = &curcpu()->pendingcallouts;
+	callout_t *co;
+	bool	   iff;
+
+	assert(callout->nanosecs > 0);
+	iff = md_intr_disable();
+	co = TAILQ_FIRST(queue);
+
+	if (!co) {
+		TAILQ_INSERT_HEAD(queue, callout, queue);
+		md_timer_set(callout->nanosecs);
+		goto next;
+	} else {
+		uint64_t remains = md_timer_get_remaining();
+		/* XXX: at least on QEMU, often reading current count > initial
+		   count! */
+		// assert(remains < co->nanosecs);
+		co->nanosecs = MIN(remains, co->nanosecs);
+	}
+
+	assert(co->nanosecs > 0);
+
+	if (co->nanosecs > callout->nanosecs) {
+		co->nanosecs -= callout->nanosecs;
+		TAILQ_INSERT_HEAD(queue, callout, queue);
+		md_timer_set(callout->nanosecs);
+		goto next;
+	}
+
+	while (co->nanosecs < callout->nanosecs) {
+		callout_t *next;
+		callout->nanosecs -= co->nanosecs;
+		next = TAILQ_NEXT(co, queue);
+		if (next == NULL)
+			break;
+		co = next;
+	}
+
+	TAILQ_INSERT_AFTER(queue, co, callout, queue);
+
+next:
+	callout->state = kCalloutPending;
+	md_intr_x(iff);
+}
+
+void
+callout_dequeue(callout_t *callout)
+{
+	__auto_type queue = &curcpu()->pendingcallouts;
+	callout_t *co;
+	bool	   iff = md_intr_disable();
+
+	// TODO(med): can have false wakeups if an interrupt is pending?
+
+	assert(callout->state == kCalloutPending);
+
+	co = TAILQ_FIRST(queue);
+
+	if (co != callout) {
+		TAILQ_REMOVE(queue, callout, queue);
+	} else {
+		uint64_t remains = md_timer_get_remaining();
+		TAILQ_REMOVE(queue, callout, queue);
+		/* XXX: at least on QEMU, often reading current count > initial
+		   count! */
+		// assert(remains < co->nanosecs);
+		callout->state = kCalloutDisabled;
+		co = TAILQ_FIRST(queue);
+		if (co) {
+			co->nanosecs += MIN(remains, co->nanosecs);
+			md_timer_set(co->nanosecs);
+		} else
+			/* nothing upcoming */
+			md_timer_set(0);
+	}
+
+	md_intr_x(iff);
+}
+
+int
+callout_interrupt(md_intr_frame_t *frame, void *unused)
+{
+	__auto_type queue = &curcpu()->pendingcallouts;
+	callout_t *co;
+	bool	   iff;
+	int	   r = 0;
+
+	iff = md_intr_disable();
+
+	co = TAILQ_FIRST(queue);
+
+	/* can have spurious ones */
+	if (co == NULL)
+		goto finish;
+
+	TAILQ_REMOVE(queue, co, queue);
+	co->state = kCalloutDisabled;
+	r = co->callback(frame, co->arg);
+
+	/* now set up the next in sequence */
+	co = TAILQ_FIRST(queue);
+	if (co != NULL)
+		md_timer_set(co->nanosecs);
+
+finish:
+	md_intr_x(iff);
+	return r;
+}
 
 void
 task_init(void)

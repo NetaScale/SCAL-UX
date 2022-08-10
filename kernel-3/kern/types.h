@@ -16,4 +16,6 @@
 typedef void * vaddr_t, *paddr_t;
 typedef size_t voff_t;
 
+#define NS_PER_S 1000000000
+
 #endif /* KERN_TYPES_H_ */

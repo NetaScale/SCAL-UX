@@ -66,12 +66,29 @@ volatile struct limine_terminal_request terminal_request = {
 	.revision = 0
 };
 
+enum { kPortCOM1 = 0x3f8 };
+
+static void
+serial_init()
+{
+	outb(kPortCOM1 + 1, 0x00);
+	outb(kPortCOM1 + 3, 0x80);
+	outb(kPortCOM1 + 0, 0x03);
+	outb(kPortCOM1 + 1, 0x00);
+	outb(kPortCOM1 + 3, 0x03);
+	outb(kPortCOM1 + 2, 0xC7);
+	outb(kPortCOM1 + 4, 0x0B);
+}
+
 void
 md_kputc(int ch, void *ctx)
 {
 	struct limine_terminal *terminal =
 	    terminal_request.response->terminals[0];
 	terminal_request.response->write(terminal, (const char *)&ch, 1);
+	while (!(inb(kPortCOM1 + 5) & 0x20))
+		;
+	outb(kPortCOM1, ch);
 }
 
 static void
@@ -165,11 +182,32 @@ common_init(struct limine_smp_info *smpi, cpu_t *cpu)
 	cpu->num = smpi->extra_argument;
 	cpus[smpi->extra_argument] = cpu;
 
+	wrmsr(kAMD64MSRGSBase, (uintptr_t)&cpus[smpi->extra_argument]);
+
 	spinlock_lock(&early_lock);
 	SLIST_INSERT_HEAD(&task0.threads, cpu->curthread, taskthreads);
 	spinlock_unlock(&early_lock);
 
+	void	 lapic_enable();
+	uint32_t lapic_timer_calibrate();
+	idt_load();
+	lapic_enable(0xff);
+
+	void setup_cpu_gdt(cpu_t * cpu);
+	setup_cpu_gdt(cpu);
+
+	/* measure thrice and average it */
+	cpu->md.lapic_tps = 0;
+	cpu->md.lapic_id = smpi->lapic_id;
+	for (int i = 0; i < 3; i++)
+		cpu->md.lapic_tps += lapic_timer_calibrate() / 3;
+
+	TAILQ_INIT(&cpu->pendingcallouts);
+	TAILQ_INIT(&cpu->runqueue);
+
 	cpu->idlethread = cpu->curthread;
+
+	asm("sti");
 }
 
 static void
@@ -213,6 +251,9 @@ smp_init()
 void
 _start(void)
 {
+	void *pcpu0 = &cpu0;
+	serial_init();
+
 	// Ensure we got a terminal
 	if (terminal_request.response == NULL ||
 	    terminal_request.response->terminal_count < 1) {
@@ -224,8 +265,8 @@ _start(void)
 	idt_init();
 	idt_load();
 
-	/*! make sure curcpu() can work */
-	wrmsr(kAMD64MSRGSBase, (uint64_t)&cpu0);
+	/*! make sure curcpu() can work; we only need it till smp_init() */
+	wrmsr(kAMD64MSRGSBase, (uint64_t)&pcpu0);
 
 	mem_init();
 	vm_kernel_init();
@@ -234,6 +275,10 @@ _start(void)
 	smp_init();
 
 	kmem_dump();
+
+	callout_t callout;
+	callout.nanosecs = NS_PER_S * 1;
+	callout_enqueue(&callout);
 
 	//*(double *)11 = 48000000.12f;
 

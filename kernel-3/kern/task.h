@@ -18,6 +18,24 @@
 
 #include <kern/vm.h>
 #include <machine/machdep.h>
+#include <machine/intr.h>
+
+typedef struct callout {
+        /* links cpu::pendingcallouts */
+	TAILQ_ENTRY(callout) queue;
+        bool (*callback)(md_intr_frame_t *frame, void*arg);
+        void *arg;
+
+	/*
+	 * time (relative to now if this is the head of the callout queue,
+	 * otherwise relative to previous callout) in nanoseconds till expiry
+	 */
+	uint64_t nanosecs;
+	enum {
+		kCalloutDisabled, /**< not enqueued */
+		kCalloutPending,  /**< pending timeout */
+	} state;
+} callout_t;
 
 typedef struct task {
 	char	  name[31];
@@ -55,8 +73,16 @@ typedef struct cpu {
 
 	thread_t *idlethread;
 
-	/*! links thread::queue */
+	/*!
+         * Run-queue of threads. Linked by thread::queue.
+         */
 	TAILQ_HEAD(, thread) runqueue;
+
+        /**
+	 * Queue of pending callouts. Linked by callout::queue. Needs interrupts
+         * off (??and cpu lock in the future??). Emptied by local timer ISR.
+	 */
+	TAILQ_HEAD(, callout) pendingcallouts;
 
 	/*! machine-dependent cpu block */
 	md_cpu_t md;
@@ -73,6 +99,18 @@ curtask()
 {
 	return curcpu()->curthread->task;
 }
+
+/*! Enqueue a callout for running. */
+void callout_enqueue(callout_t *callout);
+/*! Dequeue and disable a callout. */
+void callout_dequeue(callout_t *callout);
+
+/*! Create a new thread; it is assigned a CPU but not enqueued for running. */
+thread_t *thread_new(task_t *task, bool iskernel);
+/*! Set a thread to run a function with an argument. */
+void thread_goto(thread_t *thr, void (*fun)(void *), void *arg);
+/*! Mark a thread runnable; it may preempt the currently running. */
+void thread_run(thread_t *thread);
 
 extern task_t	task0;
 extern thread_t thread0;

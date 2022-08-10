@@ -65,4 +65,10 @@ md_intr_x(bool en)
 
 void md_switch(struct thread *from, struct thread *to);
 
+/*! set a cpu-local timer to interrupt in \p nano ns, or disable with -1 */
+void md_timer_set(uint64_t nanos);
+
+/*! get nanoseconds remaining before timer elapses */
+uint64_t md_timer_get_remaining();
+
 #endif /* MACHDEP_H_ */
