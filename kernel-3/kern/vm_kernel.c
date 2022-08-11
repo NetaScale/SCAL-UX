@@ -21,6 +21,7 @@
 /** Kernel wired memory. */
 vmem_t vm_kernel_wired;
 
+
 static int
 internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
     vmem_addr_t *out)

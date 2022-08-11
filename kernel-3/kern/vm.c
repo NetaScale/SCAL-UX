@@ -12,8 +12,7 @@
 #include <libkern/klib.h>
 
 #include <stdatomic.h>
-
-#include "kern/sync.h"
+#include <string.h>
 
 #define PGQ_INITIALIZER(PGQ)                                             \
 	{                                                                \
@@ -56,6 +55,8 @@ vm_pagealloc(bool sleep, vm_pagequeue_t *queue)
 		fatal("vm_allocpage: oom not yet handled\n");
 	}
 	vm_page_changequeue(page, &vm_pgfreeq, queue);
+
+	memset(P2V(page->paddr), 0x0, PGSIZE);
 
 	return page;
 }

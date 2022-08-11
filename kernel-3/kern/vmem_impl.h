@@ -17,13 +17,14 @@
 #ifndef VMEM_IMPL_H_
 #define VMEM_IMPL_H_
 
+#include <sys/queue.h>
+
+#include <kern/vmem.h>
+
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include "sys/queue.h"
-#include "vmem.h"
 
 enum { kNFreeLists = sizeof(vmem_addr_t) * CHAR_BIT, kNHashBuckets = 16 };
 

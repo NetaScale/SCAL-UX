@@ -95,5 +95,7 @@ setup_cpu_gdt(cpu_t *cpu)
 void md_switch(struct thread *from, struct thread *to)
 {
         curcpu()->md.old = from;
+	curcpu()->curthread = to;
+	/* the sched lock will be dropped here */
         asm("int $240");
 }

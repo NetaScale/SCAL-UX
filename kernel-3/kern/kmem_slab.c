@@ -43,6 +43,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifdef _KERNEL
 #include <kern/kmem.h>
@@ -54,6 +55,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "kmem.h"
 
@@ -228,7 +230,7 @@ slabsize(kmem_zone_t *zone)
 }
 
 /* return the capacity in number of objects of a slab of this zone */
-static size_t
+static uint32_t
 slabcapacity(kmem_zone_t *zone)
 {
 	if (zone->size <= kSmallSlabMax) {
@@ -250,6 +252,7 @@ small_slab_new(kmem_zone_t *zone)
 	slab = SMALL_SLAB_HDR(base);
 
 	SIMPLEQ_INSERT_HEAD(&zone->slablist, slab, slablist);
+
 	slab->zone = zone;
 	slab->nfree = slabcapacity(zone);
 
@@ -311,11 +314,13 @@ kmem_zonealloc(kmem_zone_t *zone)
 		if (zone->size > kSmallSlabMax) {
 			slab = large_slab_new(zone);
 		} else {
+			if (slab)
+				for (;;) ;
 			slab = small_slab_new(zone);
 		}
 	}
 
-	slab->nfree--;
+	__atomic_sub_fetch(&slab->nfree, 1, __ATOMIC_RELAXED);
 	entry = slab->firstfree;
 
 	next = entry->entrylist.sle_next;
@@ -334,7 +339,6 @@ kmem_zonealloc(kmem_zone_t *zone)
 		SLIST_INSERT_HEAD(&zone->bufctllist, entry, entrylist);
 		ret = entry->base;
 	}
-
 	mutex_unlock(&zone->lock);
 	return ret;
 }

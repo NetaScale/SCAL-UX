@@ -8,6 +8,8 @@
  * All rights reserved.
  */
 
+#include <sys/param.h>
+
 #include <kern/sync.h>
 #include <kern/task.h>
 #include <kern/types.h>
@@ -15,6 +17,7 @@
 #include <machine/intr.h>
 #include <x86_64/asmintr.h>
 #include <x86_64/cpu.h>
+#include "machine/spl.h"
 
 typedef struct {
 	uint16_t isr_low;
@@ -30,8 +33,9 @@ enum {
 	kIntNumSyscall = 128,
 	/* set below 224, so that we can filter it out with CR8 */
 	kIntNumLAPICTimer = 223,
-	kIntNumSwitch = 240,
-	kIntNumInvlPG = 241,
+	kIntNumSwitch = 240,	 /* Manually invoked with INT */
+	kIntNumInvlPG = 241,	 /* IPI */
+	kIntNumReschedule = 242, /* IPI */
 };
 
 enum {
@@ -52,7 +56,8 @@ enum {
 static idt_entry_t idt[256] = { 0 };
 static struct md_intr_entry {
 	const char	   *name;
-	md_intr_handler_fn_t handler;
+	ipl_t		    prio;
+	intr_handler_fn_t   handler;
 	void		*arg;
 } md_intrs[256] = { 0 };
 
@@ -91,7 +96,11 @@ idt_init()
 #undef IDT_SET
 
 	idt_load();
+	md_intr_register(kIntNumLAPICTimer, kSPL0, callout_interrupt, NULL);
+	md_intr_register(kIntNumReschedule, kSPL0, sched_timeslice, NULL);
 }
+
+void lapic_eoi(void);
 
 /** the handler called by the actual ISRs. */
 #pragma GCC push_options
@@ -100,7 +109,7 @@ void
 handle_int(md_intr_frame_t *frame, uintptr_t num)
 {
 	if (num == 240) {
-		/* context switch */
+		/* here the context switch actually happens */
 		thread_t *old = curcpu()->md.old, *next = curcpu()->curthread;
 		extern spinlock_t sched_lock;
 
@@ -114,10 +123,20 @@ handle_int(md_intr_frame_t *frame, uintptr_t num)
 		return;
 	}
 
-	kprintf("Interrupt number %zu!\n", num);
+	if (md_intrs[num].handler == NULL) {
+		fatal("unhandled interrupt %lu\n", num);
+	}
 
-	for (;;)
-		;
+	md_intrs[num].handler(frame, md_intrs[num].arg);
+	if (num > 32)
+		lapic_eoi();
+
+	assert(curthread()->state == kThreadRunning);
+	if (curcpu()->preempted) {
+		curcpu()->preempted = false;
+		sched_reschedule();
+
+	}
 
 	return;
 }
@@ -195,6 +214,53 @@ lapic_timer_calibrate()
 	spinlock_unlock(&calib);
 
 	return (initial - apic_after) * hz;
+}
+
+int
+md_intr_alloc(ipl_t prio, intr_handler_fn_t handler, void *arg)
+{
+	uint8_t vec = 0;
+
+	for (int i = MAX(prio << 4, 32); i < 256; i++)
+		if (md_intrs[i].handler == NULL) {
+			vec = i;
+			break;
+		}
+
+	if (vec == 0) {
+		kprintf("md_intr_alloc: out of vectors for priority %lu\n",
+		    prio);
+		return -1;
+	}
+
+	md_intr_register(vec, prio, handler, arg);
+	return vec;
+}
+
+void
+md_intr_register(int vec, ipl_t prio, intr_handler_fn_t handler, void *arg)
+{
+	md_intrs[vec].prio = prio;
+	md_intrs[vec].handler = handler;
+	md_intrs[vec].arg = arg;
+}
+
+static void send_ipi(uint32_t lapic_id, uint8_t intr)
+{
+	lapic_write(kLAPICRegICR1, lapic_id << 24);
+	lapic_write(kLAPICRegICR0, kIntNumReschedule);
+}
+
+void
+md_ipi_invlpg(cpu_t *cpu)
+{
+	send_ipi(cpu->md.lapic_id, kIntNumInvlPG);
+}
+
+void
+md_ipi_resched(cpu_t *cpu)
+{
+	send_ipi(cpu->md.lapic_id, kIntNumReschedule);
 }
 
 void

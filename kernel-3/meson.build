@@ -8,8 +8,11 @@ kern_c_args = [ '-ffreestanding', '-fno-stack-protector', '-nostdlib',
 	'-mcmodel=kernel', '-D_KERNEL' ]
 kern_objc_args = [ kern_c_args ]
 
-kern_srcs = files('kern/kmem_slab.c', 'kern/task.c', 'kern/vm_kernel.c', 'kern/vm.c',
-    'kern/vmem.c', 'libkern/klib.c',
+kern_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
+  '-fsanitize=kernel-address' ]
+
+kern_srcs = files('kern/kasan.c', 'kern/kmem_slab.c', 'kern/task.c',
+    'kern/vm_kernel.c', 'kern/vm.c', 'kern/vmem.c', 'libkern/klib.c',
 )
 kern_incs = include_directories(arch + '/include', './')
 subdir(arch)

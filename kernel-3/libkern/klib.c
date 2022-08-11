@@ -8,7 +8,6 @@
  * All rights reserved.
  */
 
-//#include <kern/liballoc.h>
 #include <kern/sync.h>
 
 spinlock_t lock_msgbuf = SPINLOCK_INITIALISER;

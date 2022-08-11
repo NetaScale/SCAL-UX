@@ -42,10 +42,11 @@ md_intr_disable()
 {
 	uintptr_t flags;
 	asm volatile("pushf\n\t"
-		     "pop %0"
+		     "pop %0\n\t"
+		     "cli"
 		     : "=rm"(flags)
 		     : /* epsilon */
-		     : "memory");
+		     : "memory", "cc");
 	return flags & (1 << 9);
 }
 
@@ -63,11 +64,14 @@ md_intr_x(bool en)
 			     : "r10", "memory");
 }
 
+/*! switch from one thread to another on this CPU */
 void md_switch(struct thread *from, struct thread *to);
-
+/*! send an invlpg IPI to a CPU */
+void md_ipi_invlpg(struct cpu *cpu);
+/*! send a reschedule IPI to a CPU */
+void md_ipi_resched(struct cpu *cpu);
 /*! set a cpu-local timer to interrupt in \p nano ns, or disable with -1 */
 void md_timer_set(uint64_t nanos);
-
 /*! get nanoseconds remaining before timer elapses */
 uint64_t md_timer_get_remaining();
 

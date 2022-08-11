@@ -23,8 +23,8 @@
 typedef struct callout {
         /* links cpu::pendingcallouts */
 	TAILQ_ENTRY(callout) queue;
-        bool (*callback)(md_intr_frame_t *frame, void*arg);
-        void *arg;
+	void (*callback)(md_intr_frame_t *frame, void *arg);
+	void *arg;
 
 	/*
 	 * time (relative to now if this is the head of the callout queue,
@@ -58,7 +58,16 @@ typedef struct thread {
 	/*! linkage for cpu::runqueue or a wait queue or... */
 	TAILQ_ENTRY(thread) queue;
 
+	/*! CPU to which the thread the belongs. */
+	struct cpu *cpu;
+
+	/*! current running state of thread */
 	enum thread_state state;
+
+	/*! kernal stack */
+	vaddr_t kstack;
+	/*! user-mode stack (or NULL) */
+	vaddr_t ustack;
 
 	/*! task to which the thread belongs */
 	task_t *task;
@@ -78,9 +87,15 @@ typedef struct cpu {
          */
 	TAILQ_HEAD(, thread) runqueue;
 
-        /**
+	/*! Whether to reschedule on dropping priority/finishing interrupt. */
+	bool preempted : 1;
+
+	/*! The timeslicing callout - timeslices processes. */
+	callout_t timeslicer;
+
+	/**
 	 * Queue of pending callouts. Linked by callout::queue. Needs interrupts
-         * off (??and cpu lock in the future??). Emptied by local timer ISR.
+	 * off (??and cpu lock in the future??). Emptied by local timer ISR.
 	 */
 	TAILQ_HEAD(, callout) pendingcallouts;
 
@@ -104,17 +119,28 @@ curtask()
 void callout_enqueue(callout_t *callout);
 /*! Dequeue and disable a callout. */
 void callout_dequeue(callout_t *callout);
+/*! Private - callout interrupt handler. */
+void callout_interrupt(md_intr_frame_t *frame, void *unused);
 
 /*! Create a new thread; it is assigned a CPU but not enqueued for running. */
-thread_t *thread_new(task_t *task, bool iskernel);
-/*! Set a thread to run a function with an argument. */
-void thread_goto(thread_t *thr, void (*fun)(void *), void *arg);
-/*! Mark a thread runnable; it may preempt the currently running. */
-void thread_run(thread_t *thread);
+thread_t *thread_new(task_t *task, void (*fun)(void *arg), void *arg);
+/*! Resume a suspended thread; it may preempt the currently running. */
+void thread_resume(thread_t *thread);
+
+/*! Private - called by the timeslicer callout when a timeslice expires. */
+void sched_timeslice(md_intr_frame_t *frame, void *arg);
+/*!
+ * Reschedule to a new thread (if there are any eligible candidates.) If the
+ * current thread wants to sleep or exit, it should have changed its state to
+ * kThreadWaiting or whichever state is relevant to it. If it is simply yielding
+ * then it should not change its state.
+ */
+void sched_reschedule(void);
 
 extern task_t	task0;
 extern thread_t thread0;
 extern cpu_t	cpu0;
 extern cpu_t  **cpus;
+extern int	ncpu;
 
 #endif /* TASK_H_ */

@@ -18,8 +18,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "kern/sync.h"
-
 void idt_init();
 void idt_load();
 void x64_vm_init(paddr_t kphys);
@@ -66,6 +64,8 @@ volatile struct limine_terminal_request terminal_request = {
 	.revision = 0
 };
 
+static int cpus_up = 0;
+
 enum { kPortCOM1 = 0x3f8 };
 
 static void
@@ -94,6 +94,7 @@ md_kputc(int ch, void *ctx)
 static void
 done(void)
 {
+	kprintf("Done!\n");
 	for (;;) {
 		__asm__("hlt");
 	}
@@ -202,12 +203,19 @@ common_init(struct limine_smp_info *smpi, cpu_t *cpu)
 	for (int i = 0; i < 3; i++)
 		cpu->md.lapic_tps += lapic_timer_calibrate() / 3;
 
+	cpu->preempted = 0;
+	cpu->timeslicer.arg = NULL;
+	cpu->timeslicer.callback = sched_timeslice;
+	cpu->timeslicer.state = kCalloutDisabled;
 	TAILQ_INIT(&cpu->pendingcallouts);
 	TAILQ_INIT(&cpu->runqueue);
 
 	cpu->idlethread = cpu->curthread;
+	cpu->idlethread->state = kThreadRunning;
 
+	vm_activate(&kmap);
 	asm("sti");
+	__atomic_add_fetch(&cpus_up, 1, __ATOMIC_RELAXED);
 }
 
 static void
@@ -237,6 +245,8 @@ smp_init()
 	cpus = kmem_alloc(sizeof *cpus * smpr->cpu_count);
 
 	kprintf("%lu cpus\n", smpr->cpu_count);
+	ncpu = smpr->cpu_count;
+
 	for (size_t i = 0; i < smpr->cpu_count; i++) {
 		struct limine_smp_info *smpi = smpr->cpus[i];
 		smpi->extra_argument = i;
@@ -245,6 +255,29 @@ smp_init()
 		} else
 			smpi->goto_address = ap_init;
 	}
+
+	while (cpus_up != smpr->cpu_count)
+		__asm__("pause");
+}
+
+static void
+fun2(void *arg)
+{
+	kprintf("thread2: hello\n");
+	done();
+}
+
+static void
+fun(void *arg)
+{
+	thread_t *test;
+
+	kprintf("thread1: hello\n");
+	test = thread_new(&task0, fun2, (void *)100);
+	kprintf("thread1: made thread2\n");
+	thread_resume(test);
+	kprintf("thread1: thread2 resumed\n");
+	done();
 }
 
 // The following will be our kernel's entry point.
@@ -274,11 +307,16 @@ _start(void)
 
 	smp_init();
 
-	kmem_dump();
+	// callout_t callout;
+	// callout.nanosecs = NS_PER_S * 1;
+	// callout_enqueue(&callout);
 
-	callout_t callout;
-	callout.nanosecs = NS_PER_S * 1;
-	callout_enqueue(&callout);
+	thread_t *test = thread_new(&task0, fun, (void *)0xdeadb00b);
+	kprintf("thread0: made thread1\n");
+	thread_resume(test);
+	kprintf("thread0: after resuming thread1\n");
+
+	kmem_dump();
 
 	//*(double *)11 = 48000000.12f;
 

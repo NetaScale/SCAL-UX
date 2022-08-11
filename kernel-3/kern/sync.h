@@ -128,17 +128,26 @@ typedef struct mutex {
 	waitq_t	       waitq;
 	struct thread *owner;
 	size_t	       count;
+	spinlock_t     lock;
 } mutex_t;
 
 #define MUTEX_INITIALISER(MUTEX)                                           \
 	{                                                                  \
 		.waitq = WAITQ_INITIALIZER((MUTEX)->waitq), .owner = NULL, \
-		.count = 0                                                 \
+		.count = 0, .lock = SPINLOCK_INITIALISER                   \
 	}
 
 static inline void mutex_init(mutex_t *mtx) {};
-static inline void mutex_lock(mutex_t *mtx) {};
-static inline void mutex_unlock(mutex_t *mtx) {};
+static inline void
+mutex_lock(mutex_t *mtx)
+{
+	spinlock_lock(&mtx->lock);
+};
+static inline void
+mutex_unlock(mutex_t *mtx)
+{
+	spinlock_unlock(&mtx->lock);
+};
 #define ASSERT_MUTEX_HELD(PMTX) \
 	assert((PMTX)->owner == curthread())
 /*!

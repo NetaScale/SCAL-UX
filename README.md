@@ -34,6 +34,12 @@ inspired by pkgsrc. You need an existing SCAL/UX toolchain for now and mlibc
 headers installed into a sysroot.
 Other tools required to build are Meson, xorriso...
 
+To-do
+-----
+
+- vm_kernel doesn't do TLB shotodowns for unmaps of kernel wired memory;
+  problem?
+
 <!--
 Third-party components
 ----------------------
