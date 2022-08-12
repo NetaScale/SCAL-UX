@@ -17,7 +17,7 @@
 #define PGQ_INITIALIZER(PGQ)                                             \
 	{                                                                \
 		.queue = TAILQ_HEAD_INITIALIZER(PGQ.queue), .npages = 0, \
-		.lock = MUTEX_INITIALISER(&PGQ.lock)                     \
+		.lock = MUTEX_INITIALISER(PGQ.lock)                     \
 	}
 
 vm_pagequeue_t vm_pgfreeq = PGQ_INITIALIZER(vm_pgfreeq),

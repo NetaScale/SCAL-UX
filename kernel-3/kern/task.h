@@ -19,6 +19,7 @@
 #include <kern/vm.h>
 #include <machine/machdep.h>
 #include <machine/intr.h>
+#include "kern/sync.h"
 
 typedef struct callout {
         /* links cpu::pendingcallouts */
@@ -52,17 +53,29 @@ enum thread_state {
 	kThreadExiting,
 };
 
+/*!
+ * Locks:
+ * @var lock Protects structures accessed by scheduler (l).
+ */
+
 typedef struct thread {
 	/*! linkage for task::threads */
 	SLIST_ENTRY(thread) taskthreads;
 	/*! linkage for cpu::runqueue or a wait queue or... */
 	TAILQ_ENTRY(thread) queue;
 
-	/*! CPU to which the thread the belongs. */
+	/*! @name scheduling @{ */
+	/*! protects scheduling structures */
+	spinlock_t lock;
+	/*! [l] wait queue (if any) on which the thread is blocking */
+	waitq_t *wq;
+	/*! [l] result of wait */
+	waitq_result_t wqres;
+	/*! [l] CPU to which the thread the belongs. */
 	struct cpu *cpu;
-
-	/*! current running state of thread */
+	/*! [l] current running state of thread */
 	enum thread_state state;
+	/*! @} */
 
 	/*! kernal stack */
 	vaddr_t kstack;

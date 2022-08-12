@@ -3,6 +3,7 @@ configure~
 configure
 build-aux/install-sh
 build
+build0
 .vscode/
 vendor/limine/limine-deploy
 barebones.iso
@@ -17,3 +18,4 @@ a.out
 /hda.img
 /html
 /latex
+out

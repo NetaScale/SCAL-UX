@@ -4,9 +4,23 @@
 static void
 kasan_check(vaddr_t addr, size_t size, bool isStore, void *ip)
 {
-	if (addr < (vaddr_t)KHEAP_BASE ||
+#if 0
+	static bool in_check = false;
+
+	if (in_check || addr < (vaddr_t)KHEAP_BASE ||
 	    addr > (vaddr_t)KHEAP_BASE + KHEAP_SIZE)
 		return;
+
+	in_check = true;
+
+	if (addr == 0xffff8001000043d8) {
+		kprintf("%p %s(%d) by %p. Old value: %d\n", addr,
+		    isStore ? "STORED" : "loaded", size,
+		    __builtin_return_address(1), *(bool *)addr);
+	}
+
+	in_check = false;
+#endif
 }
 
 void

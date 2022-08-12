@@ -15,10 +15,13 @@
 #include <kern/task.h>
 #include <libkern/klib.h>
 
+#include <stdatomic.h>
 #include <stdint.h>
 
+#include "kern/sync.h"
 #include "kern/vm.h"
 #include "machine/machdep.h"
+#include "x86_64/cpu.h"
 
 task_t task0 = {
         .name = "[kernel]",
@@ -26,7 +29,9 @@ task_t task0 = {
 };
 
 thread_t thread0 = {
-        .task = &task0
+        .task = &task0,
+	.lock = SPINLOCK_INITIALISER,
+	.wq = NULL,
 };
 
 cpu_t cpu0 = {
@@ -166,6 +171,80 @@ finish:
 }
 
 void
+mutex_lock(mutex_t *mtx)
+{
+	struct thread *nul = NULL;
+
+	if (atomic_fetch_add(&mtx->count, 1) >= 1) {
+		switch (waitq_await(&mtx->wq, -1)) {
+		case kWQSuccess:
+			/* epsilon */
+			break;
+
+		default: {
+			fatal("Failured to acquire a mutex.\n");
+		}
+		}
+	}
+
+	assert(atomic_compare_exchange_strong(&mtx->owner, &nul, curthread()));
+}
+
+void
+mutex_unlock(mutex_t *mtx)
+{
+	struct thread *expected = curthread();
+
+	assert(atomic_compare_exchange_strong(&mtx->owner, &expected, NULL));
+	if (atomic_fetch_sub(&mtx->count, 1) > 1) {
+		waitq_wake_one(&mtx->wq);
+	}
+}
+
+waitq_result_t
+waitq_await(waitq_t *wq, uint64_t nanosecs)
+{
+	thread_t	 *thread = curthread();
+	int	       iff = md_intr_disable();
+	waitq_result_t r;
+
+	spinlock_lock(&thread->lock);
+	spinlock_lock(&wq->lock);
+	TAILQ_INSERT_TAIL(&wq->waiters, thread, queue);
+	thread->state = kThreadWaiting;
+	thread->wq = wq;
+	spinlock_unlock(&wq->lock);
+	sched_reschedule();
+	r = thread->wqres;
+	md_intr_x(iff);
+	return r;
+}
+
+int
+waitq_wake_one(waitq_t *wq)
+{
+	thread_t *thrd;
+	int	  iff = md_intr_disable();
+
+	spinlock_lock(&wq->lock);
+	thrd = TAILQ_FIRST(&wq->waiters);
+	if (thrd)
+		TAILQ_REMOVE(&wq->waiters, thrd, queue);
+	spinlock_unlock(&wq->lock);
+
+	if (!thrd) {
+		kprintf("warning: waitq %p sent event with no waiters\n", wq);
+		return 0;
+	}
+
+	thrd->wqres = kWQSuccess;
+	thread_resume(thrd);
+
+	md_intr_x(iff);
+	return 1;
+}
+
+void
 task_init(void)
 {
 }
@@ -258,12 +337,16 @@ sched_reschedule(void)
 	cpu = curcpu();
 	oldthread = curthread();
 
-
 	if (oldthread == cpu->idlethread) {
 		/* idle thread shouldn't do any sleeping proper */
 		assert(oldthread->state == kThreadRunning);
 	} else if (oldthread->state == kThreadWaiting) {
 		/* accounting will happen here some day */
+		/*
+		 * protocol indicates that if you are about to wait, you shall
+		 * lock yourself and let Scheduler unlock you.
+		 */
+		spinlock_unlock(&oldthread->lock);
 	} else if (oldthread->state == kThreadExiting) {
 		kprintf("thread %s:%p exits\n", oldthread->task->name,
 		    oldthread);

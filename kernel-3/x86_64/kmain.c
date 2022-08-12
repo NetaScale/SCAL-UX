@@ -178,12 +178,9 @@ mem_init()
 static spinlock_t early_lock = SPINLOCK_INITIALISER;
 
 static void
-common_init(struct limine_smp_info *smpi, cpu_t *cpu)
+common_init(struct limine_smp_info *smpi)
 {
-	cpu->num = smpi->extra_argument;
-	cpus[smpi->extra_argument] = cpu;
-
-	wrmsr(kAMD64MSRGSBase, (uintptr_t)&cpus[smpi->extra_argument]);
+	cpu_t *cpu = (cpu_t *)smpi->extra_argument;
 
 	spinlock_lock(&early_lock);
 	SLIST_INSERT_HEAD(&task0.threads, cpu->curthread, taskthreads);
@@ -221,18 +218,21 @@ common_init(struct limine_smp_info *smpi, cpu_t *cpu)
 static void
 ap_init(struct limine_smp_info *smpi)
 {
-	cpu_t    *cpu;
+	cpu_t    *cpu = (cpu_t *)smpi->extra_argument;
 	thread_t *thread;
 
+	/* need this before any allocations */
+	wrmsr(kAMD64MSRGSBase, (uintptr_t)&cpus[cpu->num]);
+
 	spinlock_lock(&early_lock);
-	cpu = kmem_alloc(sizeof *cpu);
 	thread = kmem_alloc(sizeof *thread);
 	spinlock_unlock(&early_lock);
 
+	spinlock_init(&thread->lock);
 	cpu->curthread = thread;
 	thread->task = &task0;
 
-	common_init(smpi, cpu);
+	common_init(smpi);
 	/* this is now that CPU's idle thread loop */
 	done();
 }
@@ -249,21 +249,38 @@ smp_init()
 
 	for (size_t i = 0; i < smpr->cpu_count; i++) {
 		struct limine_smp_info *smpi = smpr->cpus[i];
-		smpi->extra_argument = i;
+
 		if (smpi->lapic_id == smpr->bsp_lapic_id) {
-			common_init(smpi, &cpu0);
-		} else
+			smpi->extra_argument = (uint64_t)&cpu0;
+			cpu0.num = i;
+			cpus[i] = &cpu0;
+			common_init(smpi);
+		} else {
+			cpu_t *cpu = kmem_alloc(sizeof *cpu);
+			cpu->num = i;
+			cpus[i] = cpu;
+			smpi->extra_argument = (uint64_t)cpu;
 			smpi->goto_address = ap_init;
+		}
 	}
 
 	while (cpus_up != smpr->cpu_count)
 		__asm__("pause");
 }
 
+static mutex_t mtx;
+
 static void
 fun2(void *arg)
 {
 	kprintf("thread2: hello\n");
+	while (1) {
+		mutex_lock(&mtx);
+		for (int i = 0; i < UINT32_MAX / 1024; i++)
+			asm("pause");
+		kprintf("B");
+		mutex_unlock(&mtx);
+	}
 	done();
 }
 
@@ -272,11 +289,20 @@ fun(void *arg)
 {
 	thread_t *test;
 
+	mutex_init(&mtx);
+
 	kprintf("thread1: hello\n");
 	test = thread_new(&task0, fun2, (void *)100);
 	kprintf("thread1: made thread2\n");
 	thread_resume(test);
 	kprintf("thread1: thread2 resumed\n");
+	while (1) {
+		mutex_lock(&mtx);
+		for (int i = 0; i < UINT32_MAX / 1024; i++)
+			asm("pause");
+		kprintf("A");
+		mutex_unlock(&mtx);
+	}
 	done();
 }
 

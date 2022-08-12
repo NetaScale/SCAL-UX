@@ -109,11 +109,21 @@ typedef struct waitq {
 	TAILQ_HEAD(, thread) waiters;
 } waitq_t;
 
-#define WAITQ_INITIALIZER(WAITQ)                                  \
-	{                                                         \
-		.lock = SPINLOCK_INITIALISER,                     \
-		.waiters = TAILQ_HEAD_INITIALIZER(WAITQ.waiters) \
+typedef enum waitq_result {
+	kWQSuccess = 0,
+	KWQTimeout = -1,
+}waitq_result_t;
+
+#define WAITQ_INITIALIZER(WAITQ)                                   \
+	{                                                          \
+		.lock = SPINLOCK_INITIALISER,                      \
+		.waiters = TAILQ_HEAD_INITIALIZER((WAITQ).waiters) \
 	}
+
+/*! Await an event on a waitqueue. */
+waitq_result_t waitq_await(waitq_t *wq, uint64_t nanosecs);
+/*! Awaken the foremost waiter on a waitqueue. @returns 1 if a thread woke. */
+int waitq_wake_one(waitq_t *wq);
 
 /*!
  * @}
@@ -125,29 +135,25 @@ typedef struct waitq {
  */
 
 typedef struct mutex {
-	waitq_t	       waitq;
-	struct thread *owner;
-	size_t	       count;
-	spinlock_t     lock;
+	struct thread *_Atomic owner;
+	waitq_t		wq;
+	atomic_uint	count;
+	spinlock_t	lock;
 } mutex_t;
 
-#define MUTEX_INITIALISER(MUTEX)                                           \
-	{                                                                  \
-		.waitq = WAITQ_INITIALIZER((MUTEX)->waitq), .owner = NULL, \
-		.count = 0, .lock = SPINLOCK_INITIALISER                   \
+#define MUTEX_INITIALISER(MUTEX)                                          \
+	{                                                                 \
+		.wq = WAITQ_INITIALIZER((MUTEX).wq), .owner = NULL, \
+		.count = 0, .lock = SPINLOCK_INITIALISER                  \
 	}
 
-static inline void mutex_init(mutex_t *mtx) {};
 static inline void
-mutex_lock(mutex_t *mtx)
+mutex_init(mutex_t *mtx)
 {
-	spinlock_lock(&mtx->lock);
+	*mtx = (mutex_t)MUTEX_INITIALISER(*mtx);
 };
-static inline void
-mutex_unlock(mutex_t *mtx)
-{
-	spinlock_unlock(&mtx->lock);
-};
+void mutex_lock(mutex_t *mtx);
+void mutex_unlock(mutex_t *mtx);
 #define ASSERT_MUTEX_HELD(PMTX) \
 	assert((PMTX)->owner == curthread())
 /*!
