@@ -10,7 +10,7 @@
 
 #include <kern/sync.h>
 #include <kern/task.h>
-#include <kern/vm.h>
+#include <vm/vm.h>
 #include <x86_64/cpu.h>
 
 typedef struct {

@@ -47,7 +47,7 @@
 
 #ifdef _KERNEL
 #include <kern/kmem.h>
-#include <kern/vm.h>
+#include <vm/vm.h>
 #include <libkern/klib.h>
 #else
 #include <sys/mman.h>
@@ -193,7 +193,6 @@ static kmem_zone_t *kmem_alloc_zones[] = { ZONE_SIZES(REFERENCE_ZONE) };
 #undef REFERENCE_ZONE
 /*! list of all zones; TODO(med): protect with a lock */
 struct kmem_zones kmem_zones = SIMPLEQ_HEAD_INITIALIZER(kmem_zones);
-
 
 void
 kmem_zone_init(struct kmem_zone *zone, const char *name, size_t size)
@@ -388,7 +387,8 @@ kmem_dump()
 {
 	kmem_zone_t *zone;
 
-	kprintf("\033[7m%-24s%-6s%-6s\033[m\n", "name", "size", "objs");
+	kprintf("\033[7m%-24s%-6s%-6s%-6s%-6s\033[m\n", "name", "size", "slabs",
+	    "objs", "free");
 
 	SIMPLEQ_FOREACH(zone, &kmem_zones, zonelist)
 	{
@@ -407,8 +407,8 @@ kmem_dump()
 			totalFree += slab->nfree;
 		}
 
-		kprintf("%-24s%-6zu%-6lu\n", zone->name, zone->size,
-		    cap * nSlabs - totalFree);
+		kprintf("%-24s%-6zu%-6lu%-6lu%-6lu\n", zone->name, zone->size,
+		    nSlabs, cap * nSlabs - totalFree, totalFree);
 
 		mutex_unlock(&zone->lock);
 	}
@@ -463,6 +463,23 @@ kmem_free(void *ptr, size_t size)
 		return vm_kfree(ptr, realsize / PGSIZE);
 	} else
 		return kmem_zonefree(kmem_alloc_zones[zoneidx], ptr);
+}
+
+void *
+kmem_realloc(void *ptr, size_t oldSize, size_t size)
+{
+	void *ret = kmem_alloc(size);
+	memcpy(ret, ptr, oldSize);
+	kmem_free(ptr, oldSize);
+	return ret;
+}
+
+void *
+kmem_zalloc(size_t size)
+{
+	void *ret = kmem_alloc(size);
+	memset(ret, 0x0, size);
+	return ret;
 }
 
 #ifndef _KERNEL

@@ -13,7 +13,7 @@
  * @brief Management of the kernel's virtual address space.
  */
 
-#include <kern/vm.h>
+#include <vm/vm.h>
 #include <kern/vmem.h>
 #include <kern/vmem_impl.h>
 #include <libkern/klib.h>
@@ -62,7 +62,7 @@ internal_freewired(vmem_t *vmem, vmem_addr_t addr, vmem_size_t size)
 	for (int i = 0; i < r; i += PGSIZE) {
 		vm_page_t *page;
 		page = pmap_unenter_kern(&kmap, (vaddr_t)addr + i);
-		vm_pagefree(page);
+		vm_page_free(page);
 	}
 }
 

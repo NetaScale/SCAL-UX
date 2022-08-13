@@ -18,11 +18,6 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
-#include "kern/sync.h"
-#include "kern/vm.h"
-#include "machine/machdep.h"
-#include "x86_64/cpu.h"
-
 task_t task0 = {
         .name = "[kernel]",
         .map = &kmap

@@ -8,8 +8,10 @@
  * All rights reserved.
  */
 
-#include <kern/vm.h>
+#include <kern/kmem.h>
+#include <kern/task.h>
 #include <libkern/klib.h>
+#include <vm/vm.h>
 #include <x86_64/cpu.h>
 
 enum {
@@ -84,7 +86,7 @@ pmap_free_sub(uint64_t *table, int level)
 		}
 
 	page = vm_page_from_paddr(V2P(table));
-	vm_pagefree(page);
+	vm_page_free(page);
 }
 
 void
@@ -237,21 +239,13 @@ pmap_trans(pmap_t *pmap, vaddr_t virt)
 void
 pmap_enter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
 {
-#if 0
-	pv_entry_t *ent = kmalloc(sizeof *ent);
+	pv_entry_t *ent = kmem_alloc(sizeof(*ent));
 
 	ent->map = map;
 	ent->vaddr = virt;
 
 	pmap_enter_kern(map->pmap, page->paddr, virt, prot);
 	LIST_INSERT_HEAD(&page->pv_table, ent, pv_entries);
-#endif
-}
-
-void
-pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
-{
-	pmap_enter_kern(map->pmap, page->paddr, virt, prot);
 }
 
 void
@@ -281,6 +275,75 @@ pmap_enter_kern(pmap_t *pmap, paddr_t phys, vaddr_t virt, vm_prot_t prot)
 	pte_set(pti_virt, phys, vm_prot_to_i386(prot));
 }
 
+void
+pmap_reenter(vm_map_t *map, vm_page_t *page, vaddr_t virt, vm_prot_t prot)
+{
+	pmap_enter_kern(map->pmap, page->paddr, virt, prot);
+}
+
+void
+pmap_reenter_all_readonly(vm_page_t *page)
+{
+	pv_entry_t *pv, *tmp;
+
+	mutex_lock(&page->lock);
+
+	LIST_FOREACH_SAFE (pv, &page->pv_table, pv_entries, tmp) {
+		mutex_lock(&pv->map->lock);
+		pmap_reenter(pv->map, page, pv->vaddr, kVMRead | kVMExecute);
+		pmap_global_invlpg(pv->vaddr);
+		mutex_unlock(&page->lock);
+	}
+	mutex_unlock(&page->lock);
+}
+
+void
+pmap_unenter(vm_map_t *map, vm_page_t *page, vaddr_t vaddr, pv_entry_t *pv)
+{
+	/** \todo free no-longer-needed page tables */
+	pte_t  *pte = pmap_fully_descend(map->pmap, vaddr);
+	paddr_t paddr;
+
+	/*
+	 * todo(med): maybe we should be more careful about this
+	 * perhaps instead of bulk pmap_unenter'ing on deallocation, instead
+	 * we should iterate through the object's page queue (amap for anon
+	 * objects). would it add significant cost?
+	 */
+	if (pte == NULL)
+		return;
+
+	pte = P2V(pte);
+	paddr = pte_get_addr(*pte);
+	if (*pte == 0)
+		return;
+	*pte = 0x0;
+
+	pmap_invlpg(vaddr);
+
+	if (!page) {
+		page = vm_page_from_paddr(paddr);
+	}
+
+	assert(page);
+
+	if (!pv) {
+		LIST_FOREACH (pv, &page->pv_table, pv_entries) {
+			if (pv->map == map && pv->vaddr == vaddr) {
+				goto next;
+			}
+		}
+
+		fatal(
+		    "pmap_unenter: no mapping of frame %p at vaddr %p in map %p\n",
+		    page->paddr, vaddr, map);
+	}
+
+next:
+	LIST_REMOVE(pv, pv_entries);
+	kmem_free(pv, sizeof(*pv));
+}
+
 vm_page_t *
 pmap_unenter_kern(vm_map_t *map, vaddr_t vaddr)
 {
@@ -305,21 +368,43 @@ pmap_unenter_kern(vm_map_t *map, vaddr_t vaddr)
 pmap_t *
 pmap_new()
 {
-#if 0
-	pmap_t *pmap = kcalloc(sizeof *pmap, 1);
-	pmap->pml4 = vm_pagealloc_zero(1)->paddr;
+	pmap_t *pmap = kmem_alloc(sizeof(*pmap));
+	pmap->pml4 = vm_pagealloc(1, &vm_pgpmapq)->paddr;
 	for (int i = 255; i < 512; i++) {
 		uint64_t *pml4 = P2V(pmap->pml4);
 		uint64_t *kpml4 = P2V(kmap.pmap->pml4);
 		pte_set(&pml4[i], (void *)kpml4[i], kMMUDefaultProt);
 	}
 	return pmap;
-#endif
-	fatal("Unimplemented\n");
 }
 
 void
 pmap_invlpg(vaddr_t addr)
 {
 	asm volatile("invlpg %0" : : "m"(*((const char *)addr)) : "memory");
+}
+
+static spinlock_t invlpg_global_lock = SPINLOCK_INITIALISER;
+vaddr_t		  invlpg_addr;
+volatile int	  invlpg_done_cnt;
+
+void
+pmap_global_invlpg(vaddr_t vaddr)
+{
+	int iff = md_intr_disable();
+
+	spinlock_lock(&invlpg_global_lock);
+	invlpg_addr = vaddr;
+	invlpg_done_cnt = 1;
+	for (int i = 0; i < ncpu; i++) {
+		if (cpus[i] == curcpu())
+			continue;
+
+		md_ipi_invlpg(cpus[i]);
+	}
+	pmap_invlpg(vaddr);
+	while (invlpg_done_cnt != ncpu)
+		__asm__("pause");
+	spinlock_unlock(&invlpg_global_lock);
+	md_intr_x(iff);
 }

@@ -1,4 +1,4 @@
-#include <kern/vm.h>
+#include <vm/vm.h>
 #include <libkern/klib.h>
 
 static void

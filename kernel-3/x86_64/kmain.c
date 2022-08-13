@@ -10,7 +10,7 @@
 
 #include <kern/kmem.h>
 #include <kern/task.h>
-#include <kern/vm.h>
+#include <vm/vm.h>
 #include <libkern/klib.h>
 #include <x86_64/cpu.h>
 #include <x86_64/limine.h>
@@ -278,7 +278,7 @@ fun2(void *arg)
 		mutex_lock(&mtx);
 		for (int i = 0; i < UINT32_MAX / 1024; i++)
 			asm("pause");
-		kprintf("B");
+		//kprintf("B");
 		mutex_unlock(&mtx);
 	}
 	done();
@@ -300,7 +300,7 @@ fun(void *arg)
 		mutex_lock(&mtx);
 		for (int i = 0; i < UINT32_MAX / 1024; i++)
 			asm("pause");
-		kprintf("A");
+		//kprintf("A");
 		mutex_unlock(&mtx);
 	}
 	done();
@@ -342,7 +342,10 @@ _start(void)
 	thread_resume(test);
 	kprintf("thread0: after resuming thread1\n");
 
+	for (int i = 0; i < 512; i++)
+		outb(0x80, 0x0);
 	kmem_dump();
+	vm_pagedump();
 
 	//*(double *)11 = 48000000.12f;
 

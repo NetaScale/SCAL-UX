@@ -85,6 +85,13 @@ void *kmem_alloc(size_t size);
  */
 void kmem_free(void *ptr, size_t size);
 
+void *kmem_realloc(void *ptr, size_t oldSize, size_t size);
+
+/*!
+ * Allocate zeroed memory from a zone.
+ */
+void *kmem_zalloc(size_t size);
+
 /*!
  * Allocate kernel wired memory generically; this is a compatibility interface
  * for those who aren't able to provide the size of allocation when freeing the

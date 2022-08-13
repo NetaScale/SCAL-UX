@@ -14,7 +14,7 @@
 #include <sys/types.h>
 
 typedef void * vaddr_t, *paddr_t;
-typedef size_t voff_t;
+typedef size_t voff_t, pgoff_t;
 
 #define NS_PER_S 1000000000
 

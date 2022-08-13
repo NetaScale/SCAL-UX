@@ -16,10 +16,9 @@
 #ifndef TASK_H_
 #define TASK_H_
 
-#include <kern/vm.h>
-#include <machine/machdep.h>
 #include <machine/intr.h>
-#include "kern/sync.h"
+#include <machine/machdep.h>
+#include <vm/vm.h>
 
 typedef struct callout {
         /* links cpu::pendingcallouts */

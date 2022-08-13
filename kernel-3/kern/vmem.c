@@ -94,7 +94,7 @@
 
 #ifdef _KERNEL
 #include <kern/sync.h>
-#include <kern/vm.h>
+#include <vm/vm.h>
 #include <libkern/klib.h>
 #else
 #include <assert.h>

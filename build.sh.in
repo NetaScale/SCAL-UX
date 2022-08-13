@@ -3,20 +3,20 @@ export CROSSFILE=@abs_builddir@/build-aux/@ARCH@.ini
 export HOSTTOOLS=@HOSTTOOLS@
 export S_SYSROOT=@SYSROOT@
 
-cd @abs_srcdir@/$1 && bmake
-cd @abs_builddir@
-tar -cf initrd.tar -C ${S_SYSROOT} ./
-mkdir -p isoroot
+cd @abs_srcdir@/$1 && bmake &&
+cd @abs_builddir@ &&
+tar -cf initrd.tar -C ${S_SYSROOT} ./ &&
+mkdir -p isoroot &&
 cp kernel/x86_64/vxkern  @abs_srcdir@/kernel-3/x86_64/limine.cfg initrd.tar \
   @abs_srcdir@/limine-3/dist/limine.sys \
   @abs_srcdir@/limine-3/dist/limine-cd.bin \
-  @abs_srcdir@/limine-3/dist/limine-cd-efi.bin isoroot/
+  @abs_srcdir@/limine-3/dist/limine-cd-efi.bin isoroot/ &&
 
 xorriso -as mkisofs -b limine-cd.bin \
   -no-emul-boot -boot-load-size 4 -boot-info-table \
   --efi-boot limine-cd-efi.bin \
   -efi-boot-part --efi-boot-image --protective-msdos-label \
-  isoroot -o barebones.iso
+  isoroot -o barebones.iso &&
 
 host_tools/bin/limine-deploy barebones.iso
 
