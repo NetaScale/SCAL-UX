@@ -56,7 +56,7 @@ Several third-party components are used. These are some of them:
 - ObjFW: provides an Objective-C runtime.
 - limine/`limine-terminal-port` (some files in`kernel/dev/fbterm/`): used by
   FBTerm to provide a terminal.
-- Managarm LAI (`kernel/dev/acpi/lai`): Lightweight ACPI Implementation used by
+- Managarm LUX ACPI Implementation (`kernel/dev/acpi/lai`): Lightweight ACPI Implementation used by
   Acpi* drivers.
 - LZ4 (`kernel/libkern/lz4.{c,h}`): Used by VM Compressor to compress pages.
 - libuuid (`kernel/libkern/uuid*`)

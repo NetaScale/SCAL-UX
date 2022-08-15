@@ -169,11 +169,10 @@ typedef struct vm_object {
  * Represents a logical page of pageable memory. May be resident or not.
  */
 typedef struct vm_anon {
-	mutex_t mtx;
+	mutex_t lock;
 	int refcnt : 24, /** number of amaps referencing it; if >1, must COW. */
 	    resident : 1; /** whether currently resident in memory */
 
-	size_t offs; /** offset in bytes into amap */
 	union {
 		struct vm_page *physpage; /** physical page if resident */
 	};
@@ -244,8 +243,14 @@ pmap_t *pmap_new();
 void pmap_free(pmap_t *pmap);
 
 /*!
- * Low-level mapping a single physical page to a virtual address. Mappings are
- * not tracked.
+ * Pageable mapping of a virtual address to a page.
+ */
+void pmap_enter(vm_map_t *map, struct vm_page *page, vaddr_t virt,
+    vm_prot_t prot);
+
+/*!
+ * Low-level mapping a single physical page to a virtual address. Mappings
+ * are not tracked.
  */
 void pmap_enter_kern(struct pmap *pmap, paddr_t phys, vaddr_t virt,
     vm_prot_t prot);

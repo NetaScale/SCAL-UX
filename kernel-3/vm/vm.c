@@ -10,10 +10,186 @@
 
 #include <kern/kmem.h>
 #include <libkern/klib.h>
+#include <machine/intr.h>
 #include <vm/vm.h>
 
 #include <stdatomic.h>
 #include <string.h>
+#include "libkern/obj.h"
+
+/*!
+ * Return a pointer to the slot of an amap where the anonymous page that maps
+ * \p page is found. The slot may of course contain NULL.
+ */
+static vm_anon_t **amap_anon_at(vm_amap_t *amap, pgoff_t page);
+
+/**
+ * Create a new anon for a given offset.
+ * @returns LOCKED new anon, resident.
+ */
+/* LOCKED */ vm_anon_t *anon_new(pgoff_t offs);
+
+/**
+ * Copy an anon, yielding a new anon.
+ * @param anon LOCKED anon to copy
+ * @returns LOCKED new anon, or NULL if OOM.
+ */
+vm_anon_t *anon_copy(vm_anon_t *anon) LOCK_REQUIRES(anon->lock);
+
+/*!
+ * Find the map entry for a given virtual address.
+ * @returns NULL if no map entry encompasses this address.
+ */
+static vm_map_entry_t *map_entry_for_addr(vm_map_t *map, vaddr_t addr)
+    LOCK_REQUIRES(map->lock);
+
+/*
+ * faults
+ */
+static int
+fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
+    vm_fault_flags_t flags) LOCK_REQUIRES(map->lock) LOCK_REQUIRES(aobj->lock)
+{
+	vm_anon_t **pAnon, *anon;
+
+	/* first, check if we have an anon already */
+	pAnon = amap_anon_at(aobj->anon.amap, (voff / PGSIZE));
+
+	if (*pAnon != NULL) {
+		anon = *pAnon;
+		mutex_lock(&anon->lock);
+
+		if (!anon->resident) {
+			kprintf("vm_fault: paging in not yet supported\n");
+			/* paging in will set the page wired */
+			assert(!(flags & kVMFaultPresent));
+			mutex_unlock(&anon->lock);
+			return -1;
+		}
+
+		if (anon->refcnt > 1) {
+			if (flags & kVMFaultWrite) {
+				/*
+				 * refcnt >1, and it's a write
+				 * the anon must be duplicated, an> the new anon
+				 * can then be mapped read/write.
+				 */
+
+				anon->refcnt--;
+				*pAnon = anon_copy(*pAnon);
+
+				if (flags & kVMFaultPresent) {
+					/*
+					 * there is an existing read-only
+					 * mapping which must be removed
+					 */
+					pmap_unenter(map, anon->physpage, vaddr,
+					    NULL);
+				}
+
+				mutex_unlock(&anon->lock);
+				anon = *pAnon;
+				pmap_enter(map, anon->physpage, vaddr, kVMAll);
+			} else {
+				/*
+				 * refcnt >1 and it's a read; we can just map
+				 * that anon readonly.
+				 */
+
+				assert(!(flags & kVMFaultPresent));
+				pmap_enter(map, anon->physpage, vaddr,
+				    kVMRead | kVMExecute);
+			}
+		} else {
+			if (flags & kVMFaultPresent) {
+				/*
+				 * the only possible(?) case when there's a
+				 * fault in which page is present and anon has a
+				 * refcnt of 1 is that it had been mapped
+				 * read-only during a CoW clone, but then the
+				 * clone took a write fault.
+				 */
+				assert(flags & kVMFaultWrite);
+				pmap_reenter(map, anon->physpage, vaddr,
+				    kVMAll);
+			} else {
+				/*
+				 * a not-present fault with an anon having a
+				 * refcnt of 1 suggests it has been moved to the
+				 * inactive queue
+				 */
+				/** XXX FIXME: is this legal? */
+				pmap_enter(map, anon->physpage, vaddr, kVMAll);
+			}
+		}
+
+		mutex_unlock(&anon->lock);
+		return 0;
+	} else if (aobj->anon.parent) {
+		kprintf("vm_fault: fetch from parent is not yet supported\n");
+		/* does this need some thought to do properly? */
+		return -1;
+	}
+
+	/* page not present locally, nor in parent => map new zero page */
+	anon = anon_new(voff / PGSIZE);
+	*pAnon = anon;
+
+	/* can just map in readwrite as it's new thus refcnt = 1 */
+	pmap_enter(map, anon->physpage, vaddr, kVMAll);
+	mutex_unlock(&anon->lock);
+
+	return 0;
+}
+
+int
+vm_fault(md_intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
+    vm_fault_flags_t flags)
+{
+	int r;
+	vm_map_entry_t *ent;
+	voff_t		obj_off;
+
+#ifdef DEBUG_VM_FAULT
+	kprintf("vm_fault: in map %p at addr %p (flags: %d)\n", map, vaddr,
+	    flags);
+#endif
+
+	if (vaddr >= (vaddr_t)KHEAP_BASE) {
+		map = &kmap;
+	}
+
+	mutex_lock(&map->lock);
+
+	ent = map_entry_for_addr(map, vaddr);
+	vaddr = (vaddr_t)PGROUNDDOWN(vaddr);
+
+	if (!ent) {
+		kprintf("vm_fault: no object at vaddr %p in map %p\n", vaddr,
+		    map);
+		r = -1;
+		goto unlockmap;
+	}
+
+	mutex_lock(&ent->obj->lock)
+
+	if (ent->obj->type != kVMObjAnon) {
+		kprintf("vm_fault: fault in unfaultable object (type %d)\n",
+		    ent->obj->type);
+		r = -1;
+		goto unlockall;
+	}
+
+	obj_off = vaddr - ent->start;
+
+	r = fault_aobj(map, ent->obj, vaddr, obj_off + ent->offset, flags);
+
+unlockall:
+	mutex_unlock(&ent->obj->lock);
+unlockmap:
+	mutex_unlock(&map->lock);
+	return r;
+}
 
 /*
  * maps
@@ -202,10 +378,10 @@ amap_copy(vm_amap_t *amap)
 			if (oldanon == NULL)
 				continue;
 
-			mutex_lock(&oldanon->mtx);
+			mutex_lock(&oldanon->lock);
 			oldanon->refcnt++;
 			pmap_reenter_all_readonly(oldanon->physpage);
-			mutex_unlock(&oldanon->mtx);
+			mutex_unlock(&oldanon->lock);
 		}
 	}
 
@@ -231,29 +407,19 @@ amap_release(vm_amap_t *amap)
 	kmem_free(amap, sizeof(*amap));
 }
 
-/**
- * Create a new anon for a given offset.
- * @returns LOCKED new anon
- */
 vm_anon_t *
 anon_new(size_t offs)
 {
 	vm_anon_t *newanon = kmem_alloc(sizeof *newanon);
 	newanon->refcnt = 1;
-	mutex_init(&newanon->mtx);
-	mutex_lock(&newanon->mtx);
+	mutex_init(&newanon->lock);
+	mutex_lock(&newanon->lock);
 	newanon->resident = true;
-	newanon->offs = offs;
 	newanon->physpage = vm_pagealloc(1, &vm_pgactiveq);
 	newanon->physpage->anon = newanon;
 	return newanon;
 }
 
-/**
- * Copy an anon, yielding a new anon.
- * @param anon LOCKED anon to copy
- * @returns LOCKED new anon, or NULL if OOM.
- */
 vm_anon_t *
 anon_copy(vm_anon_t *anon)
 {
