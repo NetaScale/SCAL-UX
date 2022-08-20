@@ -11,10 +11,18 @@ kern_objc_args = [ kern_c_args ]
 kern_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
   '-fsanitize=kernel-address' ]
 
-kern_srcs = files('kern/kasan.c', 'kern/kmem_slab.c', 'kern/task.c',
-    'kern/vmem.c', 'libkern/klib.c',
+kern_srcs = files(
+  'dev/autoconf.m',
 
-    'vm/vm_kernel.c','vm/vm_page.c', 'vm/vm_pageout.c', 'vm/vm.c'
+  'kern/kasan.c', 'kern/kmem_slab.c', 'kern/liballoc.c',
+  'kern/liballoc_sysdep.c', 'kern/task.c', 'kern/vmem.c',
+
+  'libkern/klib.c',
+
+  'posix/posix_main.c',
+
+  'vm/vm_kernel.c','vm/vm_page.c', 'vm/vm_pageout.c', 'vm/vm.c'
 )
 kern_incs = include_directories(arch + '/include', './')
+subdir('libkobjfw')
 subdir(arch)

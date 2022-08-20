@@ -10,5 +10,5 @@ vxkern = executable('vxkern', kern_srcs,
 	  '-Wl,-T' + ldscript ],
     include_directories: [ kern_incs ],
     #include_directories: [ kernel_includes, libc_includes ],
-    #dependencies: [ libkobjc_dep ]
+    dependencies: [ libkobjc_dep ]
 )

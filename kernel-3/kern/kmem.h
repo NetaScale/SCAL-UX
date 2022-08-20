@@ -100,9 +100,14 @@ void *kmem_zalloc(size_t size);
 void *kmem_genalloc(size_t size);
 
 /*!
+ * The realloc-like counterpart to kmem_genalloc().
+ */
+void *kmem_genrealloc(void * ptr, size_t newSize);
+
+/*!
  * Release memory allocated by kmem_genalloc().
  */
-void kmem_genfree(size_t size);
+void kmem_genfree(void *ptr);
 
 extern struct kmem_zones kmem_zones;
 

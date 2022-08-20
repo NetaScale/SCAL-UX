@@ -285,7 +285,7 @@ fun2(void *arg)
 }
 
 static void
-fun(void *arg)
+kmain(void *arg)
 {
 	thread_t *test;
 
@@ -296,6 +296,8 @@ fun(void *arg)
 	kprintf("thread1: made thread2\n");
 	thread_resume(test);
 	kprintf("thread1: thread2 resumed\n");
+
+#if 0
 	while (1) {
 		mutex_lock(&mtx);
 		for (int i = 0; i < UINT32_MAX / 1024; i++)
@@ -303,6 +305,11 @@ fun(void *arg)
 		//kprintf("A");
 		mutex_unlock(&mtx);
 	}
+#endif
+
+	int posix_main(void);
+	posix_main();
+
 	done();
 }
 
@@ -337,9 +344,12 @@ _start(void)
 	// callout.nanosecs = NS_PER_S * 1;
 	// callout_enqueue(&callout);
 
-	thread_t *test = thread_new(&task0, fun, (void *)0xdeadb00b);
+	thread_t *test = thread_new(&task0, kmain, 0);
 	kprintf("thread0: made thread1\n");
 	thread_resume(test);
+
+	/* this thread is now the idle thread */
+
 	kprintf("thread0: after resuming thread1\n");
 
 	for (int i = 0; i < 512; i++)
