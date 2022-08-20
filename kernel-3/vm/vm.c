@@ -10,12 +10,12 @@
 
 #include <kern/kmem.h>
 #include <libkern/klib.h>
+#include <libkern/obj.h>
 #include <machine/intr.h>
 #include <vm/vm.h>
 
 #include <stdatomic.h>
 #include <string.h>
-#include "libkern/obj.h"
 
 /*!
  * Return a pointer to the slot of an amap where the anonymous page that maps
@@ -25,9 +25,9 @@ static vm_anon_t **amap_anon_at(vm_amap_t *amap, pgoff_t page);
 
 /**
  * Create a new anon for a given offset.
- * @returns LOCKED new anon, resident.
+ * @returns LOCKED new anon
  */
-/* LOCKED */ vm_anon_t *anon_new(pgoff_t offs);
+/* LOCKED */ vm_anon_t *anon_new();
 
 /**
  * Copy an anon, yielding a new anon.
@@ -132,7 +132,7 @@ fault_aobj(vm_map_t *map, vm_object_t *aobj, vaddr_t vaddr, voff_t voff,
 	}
 
 	/* page not present locally, nor in parent => map new zero page */
-	anon = anon_new(voff / PGSIZE);
+	anon = anon_new(/* voff / PGSIZE */);
 	*pAnon = anon;
 
 	/* can just map in readwrite as it's new thus refcnt = 1 */
@@ -171,7 +171,7 @@ vm_fault(md_intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
 		goto unlockmap;
 	}
 
-	mutex_lock(&ent->obj->lock)
+	mutex_lock(&ent->obj->lock);
 
 	if (ent->obj->type != kVMObjAnon) {
 		kprintf("vm_fault: fault in unfaultable object (type %d)\n",
@@ -294,6 +294,41 @@ vm_map_release(vm_map_t *map)
 	kmem_free(map, sizeof(*map));
 }
 
+vm_map_t *
+vm_map_fork(vm_map_t *map)
+{
+	vm_map_t	 *newmap = kmem_alloc(sizeof(*newmap));
+	vm_map_entry_t *ent;
+	int		r;
+
+	newmap->pmap = pmap_new();
+	TAILQ_INIT(&newmap->entries);
+	vmem_init(&newmap->vmem, "task map", USER_BASE, USER_SIZE, PGSIZE, NULL,
+	    NULL, NULL, 0, 0, kSPL0);
+
+	if (map == &kmap)
+		return newmap; /* nothing to inherit */
+
+	TAILQ_FOREACH (ent, &map->entries, queue) {
+		vm_object_t *newobj;
+		vaddr_t	     start = ent->start;
+
+		if (ent->obj->type != kVMObjAnon)
+			fatal("vm_map_fork: only handles anon objects\n");
+
+		newobj = vm_object_copy(ent->obj);
+		assert(newobj != NULL);
+
+		r = vm_map_object(newmap, newobj, &start, ent->end - ent->start,
+		    ent->offset, false);
+		assert(r == 0);
+
+		vm_object_release(newobj);
+	}
+
+	return newmap;
+}
+
 int
 vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
     voff_t offset, bool copy)
@@ -316,7 +351,8 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 	r = vmem_xalloc(&map->vmem, size, 0, 0, 0, exact ? addr : 0, 0,
 	    exact ? kVMemExact : 0, &addr);
 	if (r < 0) {
-		goto finish;
+		/* TODO: free copy if necessary? */
+		return r;
 	}
 
 	entry = kmem_alloc(sizeof *entry);
@@ -329,8 +365,6 @@ vm_map_object(vm_map_t *map, vm_object_t *obj, vaddr_t *vaddrp, size_t size,
 
 	*vaddrp = (vaddr_t)addr;
 
-finish:
-	mutex_unlock(&obj->lock);
 	return r;
 }
 
@@ -408,7 +442,7 @@ amap_release(vm_amap_t *amap)
 }
 
 vm_anon_t *
-anon_new(size_t offs)
+anon_new()
 {
 	vm_anon_t *newanon = kmem_alloc(sizeof *newanon);
 	newanon->refcnt = 1;
@@ -421,9 +455,9 @@ anon_new(size_t offs)
 }
 
 vm_anon_t *
-anon_copy(vm_anon_t *anon)
+anon_copy(vm_anon_t *anon) LOCK_REQUIRES(anon->lock)
 {
-	vm_anon_t *newanon = anon_new(anon->offs);
+	vm_anon_t *newanon = anon_new();
 	copyphyspage(newanon->physpage->paddr, anon->physpage->paddr);
 	return newanon;
 }
@@ -485,6 +519,8 @@ vm_object_copy(vm_object_t *obj)
 {
 	vm_object_t *newobj = kmem_alloc(sizeof *newobj);
 
+	mutex_lock(&obj->lock);
+
 	if (obj->type != kVMObjAnon) {
 		fatal("vm_object_copy: only implemented for anons as of yet\n");
 	}
@@ -499,6 +535,8 @@ vm_object_copy(vm_object_t *obj)
 	}
 	newobj->anon.amap = amap_copy(obj->anon.amap);
 
+	mutex_unlock(&obj->lock);
+
 	return newobj;
 }
 
@@ -511,16 +549,12 @@ vm_object_retain(vm_object_t *obj)
 void
 vm_object_release(vm_object_t *obj)
 {
-	mutex_lock(&obj->lock);
-
-	if (--obj->refcnt > 0) {
-		mutex_unlock(&obj->lock);
+	if (--obj->refcnt > 0)
 		return;
-	}
 
-	if (obj->type == kVMObjAnon) {
+	if (obj->type == kVMObjAnon)
 		amap_release(obj->anon.amap);
-	} else
+	else
 		fatal("vm_object_release: only implemented for anons\n");
 
 	kmem_free(obj, sizeof(*obj));

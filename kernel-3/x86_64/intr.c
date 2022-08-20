@@ -17,7 +17,6 @@
 #include <machine/intr.h>
 #include <x86_64/asmintr.h>
 #include <x86_64/cpu.h>
-#include "machine/spl.h"
 
 typedef struct {
 	uint16_t isr_low;
@@ -84,6 +83,18 @@ idt_load()
 	asm volatile("lidt %0" : : "m"(idtr));
 }
 
+static void
+pagefault_interrupt(md_intr_frame_t *frame, void *unused)
+{
+	int r;
+
+	(void)unused;
+
+	r = vm_fault(frame, curtask()->map, (vaddr_t)read_cr2(), frame->code);
+	if (r < 0)
+		fatal("unhandled page fault\n");
+}
+
 void
 idt_init()
 {
@@ -96,6 +107,7 @@ idt_init()
 #undef IDT_SET
 
 	idt_load();
+	md_intr_register(14, kSPL0, pagefault_interrupt, NULL);
 	md_intr_register(kIntNumLAPICTimer, kSPL0, callout_interrupt, NULL);
 	md_intr_register(kIntNumReschedule, kSPL0, sched_timeslice, NULL);
 }
@@ -121,6 +133,13 @@ handle_int(md_intr_frame_t *frame, uintptr_t num)
 
 		spinlock_unlock(&sched_lock);
 		return;
+	} else if (num == kIntNumInvlPG) {
+		extern vaddr_t		   invlpg_addr;
+		extern volatile atomic_int invlpg_done_cnt;
+		pmap_invlpg(invlpg_addr);
+		atomic_fetch_add(&invlpg_done_cnt, 1);
+		lapic_eoi();
+		return;
 	}
 
 	if (md_intrs[num].handler == NULL) {
@@ -135,7 +154,6 @@ handle_int(md_intr_frame_t *frame, uintptr_t num)
 	if (curcpu()->preempted) {
 		curcpu()->preempted = false;
 		sched_reschedule();
-
 	}
 
 	return;
@@ -248,7 +266,7 @@ md_intr_register(int vec, ipl_t prio, intr_handler_fn_t handler, void *arg)
 static void send_ipi(uint32_t lapic_id, uint8_t intr)
 {
 	lapic_write(kLAPICRegICR1, lapic_id << 24);
-	lapic_write(kLAPICRegICR0, kIntNumReschedule);
+	lapic_write(kLAPICRegICR0, intr);
 }
 
 void

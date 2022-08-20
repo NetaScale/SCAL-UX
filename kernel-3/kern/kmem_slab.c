@@ -468,9 +468,14 @@ kmem_free(void *ptr, size_t size)
 void *
 kmem_realloc(void *ptr, size_t oldSize, size_t size)
 {
-	void *ret = kmem_alloc(size);
-	memcpy(ret, ptr, oldSize);
-	kmem_free(ptr, oldSize);
+	void *ret;
+
+	ret = kmem_alloc(size);
+	if (ptr != NULL) {
+		assert(oldSize > 0);
+		memcpy(ret, ptr, oldSize);
+		kmem_free(ptr, oldSize);
+	}
 	return ret;
 }
 

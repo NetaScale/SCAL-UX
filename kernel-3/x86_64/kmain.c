@@ -347,6 +347,23 @@ _start(void)
 	kmem_dump();
 	vm_pagedump();
 
+	vm_object_t *aobj1, *aobj2;
+
+	vaddr_t anonaddr = VADDR_MAX, anon2addr = VADDR_MAX;
+	vm_allocate(&kmap, &aobj1, &anonaddr, PGSIZE * 32);
+	kprintf("Aobj at %p\n", anonaddr);
+
+	strcpy(anonaddr, "Hello, world");
+
+	aobj2 = vm_object_copy(aobj1);
+	vm_map_object(&kmap, aobj2, &anon2addr, PGSIZE * 32, 0, false);
+	kprintf("Aobj copy at %p\n", anon2addr);
+
+	strcpy(anon2addr + 7, "copy-on-write world!");
+
+	kprintf("Page from Aobj1:\t%s\nPage from Aobj2:\t%s\n",
+	    (char *)anonaddr, (char *)anon2addr);
+
 	//*(double *)11 = 48000000.12f;
 
 	// We're done, just hang...

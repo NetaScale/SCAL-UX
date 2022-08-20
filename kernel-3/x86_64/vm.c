@@ -292,7 +292,7 @@ pmap_reenter_all_readonly(vm_page_t *page)
 		mutex_lock(&pv->map->lock);
 		pmap_reenter(pv->map, page, pv->vaddr, kVMRead | kVMExecute);
 		pmap_global_invlpg(pv->vaddr);
-		mutex_unlock(&page->lock);
+		mutex_unlock(&pv->map->lock);
 	}
 	mutex_unlock(&page->lock);
 }
@@ -386,7 +386,7 @@ pmap_invlpg(vaddr_t addr)
 
 static spinlock_t invlpg_global_lock = SPINLOCK_INITIALISER;
 vaddr_t		  invlpg_addr;
-volatile int	  invlpg_done_cnt;
+volatile atomic_int invlpg_done_cnt;
 
 void
 pmap_global_invlpg(vaddr_t vaddr)

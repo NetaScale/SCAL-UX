@@ -27,6 +27,7 @@
 #include <kern/vmem_impl.h>
 #include <libkern/obj.h>
 #include <machine/vm.h>
+#include <machine/intr.h>
 
 #define VADDR_MAX (vaddr_t) UINT64_MAX
 
@@ -110,6 +111,14 @@ int vm_allocate(vm_map_t *map, GEN_RETURNS_UNRETAINED vm_object_t **out,
  * of whole objects; they are released and accordingly
  */
 int vm_deallocate(vm_map_t *map, vaddr_t start, size_t size);
+
+/*!
+ * Handle a page fault.
+ */
+int
+vm_fault(md_intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
+    vm_fault_flags_t flags);
+
 /**
  * Map a VM object into an address space either at a given virtual address, or
  * (if \p vaddr points to vaddr of VADDR_MAX) pick a suitable place to put it.

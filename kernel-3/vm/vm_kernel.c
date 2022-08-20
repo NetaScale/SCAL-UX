@@ -13,14 +13,13 @@
  * @brief Management of the kernel's virtual address space.
  */
 
-#include <vm/vm.h>
 #include <kern/vmem.h>
 #include <kern/vmem_impl.h>
 #include <libkern/klib.h>
+#include <vm/vm.h>
 
 /** Kernel wired memory. */
 vmem_t vm_kernel_wired;
-
 
 static int
 internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
@@ -37,7 +36,7 @@ internal_allocwired(vmem_t *vmem, vmem_size_t size, vmem_flag_t flags,
 	}
 
 	for (int i = 0; i < size - 1; i += PGSIZE) {
-		vm_page_t *page = vm_pagealloc(flags & kVMemSleep,&vm_pgkmemq);
+		vm_page_t *page = vm_pagealloc(flags & kVMemSleep, &vm_pgkmemq);
 		pmap_enter_kern(kmap.pmap, page->paddr, (vaddr_t)*out + i,
 		    kVMAll);
 	}
