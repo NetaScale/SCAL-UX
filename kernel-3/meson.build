@@ -14,6 +14,8 @@ kern_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
 kern_srcs = files(
   'dev/autoconf.m',
 
+  'devicekit/DKDevice.m',
+
   'kern/kasan.c', 'kern/kmem_slab.c', 'kern/liballoc.c',
   'kern/liballoc_sysdep.c', 'kern/task.c', 'kern/vmem.c',
 
@@ -23,6 +25,10 @@ kern_srcs = files(
 
   'vm/vm_kernel.c','vm/vm_page.c', 'vm/vm_pageout.c', 'vm/vm.c'
 )
-kern_incs = include_directories(arch + '/include', './')
+
+kern_incs = [ include_directories(arch + '/include', './') ]
+
+subdir('tools')
 subdir('libkobjfw')
+subdir('dev')
 subdir(arch)

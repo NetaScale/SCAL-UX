@@ -8,3 +8,6 @@
 [submodule "Libobjfw-1"]
 	path = Libobjfw-1/dist
 	url = ../ObjFW
+[submodule "kernel-3/dev/acpi/lai"]
+	path = kernel-3/dev/acpi/lai
+	url = ../lai

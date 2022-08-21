@@ -8,10 +8,11 @@
  * All rights reserved.
  */
 
+#include <dev/fbterm/FBTerm.h>
 #include <kern/kmem.h>
 #include <kern/task.h>
-#include <vm/vm.h>
 #include <libkern/klib.h>
+#include <vm/vm.h>
 #include <x86_64/cpu.h>
 #include <x86_64/limine.h>
 
@@ -25,6 +26,11 @@ void x64_vm_init(paddr_t kphys);
 // The Limine requests can be placed anywhere, but it is important that
 // the compiler does not optimise them away, so, usually, they should
 // be made volatile or equivalent.
+
+volatile struct limine_framebuffer_request framebuffer_request = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0
+};
 
 static volatile struct limine_hhdm_request hhdm_request = {
 	.id = LIMINE_HHDM_REQUEST,
@@ -83,12 +89,17 @@ serial_init()
 void
 md_kputc(int ch, void *ctx)
 {
-	struct limine_terminal *terminal =
-	    terminal_request.response->terminals[0];
-	terminal_request.response->write(terminal, (const char *)&ch, 1);
 	while (!(inb(kPortCOM1 + 5) & 0x20))
 		;
 	outb(kPortCOM1, ch);
+
+	if (!syscon) {
+		struct limine_terminal *terminal =
+		    terminal_request.response->terminals[0];
+		terminal_request.response->write(terminal, (char *)&ch, 1);
+	} else {
+		sysconputc(ch);
+	}
 }
 
 static void
