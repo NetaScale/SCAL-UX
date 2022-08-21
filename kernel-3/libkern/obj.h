@@ -20,7 +20,7 @@
  * @name Miscellaneous annotations
  */
 
-#define nullable
+#define NULLABLE
 
 /*!
  * @}
