@@ -165,6 +165,7 @@ vm_fault(md_intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
 	vaddr = (vaddr_t)PGROUNDDOWN(vaddr);
 
 	if (!ent) {
+		spinlock_unlock(&lock_msgbuf);
 		kprintf("vm_fault: no object at vaddr %p in map %p\n", vaddr,
 		    map);
 		r = -1;

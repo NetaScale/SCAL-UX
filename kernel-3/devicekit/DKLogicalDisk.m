@@ -8,13 +8,14 @@
  * All rights reserved.
  */
 
+#include <libkern/klib.h>
+
 #include <errno.h>
 
 #include "DKDisk.h"
 #include "dev/GPTVolumeManager.h"
-#include "libkern/klib.h"
-#include "posix/dev.h"
-#include "posix/vfs.h"
+//#include "posix/dev.h"
+//#include "posix/vfs.h"
 
 static int major = -1;
 static int minor = 0;
@@ -28,8 +29,8 @@ static int minor = 0;
 
 + (void)initialize
 {
-	cdevsw_t cdev;
-	major = cdevsw_attach(&cdev);
+	// cdevsw_t cdev;
+	// major = cdevsw_attach(&cdev);
 }
 
 - (blksize_t)blockSize
@@ -60,24 +61,25 @@ static int minor = 0;
 		location:(size_t)location
 		provider:(DKDevice *)provider
 {
-	self = [super init];
+	self = [super initWithProvider:provider];
 	if (self) {
 		char nameBuf[64];
-		vnode_t *node;
+		// vnode_t *node;
 
-		ksnprintf(m_name, 32, "%s Disk", aname);
+		kmem_asprintf(&m_name, "%s Disk", aname);
+		[self registerDevice];
+		DKLogAttach(self);
+
 		m_underlying = underlying;
 		m_base = base;
 		m_size = size;
 		m_location = location;
-		parent = provider;
-		[self registerDevice];
 
 		[self buildPosixDeviceName:nameBuf withMaxSize:63];
 
 		DKDevLog(self, "POSIX DevFS node: %s\n", nameBuf);
-		assert(root_dev->ops->mknod(root_dev, &node, nameBuf,
-			   makedev(major, minor++)) == 0);
+		// assert(root_dev->ops->mknod(root_dev, &node, nameBuf,
+		//	   makedev(major, minor++)) == 0);
 
 		if (location == 0) {
 			[GPTVolumeManager probe:self];

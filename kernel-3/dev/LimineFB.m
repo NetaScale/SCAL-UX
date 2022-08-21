@@ -1,6 +1,7 @@
 #include <x86_64/boot.h>
 
 #include "LimineFB.h"
+#include "devicekit/DKDevice.h"
 
 @implementation LimineFB
 
@@ -9,28 +10,30 @@
 static int fbNum = 0;
 LimineFB	 *sysfb = NULL;
 
-+ (BOOL)probeWithLimineFBResponse:(struct limine_framebuffer_response *)resp
++ (BOOL)probeWithProvider:(DKDevice *)provider
+	 limineFBResponse:(struct limine_framebuffer_response *)resp
 {
 	LimineFB *fbs[resp->framebuffer_count];
 	assert(resp->framebuffer_count > 0);
 	for (int i = 0; i < resp->framebuffer_count; i++)
-		fbs[i] = [[self alloc] initWithLimineFB:resp->framebuffers[i]];
+		fbs[i] = [[self alloc] initWithProvider:provider
+					       limineFB:resp->framebuffers[i]];
 	sysfb = fbs[0];
 	return YES;
 }
 
-- initWithLimineFB:(struct limine_framebuffer *)fb
+- initWithProvider:(DKDevice *)provider
+	  limineFB:(struct limine_framebuffer *)fb;
 {
-	self = [super init];
-	parent = nil;
-	ksnprintf(m_name, sizeof m_name, "LimFB%d", fbNum++);
+	self = [super initWithProvider:provider];
+	kmem_asprintf(&m_name, "LimineFB%d", fbNum++);
 	[self registerDevice];
 	width = fb->width;
 	height = fb->height;
 	pitch = fb->pitch;
 	bpp = fb->bpp;
 	base = fb->address;
-	DKDevLog(self, " %lux%lux%d\n", width, height, bpp);
+	DKLogAttachExtra(self, " %lux%lux%d", width, height, bpp);
 	return self;
 }
 

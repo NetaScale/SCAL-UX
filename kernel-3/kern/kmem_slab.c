@@ -199,6 +199,7 @@ kmem_zone_init(struct kmem_zone *zone, const char *name, size_t size)
 {
 	zone->name = name;
 	zone->size = size;
+	mutex_init(&zone->lock);
 	SIMPLEQ_INIT(&zone->slablist);
 	SLIST_INIT(&zone->bufctllist);
 	SIMPLEQ_INSERT_TAIL(&kmem_zones, zone, zonelist);
@@ -313,8 +314,6 @@ kmem_zonealloc(kmem_zone_t *zone)
 		if (zone->size > kSmallSlabMax) {
 			slab = large_slab_new(zone);
 		} else {
-			if (slab)
-				for (;;) ;
 			slab = small_slab_new(zone);
 		}
 	}
@@ -485,6 +484,48 @@ kmem_zalloc(size_t size)
 	void *ret = kmem_alloc(size);
 	memset(ret, 0x0, size);
 	return ret;
+}
+
+int
+kmem_vasprintf(char **strp, const char *fmt, va_list ap)
+{
+	size_t	size = 0;
+	va_list apcopy;
+
+	va_copy(apcopy, ap);
+	size = npf_vsnprintf(NULL, 0, fmt, apcopy);
+	va_end(apcopy);
+
+	if (size < 0)
+		return -1;
+
+	*strp = (char *)kmem_alloc(size + 1);
+
+	if (NULL == *strp)
+		return -1;
+
+	size = npf_vsnprintf(*strp, size + 1, fmt, ap);
+	return size;
+}
+
+int
+kmem_asprintf(char **str, const char *fmt, ...)
+{
+	size_t	size = 0;
+	va_list ap;
+
+	va_start(ap, fmt);
+	size = kmem_vasprintf(str, fmt, ap);
+	va_end(ap);
+
+	return size;
+}
+
+void *
+kmem_strfree(char *str)
+{
+	kmem_free(str, strlen(str));
+	return NULL;
 }
 
 #ifndef _KERNEL

@@ -8,7 +8,7 @@
  * All rights reserved.
  */
 
-#include <dev/fbterm/FBTerm.h>
+#include <dev/fbterm/FBTerminal.h>
 #include <kern/kmem.h>
 #include <kern/task.h>
 #include <libkern/klib.h>
@@ -70,9 +70,11 @@ volatile struct limine_terminal_request terminal_request = {
 	.revision = 0
 };
 
-static int cpus_up = 0;
 
 enum { kPortCOM1 = 0x3f8 };
+
+static int cpus_up = 0;
+struct msgbuf msgbuf;
 
 static void
 serial_init()
@@ -89,10 +91,19 @@ serial_init()
 void
 md_kputc(int ch, void *ctx)
 {
+	/* put on msgbuf */
+	msgbuf.buf[msgbuf.write++] = ch;
+	if (msgbuf.write >= 4096)
+		msgbuf.write = 0;
+	if (msgbuf.read == msgbuf.write && ++msgbuf.read == msgbuf.write)
+		msgbuf.read = 0;
+
+	/* put to com1 */
 	while (!(inb(kPortCOM1 + 5) & 0x20))
 		;
 	outb(kPortCOM1, ch);
 
+	/* put to syscon/limine terminal */
 	if (!syscon) {
 		struct limine_terminal *terminal =
 		    terminal_request.response->terminals[0];
@@ -302,11 +313,11 @@ kmain(void *arg)
 
 	mutex_init(&mtx);
 
-	kprintf("thread1: hello\n");
+	kprintf("vm_pagedaemon: hello\n");
 	test = thread_new(&task0, fun2, (void *)100);
-	kprintf("thread1: made thread2\n");
+	kprintf("vm_pagedaemon: made thread2\n");
 	thread_resume(test);
-	kprintf("thread1: thread2 resumed\n");
+	kprintf("vm_pagedaemon: thread2 resumed\n");
 
 #if 0
 	while (1) {
@@ -355,15 +366,16 @@ _start(void)
 	// callout.nanosecs = NS_PER_S * 1;
 	// callout_enqueue(&callout);
 
-	thread_t *test = thread_new(&task0, kmain, 0);
-	kprintf("thread0: made thread1\n");
-	thread_resume(test);
+	thread_t *vm_pagedaemon = thread_new(&task0, kmain, 0);
+	kprintf("thread0: made vm_pagedaemon\n");
+	thread_resume(vm_pagedaemon);
 
 	/* this thread is now the idle thread */
 
-	kprintf("thread0: after resuming thread1\n");
+#if 0
+	kprintf("thread0: after resuming vm_pagedaemon\n");
 
-	for (int i = 0; i < 512; i++)
+	for (int i = 0; i < 8192; i++)
 		outb(0x80, 0x0);
 	kmem_dump();
 	vm_pagedump();
@@ -386,6 +398,7 @@ _start(void)
 	    (char *)anonaddr, (char *)anon2addr);
 
 	//*(double *)11 = 48000000.12f;
+#endif
 
 	// We're done, just hang...
 	done();

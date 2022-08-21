@@ -2,11 +2,11 @@
 #define FBTERM_H_
 
 #ifdef __OBJC__
-#include "../LimineFB.h"
+#include "dev/LimineFB.h"
 #include "devicekit/DKDevice.h"
-#include "term.h"
+#include "./term.h"
 
-@interface FBTerm : DKDevice {
+@interface FBTerminal : DKDevice {
 	LimineFB *_fb;
 #if 0
 	tty_t tty;

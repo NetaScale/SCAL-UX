@@ -47,5 +47,6 @@ typedef void (*intr_handler_fn_t)(md_intr_frame_t *frame, void *arg);
 int  md_intr_alloc(ipl_t prio, intr_handler_fn_t handler, void *arg);
 void md_intr_register(int vec, ipl_t prio, intr_handler_fn_t handler,
     void *arg);
+void md_intr_frame_trace(md_intr_frame_t *frame);
 
 #endif /* INTR_H_ */

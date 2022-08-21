@@ -2,6 +2,7 @@
 #include <sys/queue.h>
 
 #include "dev/IOApic.h"
+#include "dev/acpi/AcpiPC.h"
 #include "machine/intr.h"
 
 enum {
@@ -69,7 +70,7 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 
 - initWithID:(uint32_t)id address:(paddr_t *)paddr gsiBase:(uint32_t)gsiBase
 {
-	self = [super init];
+	self = [super initWithProvider:[AcpiPC instance]];
 
 	_id = id;
 	_vaddr = P2V(paddr);
@@ -82,8 +83,9 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 
 	TAILQ_INSERT_TAIL(&ioapics, self, _ioapics_entries);
 
-	ksnprintf(m_name, sizeof m_name, "IOApic%d", id);
+	kmem_asprintf(&m_name, "IOApic%d", id);
 	[self registerDevice];
+	DKLogAttach(self);
 
 	return self;
 }

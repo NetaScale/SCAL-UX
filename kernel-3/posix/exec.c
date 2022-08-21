@@ -193,7 +193,7 @@ strv_free(char **strv)
 
 int
 sys_exec(proc_t *proc, const char *u_path, const char *u_argp[],
-    const char *u_envp[], intr_frame_t *frame)
+    const char *u_envp[], md_intr_frame_t *frame)
 {
 	int	       r = 0;
 	exec_package_t pkg, rtldpkg;

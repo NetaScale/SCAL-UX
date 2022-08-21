@@ -36,6 +36,8 @@ typedef struct {
 
 @interface AcpiPC : DKDevice
 
++ (AcpiPC*)instance;
+
 + (BOOL)probeWithRSDP:(rsdp_desc_t *)rsdp;
 
 - init;

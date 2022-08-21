@@ -93,6 +93,18 @@ void *kmem_realloc(void *ptr, size_t oldSize, size_t size);
 void *kmem_zalloc(size_t size);
 
 /*!
+ * As asprintf, but use kmem backing.
+ */
+int kmem_asprintf(char **str, const char *fmt, ...);
+
+/*!
+ * Free a null-terminated string. The string **must** be null-terminated at
+ * the end of its allocation, and nowhere else.
+ * @returns NULL
+ */
+void *kmem_strfree(char *str);
+
+/*!
  * Allocate kernel wired memory generically; this is a compatibility interface
  * for those who aren't able to provide the size of allocation when freeing the
  * allocated memory. Alignment is to 8 bytes only.

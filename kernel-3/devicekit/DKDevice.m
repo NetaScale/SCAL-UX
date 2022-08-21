@@ -3,37 +3,31 @@
 
 @implementation DKDevice
 
-- (const char *)name
-{
-	return m_name;
-}
+@synthesize name = m_name;
+@synthesize provider = m_provider;
 
 - (void)addToTree
 {
-	TAILQ_INIT(&subdevs);
-	if (parent)
-		TAILQ_INSERT_TAIL(&parent->subdevs, self, subdev_entries);
+	TAILQ_INIT(&m_subDevices);
+	if (m_provider)
+		TAILQ_INSERT_TAIL(&m_provider->m_subDevices, self,
+		    m_subDevices_entry);
+}
+
+- (id)initWithProvider:(DKDevice *)provider
+{
+	self = [super init];
+	if (!self)
+		return NULL;
+
+	self->m_provider = provider;
+
+	return self;
 }
 
 - (void)registerDevice
 {
 	[self addToTree];
-	if (parent)
-		DKDevLog(self,
-		    "Registered at " kAnsiYellow "%s" kAnsiReset "\n",
-		    parent->m_name);
-	else
-		DKDevLog(self, "Registered\n");
 }
-
-#if 0
-- (void)registerDevicePCIInfo:(struct dk_device_pci_info *)pciInfo
-{
-	parent = pciInfo->busObj;
-	[self addToTree];
-	DKDevLog(self, "Registered at %s (slot %d, func %d)\n",
-	    [pciInfo->busObj name], pciInfo -> slot, pciInfo -> fun);
-}
-#endif
 
 @end

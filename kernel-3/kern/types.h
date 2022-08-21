@@ -18,4 +18,12 @@ typedef size_t voff_t, pgoff_t;
 
 #define NS_PER_S 1000000000
 
+/* does not belong here */
+struct msgbuf {
+	char buf[4096];
+	size_t read, write;
+};
+
+extern struct msgbuf msgbuf;
+
 #endif /* KERN_TYPES_H_ */

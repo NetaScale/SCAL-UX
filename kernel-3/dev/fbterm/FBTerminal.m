@@ -1,12 +1,13 @@
 #include <x86_64/boot.h>
 
-#include "FBTerm.h"
+#include "FBTerminal.h"
 #include "dev/fbterm/term.h"
+#include "devicekit/DKDevice.h"
 #include "vm/vm.h"
 
 extern char sun12x22[], nbsdbold[];
 
-FBTerm    *syscon = nil;
+FBTerminal    *syscon = nil;
 static int termnum = 0;
 
 #if 0
@@ -14,7 +15,7 @@ static int fbtopen(dev_t dev, int mode, struct proc *proc);
 #endif
 static int fbtputch(void *data, int ch);
 
-@implementation FBTerm
+@implementation FBTerminal
 
 + (BOOL)probeWithFB:(LimineFB *)fb
 {
@@ -31,9 +32,8 @@ static int fbtputch(void *data, int ch);
 	cdevsw_t cdev;
 #endif
 
-	self = [super init];
+	self = [super initWithProvider:fb];
 
-	parent = nil;
 	_fb = fb;
 	style = (struct style_t) { DEFAULT_ANSI_COLOURS,
 		DEFAULT_ANSI_BRIGHT_COLOURS, 0xFFFFFFFF, 0x00000000, 40, 0 };
@@ -66,7 +66,7 @@ static int fbtputch(void *data, int ch);
 	tty.data = self;
 #endif
 
-	ksnprintf(m_name, sizeof m_name, "FBTerm%d", termnum++);
+	kmem_asprintf(&m_name, "FBTerminal%d", termnum++);
 
 	term_init(&term, NULL, false);
 	term_vbe(&term, frm, font, style, back);
@@ -90,10 +90,17 @@ static int fbtputch(void *data, int ch);
 #else
 	if (syscon == nil) {
 		syscon = self;
+		for (int i = msgbuf.read; i != msgbuf.write; i++) {
+			if (i >= sizeof(msgbuf.buf))
+				i = 0;
+			term_putchar(&term, msgbuf.buf[i]);
+		}
+		term_double_buffer_flush(&term);
 	}
 #endif
 
 	[self registerDevice];
+	DKLogAttach(self);
 
 	return self;
 }
@@ -146,8 +153,8 @@ static int
 fbtputch(void *data, int c)
 {
 	limterm_putc(c, NULL);
-	//[(FBTerm *)data putc:c];
-	[(FBTerm *)data flush];
+	//[(FBTerminal *)data putc:c];
+	[(FBTerminal *)data flush];
 	return 0;
 }
 #endif

@@ -1,19 +1,18 @@
-//#include <amd64/amd64.h>
 #include <x86_64/cpu.h>
 
 #include <byteswap.h>
 
 #include "AcpiPC.h"
 #include "dev/IOApic.h"
-//#include "dev/PCIBus.h"
+#include "dev/PCIBus.h"
 //#include "dev/PS2Keyboard.h"
+#include <kern/kmem.h>
+#include <libkern/klib.h>
+
 #include "devicekit/DKDevice.h"
-#include "vm/vm.h"
 #include "lai/core.h"
 #include "lai/helpers/sci.h"
-//#include "lai/internal-exec.h"
-#include <libkern/klib.h>
-#include <kern/kmem.h>
+#include "vm/vm.h"
 
 typedef struct {
 	acpi_header_t header;
@@ -48,6 +47,7 @@ typedef struct {
 acpi_rsdt_t *rsdt = NULL;
 acpi_xsdt_t *xsdt = NULL;
 mcfg_t      *mcfg = NULL;
+static AcpiPC *acpipc = NULL;
 
 uint8_t
 pci_readb(uint32_t bus, uint32_t slot, uint32_t function, uint32_t offset)
@@ -372,16 +372,15 @@ string_to_eisaid(const char *id)
 	else
 		devid = eisaid_to_string(id.integer);
 
-#if 0
 	/* TODO: matching on device classes by a more elegant means */
-	if (strcmp(devid, "PNP0303") == 0)
+	/*if (strcmp(devid, "PNP0303") == 0)
 		[PS2Keyboard probeWithAcpiNode:node];
-	else if (strcmp(devid, ACPI_PCI_ROOT_BUS_PNP_ID) == 0) {
-		[PCIBus probeWithAcpiNode:node];
+	else */
+	if (strcmp(devid, ACPI_PCI_ROOT_BUS_PNP_ID) == 0) {
+		[PCIBus probeWithAcpiNode:node provider:self];
 	} else if (strcmp(devid, ACPI_PCIE_ROOT_BUS_PNP_ID) == 0) {
-		[PCIBus probeWithAcpiNode:node];
+		[PCIBus probeWithAcpiNode:node provider:self];
 	}
-#endif
 }
 
 /* depth-first traversal of devices within the tree */
@@ -400,6 +399,11 @@ string_to_eisaid(const char *id)
 		if (node->children.num_elems)
 			[self iterate:node];
 	}
+}
+
++ instance
+{
+	return acpipc;
 }
 
 + (BOOL)probeWithRSDP:(rsdp_desc_t *)rsdp
@@ -519,8 +523,10 @@ do_osc(lai_nsnode_t *osc)
 
 	self = [super init];
 
-	ksnprintf(m_name, sizeof m_name, "AcpiPC0");
+	kmem_asprintf(&m_name, "AcpiPC0");
 	[self registerDevice];
+	DKLogAttach(self);
+	acpipc = self;
 
 	madt = laihost_scan("APIC", 0);
 	madt_walk(madt, parse_ioapics, NULL);

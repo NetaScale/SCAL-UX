@@ -13,6 +13,8 @@
 
 #include <sys/types.h>
 
+#include <vm/vm.h>
+
 #include "devicekit/DKDevice.h"
 
 /*!

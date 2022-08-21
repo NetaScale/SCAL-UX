@@ -18,9 +18,11 @@ struct limine_framebuffer;
 @property (nonatomic) uint16_t bpp;
 @property (nonatomic) vaddr_t  base;
 
-+ (BOOL)probeWithLimineFBResponse:(struct limine_framebuffer_response *)resp;
++ (BOOL)probeWithProvider:(DKDevice *)provider
+	 limineFBResponse:(struct limine_framebuffer_response *)resp;
 
-- initWithLimineFB:(struct limine_framebuffer *)fb;
+- initWithProvider:(DKDevice *)provider
+	  limineFB:(struct limine_framebuffer *)fb;
 @end
 
 extern LimineFB *sysfb;

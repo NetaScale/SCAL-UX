@@ -91,8 +91,10 @@ pagefault_interrupt(md_intr_frame_t *frame, void *unused)
 	(void)unused;
 
 	r = vm_fault(frame, curtask()->map, (vaddr_t)read_cr2(), frame->code);
-	if (r < 0)
-		fatal("unhandled page fault\n");
+	if (r < 0) {
+		md_intr_frame_trace(frame);
+		fatal("unhandled page fault at RIP 0x%lx\n", frame->rip);
+	}
 }
 
 void
@@ -261,6 +263,30 @@ md_intr_register(int vec, ipl_t prio, intr_handler_fn_t handler, void *arg)
 	md_intrs[vec].prio = prio;
 	md_intrs[vec].handler = handler;
 	md_intrs[vec].arg = arg;
+}
+
+void
+md_intr_frame_trace(md_intr_frame_t *frame)
+{
+	struct frame {
+		struct frame *rbp;
+		uint64_t      rip;
+	} *aframe = (struct frame *)frame->rbp;
+	const char *name = NULL;
+	size_t	    offs = 0;
+
+	//ksrv_backtrace((vaddr_t)frame->rip, &name, &offs);
+	kprintf("Begin stack trace:\n");
+	kprintf(" - %p %s+%lu\n", (void *)frame->rip, name ? name : "???", offs);
+
+
+	if (aframe != NULL)
+		do {
+			//ksrv_backtrace((vaddr_t)aframe->rip, &name, &offs);
+			kprintf(" - %p %s+%lu\n", (void *)aframe->rip, name ? name : "???",
+			    offs);
+		} while ((aframe = aframe->rbp) /*&& (uint64_t)aframe >= KERN_BASE &&
+		    aframe->rip != 0x0*/);
 }
 
 static void send_ipi(uint32_t lapic_id, uint8_t intr)

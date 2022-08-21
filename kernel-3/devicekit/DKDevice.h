@@ -8,19 +8,21 @@
 #define kAnsiYellow "\e[0;33m"
 #define kAnsiReset "\e[0m"
 
-#define DKLogAttach(dev) \
-	kprintf(kAnsiYellow "%s" kAnsiReset " at " kAnsiYellow "%s" kAnsiReset);
-#define DKLogAttachExtra(DEV, FMT, ...)                        \
-	kprintf(kAnsiYellow "%s" kAnsiReset " at " kAnsiYellow \
-			    "%s" kAnsiReset FMT,               \
-	    [dev name], DEV -> parent -> name, ##__VA_ARGS__);
 #define DKPrint(...) kprintf(__VA_ARGS__)
 #define DKLog(SUB, ...)                                      \
 	({                                                   \
 		kprintf(kAnsiYellow "%s: " kAnsiReset, SUB); \
 		kprintf(__VA_ARGS__);                        \
 	})
-#define DKDevLog(dev, ...) DKLog(dev->m_name, __VA_ARGS__)
+#define DKLogAttach(DEV)                                                       \
+	kprintf(kAnsiYellow "%s" kAnsiReset " at " kAnsiYellow "%s" kAnsiReset \
+			    "\n",                                              \
+	    [DEV name], [DEV provider] ? [[DEV provider] name] : "(root)");
+#define DKLogAttachExtra(DEV, FMT, ...)                        \
+	kprintf(kAnsiYellow "%s" kAnsiReset " at " kAnsiYellow \
+			    "%s: " kAnsiReset FMT "\n",        \
+	    [DEV name], [[DEV provider] name], ##__VA_ARGS__);
+#define DKDevLog(DEV, ...) DKLog([DEV name], __VA_ARGS__)
 
 @class DKDevice;
 
@@ -34,24 +36,28 @@ typedef _TAILQ_ENTRY(DKDevice, ) DKDevice_queue_entry_t;
 typedef _SLIST_HEAD(, DKDevice, ) DKDevice_slist_t;
 typedef _SLIST_ENTRY(DKDevice, ) DKDevice_slist_entry_t;
 
-/**
- * Represents any sort of device.
+/*!
+ * Represents any sort of device, whether physical or pseudo.
  */
 @interface DKDevice : OFObject {
-	char		       m_name[32];
-	DKDevice		 *parent;
-	DKDevice_queue_t       subdevs;
-	DKDevice_queue_entry_t subdev_entries;
+	@public
+	char		  *m_name;
+	DKDevice		 *m_provider;
+	DKDevice_queue_t       m_subDevices;
+	DKDevice_queue_entry_t m_subDevices_entry;
 }
 
-/** The device's unique name. */
+/*! The device's unique name. */
 @property (readonly) const char *name;
+
+/*! The device's provider; unless this is the root device. */
+@property (readonly) DKDevice *provider;
+
+/*! Initialise with a given provider. */
+- initWithProvider:(DKDevice *)provider;
 
 /** Register the device in the system. */
 - (void)registerDevice;
-
-/** Register the device in the system (for PCI devices). */
-- (void)registerDevicePCIInfo:(struct dk_device_pci_info *)pciInfo;
 
 @end
 

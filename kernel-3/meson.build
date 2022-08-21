@@ -1,4 +1,4 @@
-project('SCAL/UX Kernel', ['c', 'cpp', 'objc'],
+project('SCAL/UX Kernel', ['c', 'cpp', 'objc', 'swift'],
     default_options: [ 'cpp_std=c++20' ])
 
 arch = 'x86_64'
@@ -12,14 +12,12 @@ kern_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
   '-fsanitize=kernel-address' ]
 
 kern_srcs = files(
-  'dev/autoconf.m',
-
-  'devicekit/DKDevice.m',
+  'devicekit/DKDevice.m', 'devicekit/DKDisk.m', 'devicekit/DKLogicalDisk.m',
 
   'kern/kasan.c', 'kern/kmem_slab.c', 'kern/liballoc.c',
   'kern/liballoc_sysdep.c', 'kern/task.c', 'kern/vmem.c',
 
-  'libkern/klib.c',
+  'libkern/klib.c', 'libkern/uuid.c',
 
   'posix/posix_main.c',
 
