@@ -1,10 +1,11 @@
+#include <machine/machdep.h>
+#include <vm/vm.h>
+
 #include <stdint.h>
 
 #include "NVMeController.h"
 #include "dev/GPTVolumeManager.h"
 #include "dev/NVMeDisk.h"
-#include <vm/vm.h>
-//#include <machine/vm_machdep.h>
 #include "nvmereg.h"
 
 /*
@@ -78,8 +79,22 @@ union nvme_status_code {
 _Static_assert(sizeof(struct nvme_cap) == sizeof(uint64_t), "NVMe caps size");
 _Static_assert(sizeof(struct nvme_cc) == sizeof(uint32_t), "NVMe cc size");
 
+/*!
+ * Control structure reprezsenting an in-flight NVMe request.
+ */
+struct nvme_request {
+	SIMPLEQ_ENTRY(nvme_request) entry;
+	struct dk_diskio_completion *completion;
+	uint16_t cid;	/* command ID */
+	size_t nbytes;	/* number of bytes to transfer */
+	struct nvme_sqe *sqe; /* nulled on submission */
+};
+
 struct nvme_queue {
-	spinlock_t lock; /* locks cq and sq + related; todo split */
+	spinlock_t lock; /* locks all the things in a queue; todo split? */
+
+	SIMPLEQ_HEAD(, nvme_request) req_q;
+	struct nvme_request *reqs; /* n = sqslots */
 
 	voff_t sqtdbl; /* offset submission queue tail doorbell */
 	voff_t cqhdbl; /* offset completion queue head doorbell */
@@ -96,7 +111,7 @@ struct nvme_queue {
 };
 
 static int nvmeId = 0;
-static int cmdId = 0;
+static int cmdId = 0; /* todo move to nvme_queue:: */
 
 static void
 copy32(void *dst, void *src, size_t nbytes)
@@ -114,12 +129,12 @@ write32(void *dst, uint32_t val)
 	*(uint32_t *)dst = val;
 }
 
-struct nvme_queue *
+static struct nvme_queue *
 queue_alloc(uint16_t idx, uint16_t dstrd)
 {
 	struct nvme_queue *q = kmem_zalloc(sizeof (*q));
-	vm_page_t	  *page;
-	size_t		   stride = 4 << dstrd; /* xxx */
+	vm_page_t *page;
+	size_t	   stride = 4 << dstrd; /* xxx */
 
 	assert(q != NULL);
 
@@ -146,6 +161,14 @@ queue_alloc(uint16_t idx, uint16_t dstrd)
 
 	q->phase = 1;
 
+	SIMPLEQ_INIT(&q->req_q);
+	q->reqs = kmem_alloc(sizeof(*q->reqs) * q->sqslots);
+	for (int i = 0; i < q->sqslots; i++) {
+		q->reqs[i].cid = i;
+		q->reqs[i].completion = NULL;
+		SIMPLEQ_INSERT_TAIL(&q->req_q, &q->reqs[i], entry);
+	}
+
 	return q;
 }
 
@@ -159,7 +182,6 @@ static void nvme_intr(md_intr_frame_t *frame, void *arg);
 + (BOOL)probeWithPCIInfo:(dk_device_pci_info_t *)pciInfo
 {
 	volatile vaddr_t bar0;
-	int		 r;
 
 	[PCIBus enableMemorySpace:pciInfo];
 	[PCIBus enableBusMastering:pciInfo];
@@ -170,22 +192,11 @@ static void nvme_intr(md_intr_frame_t *frame, void *arg);
 		return NO;
 	}
 
-	[PCIBus setInterruptsOf:pciInfo enabled:NO];
-	r = [PCIBus handleInterruptOf:pciInfo
-			  withHandler:nvme_intr
-			     argument:self
-			   atPriority:kSPL0];
-
-	if (r < 0) {
-		DKLog("NVMe", "Failed to allocate interrupt handler: %d\n", r);
-		return NO;
-	}
-
 	return [[self alloc] initWithPCIInfo:pciInfo] != NULL;
 }
 
 static void
-disable(vaddr_t regs)
+controller_disable(vaddr_t regs)
 {
 	struct nvme_cc	 cc;
 	struct nvme_csts csts;
@@ -207,18 +218,22 @@ disable(vaddr_t regs)
 	return cident->mn;
 }
 
+/*
+ * Usable only when there are and will be no async requests in-flight!
+ */
 - (int)polledSubmit:(struct nvme_sqe *)cmd toQueue:(struct nvme_queue *)queue
 {
 	int    flags;
 	size_t cnt = 0;
 
+	write32(regs + NVME_INTMS, 0x1);
+
 	cmd->cid = cmdId++;
-	__sync_synchronize();
-	assert(queue && queue->sq);
+
 	queue->sq[queue->sqtail++] = *cmd;
 	if (queue->sqtail == queue->sqslots)
 		queue->sqtail = 0;
-	__sync_synchronize();
+
 	*(uint32_t *)(regs + queue->sqtdbl) = queue->sqtail;
 
 	while (true) {
@@ -229,9 +244,7 @@ disable(vaddr_t regs)
 
 		asm("pause");
 		if (cnt++ > 0x10000000) {
-			kprintf("FIXME: add a proper timeout\n");
-			for (;;)
-				asm("hlt");
+			fatal("FIXME: add a proper timeout\n");
 		}
 	}
 
@@ -241,8 +254,7 @@ disable(vaddr_t regs)
 		DKDevLog(self, "Command error %d\n", flags);
 		union nvme_status_code code;
 		code.asShort = flags;
-		for (;;)
-			;
+		fatal("panicking for debug\n");
 	}
 
 	if (++queue->cqhead == queue->cqslots) {
@@ -250,10 +262,76 @@ disable(vaddr_t regs)
 		queue->phase = !queue->phase;
 	}
 
-	__sync_synchronize();
 	*(uint32_t *)(regs + queue->cqhdbl) = queue->cqhead;
 
+	write32(regs + NVME_INTMC, 0x1);
+
 	return flags >> 1;
+}
+
+- (int)submitRequest:(struct nvme_request *)req
+	   toQueue:(struct nvme_queue *)queue
+    withCompletion:(struct dk_diskio_completion *)completion
+{
+	int iff = md_intr_disable();
+
+	spinlock_lock(&queue->lock);
+	req->sqe->cid = req->cid;
+
+	queue->sq[queue->sqtail++] = *req->sqe;
+	req->sqe = NULL;
+	if (queue->sqtail == queue->sqslots)
+		queue->sqtail = 0;
+
+	*(uint32_t *)(regs + queue->sqtdbl) = queue->sqtail;
+
+	spinlock_unlock(&queue->lock);
+	md_intr_x(iff);
+
+	return 0;
+}
+
+- (void)queueCompleteRequests:(struct nvme_queue *)queue
+{
+	spinlock_lock(&queue->lock);
+	while (true) {
+		uint16_t flags = queue->cq[queue->cqhead].flags;
+		uint16_t cid = queue->cq[queue->cqhead].cid;
+		struct nvme_request *req;
+
+		if ((flags & 0x1) != queue->phase)
+			break;
+
+		if (flags >> 1 != 0) {
+			DKDevLog(self, "Command error %d\n", flags);
+			union nvme_status_code code;
+			code.asShort = flags;
+			fatal("panicking for debugging purposes\n");
+		}
+
+		assert(cid < queue->cqslots);
+		req = &queue->reqs[cid];
+		assert (req->completion);
+		req->completion->callback(req->completion->data, req->nbytes);
+
+		/*
+		 * todo(med): free PRP list? i think better we just keep PRP
+		 * list allocated and associated with an nvme_req and reuse it.
+		 */
+
+		/* return request to free queue */
+		req->completion = NULL;
+		req->nbytes = 0;
+		SIMPLEQ_INSERT_HEAD(&queue->req_q, req, entry);
+
+		if (++queue->cqhead == queue->cqslots) {
+			queue->cqhead = 0;
+			queue->phase = !queue->phase;
+		}
+
+		*(uint32_t *)(regs + queue->cqhdbl) = queue->cqhead;
+	}
+	spinlock_unlock(&queue->lock);
 }
 
 #define TRIMSPACES(CHARARR)                                                   \
@@ -281,7 +359,7 @@ disable(vaddr_t regs)
 	TRIMSPACES(cident->mn);
 	TRIMSPACES(cident->fr);
 	TRIMSPACES(cident->sn);
-	/* TODO(low): non 512 byte block size */
+	/* TODO(low): handle non 512 byte block size */
 	maxBlockTransfer = (1 << cident->mdts) * PGSIZE / 512;
 
 	DKDevLog(self, "%s, firmware %s, serial %s\n", cident->mn, cident->fr,
@@ -381,7 +459,8 @@ void *malloc(size_t size)
 {
 	struct nvme_cap cap;
 	struct nvme_ver ver;
-	vm_page_t	  *page = vm_pagealloc(1, &vm_pgwiredq);
+	vm_page_t *page = vm_pagealloc(1, &vm_pgwiredq);
+	int r;
 
 	self = [super initWithProvider:pciInfo->busObj];
 	m_controllerId = nvmeId++;
@@ -389,6 +468,17 @@ void *malloc(size_t size)
 
 	[self registerDevice];
 	DKLogAttach(self);
+
+	r = [PCIBus handleInterruptOf:pciInfo
+			  withHandler:nvme_intr
+			     argument:self
+			   atPriority:kSPL0];
+
+	if (r < 0) {
+		DKDevLog(self, "Failed to allocate interrupt handler: %d\n", r);
+		[self release];
+		return NULL;
+	}
 
 	regs = P2V([PCIBus getBar:0 info:pciInfo]);
 	copy32(&cap, regs + NVME_CAP, sizeof cap);
@@ -404,13 +494,15 @@ void *malloc(size_t size)
 
 	assert(cap.MPSMIN == 0 && "doesn't support host pagesize");
 
-	disable(regs);
+	controller_disable(regs);
 	if ([self enable] < 0) {
+		DKDevLog(self, "Failed to re-enable controller!\n");
 		[self release];
 		return nil;
 	}
 
-	write32(regs + NVME_INTMS, 0x1);
+	[PCIBus setInterruptsOf:pciInfo enabled:YES];
+
 	[self identifyController];
 
 	/* create I/O submission and completion queues */
@@ -438,10 +530,6 @@ void *malloc(size_t size)
 		(void)disk; /* TODO: keep track of it? */
 	}
 
-	write32(regs + NVME_INTMC, 0x1);
-	[PCIBus setInterruptsOf:pciInfo enabled:YES];
-
-	DKDevLog(self, "Done\n");
 	return self;
 }
 
@@ -451,16 +539,28 @@ void *malloc(size_t size)
        intoBuffer:(vm_mdl_t *)buf
        completion:(struct dk_diskio_completion *)completion
 {
+	int	  r;
+	int 	  iff = md_intr_disable();
 	struct nvme_sqe_io io = { 0 };
-	int		   r;
-	vm_mdl_t		 *prpListMDL;
+	struct nvme_request *req;
+	vm_mdl_t *prpListMDL;
 
+	spinlock_lock(&ioqueue->lock);
+	req = SIMPLEQ_LAST(&ioqueue->req_q, nvme_request, entry);
+	assert(req != NULL);
+	SIMPLEQ_REMOVE(&ioqueue->req_q, req, nvme_request, entry);
+	spinlock_unlock(&ioqueue->lock);
+	md_intr_x(iff);
+
+	req->completion = completion;
+	req->sqe = (struct nvme_sqe *)&io;
+	/* TODO(low): block size other than 512 bytes */
+	req->nbytes = nBlocks * 512;
 	io.opcode = NVM_CMD_READ;
 	io.nsid = nsid;
 	io.slba = offset;
 	io.nlb = nBlocks - 1;
 
-	/* TODO(low): block size other than 512 bytes */
 	assert(nBlocks < maxBlockTransfer);
 
 	if (buf->nPages == 1) {
@@ -471,8 +571,7 @@ void *malloc(size_t size)
 	} else {
 		size_t nPRPPerList = PGSIZE / sizeof(void *) - 1;
 		size_t nPRPLists = ROUNDUP((buf->nPages - 1), nPRPPerList) /
-			nPRPPerList +
-		    1;
+			nPRPPerList + 1;
 		size_t iPRPList = 0;
 
 		r = vm_mdl_new_with_capacity(&prpListMDL, nPRPLists * PGSIZE);
@@ -498,12 +597,9 @@ void *malloc(size_t size)
 		io.entry.prp[1] = (uint64_t)prpListMDL->pages[0]->paddr;
 	}
 
-	r = [self polledSubmit:(struct nvme_sqe *)&io toQueue:ioqueue];
-
-	// vm_mdl_release(prpListMDL);
+	r = [self submitRequest:req toQueue:ioqueue withCompletion:completion];
 
 	return r;
-	/* TODO implement rest; make async */
 }
 
 @end
@@ -511,5 +607,7 @@ void *malloc(size_t size)
 static void
 nvme_intr(md_intr_frame_t *frame, void *arg)
 {
-	kprintf("NVMe interrupt\n");
+	NVMeController *controller = arg;
+
+	[controller queueCompleteRequests:controller->ioqueue];
 }

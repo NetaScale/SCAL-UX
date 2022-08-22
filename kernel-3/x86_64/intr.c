@@ -17,6 +17,7 @@
 #include <machine/intr.h>
 #include <x86_64/asmintr.h>
 #include <x86_64/cpu.h>
+#include "machine/machdep.h"
 
 typedef struct {
 	uint16_t isr_low;
@@ -122,6 +123,8 @@ void lapic_eoi(void);
 void
 handle_int(md_intr_frame_t *frame, uintptr_t num)
 {
+	int oldInInterrupt = curcpu()->inInterrupt;
+
 	if (num == 240) {
 		/* here the context switch actually happens */
 		thread_t *old = curcpu()->md.old, *next = curcpu()->curthread;
@@ -148,12 +151,19 @@ handle_int(md_intr_frame_t *frame, uintptr_t num)
 		fatal("unhandled interrupt %lu\n", num);
 	}
 
+	if (num >= 32) {
+		curcpu()->inInterrupt = true;
+	}
+
 	md_intrs[num].handler(frame, md_intrs[num].arg);
-	if (num > 32)
+
+	if (num >= 32) {
 		lapic_eoi();
+		curcpu()->inInterrupt = oldInInterrupt;
+	}
 
 	assert(curthread()->state == kThreadRunning);
-	if (curcpu()->preempted) {
+	if (curcpu()->preempted && curcpu()->inInterrupt == false) {
 		curcpu()->preempted = false;
 		sched_reschedule();
 	}

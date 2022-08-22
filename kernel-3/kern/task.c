@@ -18,6 +18,9 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+#include "kern/sync.h"
+#include "machine/machdep.h"
+
 task_t task0 = {
         .name = "[kernel]",
         .map = &kmap
@@ -196,21 +199,33 @@ mutex_unlock(mutex_t *mtx)
 	}
 }
 
-waitq_result_t
-waitq_await(waitq_t *wq, uint64_t nanosecs)
+/* to be called with interrupts disabled + wq locked */
+static waitq_result_t
+waitq_await_locked(waitq_t *wq, uint64_t nanosecs)
 {
 	thread_t	 *thread = curthread();
-	int	       iff = md_intr_disable();
 	waitq_result_t r;
 
+	/* TODO(high): timeouts */
+
 	spinlock_lock(&thread->lock);
-	spinlock_lock(&wq->lock);
 	TAILQ_INSERT_TAIL(&wq->waiters, thread, queue);
 	thread->state = kThreadWaiting;
 	thread->wq = wq;
 	spinlock_unlock(&wq->lock);
 	sched_reschedule();
 	r = thread->wqres;
+	return r;
+}
+
+waitq_result_t
+waitq_await(waitq_t *wq, uint64_t nanosecs)
+{
+	int	       iff = md_intr_disable();
+	waitq_result_t r;
+
+	spinlock_lock(&wq->lock);
+	r = waitq_await_locked(wq, nanosecs);
 	md_intr_x(iff);
 	return r;
 }
@@ -229,6 +244,7 @@ waitq_wake_one(waitq_t *wq)
 
 	if (!thrd) {
 		kprintf("warning: waitq %p sent event with no waiters\n", wq);
+		md_intr_x(iff);
 		return 0;
 	}
 
@@ -239,9 +255,32 @@ waitq_wake_one(waitq_t *wq)
 	return 1;
 }
 
-void
-task_init(void)
+waitq_result_t
+semaphore_wait(semaphore_t *sem, uint64_t nanosecs)
 {
+	int	       iff = md_intr_disable();
+	waitq_result_t r;
+
+	spinlock_lock(&sem->wq.lock);
+	if (--sem->count < 0) {
+		r = waitq_await_locked(&sem->wq, nanosecs);
+		assert(r == kWQSuccess);
+	} else {
+		spinlock_unlock(&sem->wq.lock);
+		r = kWQSuccess;
+	}
+
+	md_intr_x(iff);
+	return r;
+}
+
+int
+semaphore_signal(semaphore_t *sem)
+{
+	/* xxx TODO(high): can there be a race condition here? */
+	if (++sem->count <= 0)
+		return waitq_wake_one(&sem->wq);
+	return 0;
 }
 
 thread_t *
@@ -287,7 +326,10 @@ thread_resume(thread_t *thread)
 
 	spinlock_unlock(&sched_lock);
 	if (thread->cpu == curcpu()) {
-		sched_reschedule();
+		if (thread->cpu->inInterrupt)
+			thread->cpu->preempted = true;
+		else
+			sched_reschedule();
 	} else {
 		md_ipi_resched(thread->cpu);
 	}

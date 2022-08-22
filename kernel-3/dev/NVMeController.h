@@ -8,7 +8,8 @@ struct nvm_identify_controller;
 struct dk_diskio_completion;
 
 @interface NVMeController : DKDevice {
-    @private
+    //@private
+    @public
 	size_t		 m_controllerId;
 	volatile vaddr_t regs;
 

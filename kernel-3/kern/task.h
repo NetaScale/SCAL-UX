@@ -100,7 +100,10 @@ typedef struct cpu {
 	TAILQ_HEAD(, thread) runqueue;
 
 	/*! Whether to reschedule on dropping priority/finishing interrupt. */
-	bool preempted : 1;
+	bool preempted : 1,
+	    /*! Whether currently in interrupt context (and so cannot
+	       reschedule) */
+	    inInterrupt : 1;
 
 	/*! The timeslicing callout - timeslices processes. */
 	callout_t timeslicer;

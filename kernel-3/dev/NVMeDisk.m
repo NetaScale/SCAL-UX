@@ -35,7 +35,7 @@
 	m_maxBlockTransfer = [info->controller maxBlockTransfer];
 	[self registerDevice];
 
-	DKLogAttachExtra(self, "NSID %d; %lu MiB (blocksize %ld, blocks %ld)\n",
+	DKLogAttachExtra(self, "NSID %d; %lu MiB (blocksize %ld, blocks %ld)",
 	    info->nsid, m_nBlocks * m_blockSize / 1024 / 1024, m_blockSize,
 	    m_nBlocks);
 

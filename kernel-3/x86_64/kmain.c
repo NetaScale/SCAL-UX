@@ -222,7 +222,8 @@ common_init(struct limine_smp_info *smpi)
 	for (int i = 0; i < 3; i++)
 		cpu->md.lapic_tps += lapic_timer_calibrate() / 3;
 
-	cpu->preempted = 0;
+	cpu->preempted = false;
+	cpu->inInterrupt = false;
 	cpu->timeslicer.arg = NULL;
 	cpu->timeslicer.callback = sched_timeslice;
 	cpu->timeslicer.state = kCalloutDisabled;

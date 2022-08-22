@@ -8,6 +8,9 @@
  * All rights reserved.
  */
 
+#include <kern/sync.h>
+#include <kern/task.h>
+
 #include <errno.h>
 
 #include "DKDisk.h"
@@ -37,12 +40,37 @@ static int driveIDCounter = 0;
 	return self;
 }
 
+struct complete_sync_data {
+	semaphore_t sem;
+	ssize_t result;
+};
+
+static void
+complete_sync(void *data, ssize_t result)
+{
+	struct complete_sync_data *sync = data;
+	sync->result = result;
+	semaphore_signal(&sync->sem);
+}
+
 - (int)commonIO:(dk_strategy_t)strategy
 	  bytes:(size_t)nBytes
 	     at:(off_t)offset
 	 buffer:(vm_mdl_t *)buf
      completion:(struct dk_diskio_completion *)completion
 {
+	struct dk_diskio_completion comp;
+	struct complete_sync_data   sync;
+	int			    r;
+
+	if (!completion) {
+		completion = &comp;
+		comp.callback = complete_sync;
+		comp.data = &sync;
+		sync.sem = (semaphore_t)SEMAPHORE_INITIALIZER(sync.sem);
+	} else
+		comp.data = NULL;
+
 	if (nBytes > m_maxBlockTransfer * m_blockSize) {
 		DKDevLog(self, "Excessive request received - not yet handled.");
 		return -EOPNOTSUPP;
@@ -54,15 +82,25 @@ static int driveIDCounter = 0;
 		return -EOPNOTSUPP;
 	}
 
-	return strategy == kDKRead ?
-	    [selfDelegate readBlocks:nBytes / m_blockSize
-				  at:offset / m_blockSize
-			  intoBuffer:buf
-			  completion:completion] :
-	    [selfDelegate writeBlocks:nBytes / m_blockSize
-				   at:offset / m_blockSize
-			   fromBuffer:buf
-			   completion:completion];
+	r = strategy == kDKRead ? [selfDelegate readBlocks:nBytes / m_blockSize
+							at:offset / m_blockSize
+						intoBuffer:buf
+						completion:completion] :
+				  [selfDelegate writeBlocks:nBytes / m_blockSize
+							 at:offset / m_blockSize
+						 fromBuffer:buf
+						 completion:completion];
+
+	if (r != 0)
+		return r;
+
+	if (comp.data) {
+		/* synchronous case */
+		r = semaphore_wait(&sync.sem, -1);
+		assert(r == kWQSuccess);
+		return sync.result;
+	} else
+		return 0;
 }
 
 - (int)readBytes:(size_t)nBytes

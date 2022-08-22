@@ -117,7 +117,7 @@ static _TAILQ_HEAD(, IOApic, ) ioapics = TAILQ_HEAD_INITIALIZER(ioapics);
 
 			ioapic_route(ioapic->_vaddr, intr, vec, lopol);
 			ioapic->redirs[intr] = vec;
-			;
+
 			found = true;
 			break;
 		}

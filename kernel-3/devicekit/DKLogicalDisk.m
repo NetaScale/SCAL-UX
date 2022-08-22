@@ -81,6 +81,12 @@ static int minor = 0;
 		// assert(root_dev->ops->mknod(root_dev, &node, nameBuf,
 		//	   makedev(major, minor++)) == 0);
 
+		if (![m_underlying isKindOfClass:[DKDrive class]]) {
+			int
+mountit(DKLogicalDisk *disk);
+mountit(self);
+		}
+
 		if (location == 0) {
 			[GPTVolumeManager probe:self];
 		}

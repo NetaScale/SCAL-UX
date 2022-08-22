@@ -13,8 +13,8 @@
  * @brief Synchronisation functionality for the kernel.
  */
 
-#ifndef SYNCH_H_
-#define SYNCH_H_
+#ifndef SYNC_H_
+#define SYNC_H_
 
 #include <sys/queue.h>
 
@@ -134,6 +134,34 @@ int waitq_wake_one(waitq_t *wq);
  * @{
  */
 
+/*!
+ * A semaphore. All fields protected by wq.lock.
+ */
+typedef struct semaphore {
+	atomic_int count;
+	waitq_t	   wq;
+} semaphore_t;
+
+#define SEMAPHORE_INITIALIZER(SEMA)                            \
+	{                                                      \
+		.count = 0, .wq = WAITQ_INITIALIZER((SEMA).wq) \
+	}
+
+/*! Await a semaphore. */
+waitq_result_t semaphore_wait(semaphore_t *sem, uint64_t nanosecs);
+
+/*! Signal a semaphore. @returns 1 if a thread woke. */
+int semaphore_signal(semaphore_t * sem);
+
+/*!
+ * @}
+ */
+
+/*!
+ * @name Mutexes
+ * @{
+ */
+
 typedef struct mutex {
 	struct thread *_Atomic owner;
 	waitq_t		wq;
@@ -160,4 +188,4 @@ void mutex_unlock(mutex_t *mtx);
  * @}
  */
 
-#endif /* SYNCH_H_ */
+#endif /* SYNC_H_ */
