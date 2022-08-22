@@ -9,6 +9,7 @@
  */
 
 #include <kern/kmem.h>
+#include <kern/task.h>
 #include <libkern/klib.h>
 #include <libkern/obj.h>
 #include <machine/intr.h>
@@ -150,6 +151,13 @@ vm_fault(md_intr_frame_t *frame, vm_map_t *map, vaddr_t vaddr,
 	vm_map_entry_t *ent;
 	voff_t		obj_off;
 
+	if (curthread()->in_pagefault) {
+		spinlock_unlock(&lock_msgbuf);
+		md_intr_frame_trace(frame);
+		fatal("Nested page fault\n");
+	}
+	curthread()->in_pagefault = true;
+
 #ifdef DEBUG_VM_FAULT
 	kprintf("vm_fault: in map %p at addr %p (flags: %d)\n", map, vaddr,
 	    flags);
@@ -189,6 +197,9 @@ unlockall:
 	mutex_unlock(&ent->obj->lock);
 unlockmap:
 	mutex_unlock(&map->lock);
+
+	curthread()->in_pagefault = false;
+
 	return r;
 }
 
@@ -398,7 +409,8 @@ amap_copy(vm_amap_t *amap)
 	vm_amap_t *newamap = kmem_alloc(sizeof(*newamap));
 
 	newamap->curnchunk = amap->curnchunk;
-	newamap->chunks = kmem_alloc(sizeof *newamap->chunks * amap->curnchunk);
+	newamap->chunks = kmem_alloc(sizeof(vm_amap_chunk_t *)
+	    * amap->curnchunk);
 	for (int i = 0; i < amap->curnchunk; i++) {
 		if (amap->chunks[i] == NULL) {
 			newamap->chunks[i] = NULL;
@@ -486,7 +498,7 @@ amap_anon_at(vm_amap_t *amap, pgoff_t page)
 
 	if (amap->curnchunk < minnchunk) {
 		amap->chunks = kmem_realloc(amap->chunks,
-		    amap->curnchunk * sizeof(vm_amap_chunk_t),
+		    amap->curnchunk * sizeof(vm_amap_chunk_t *),
 		    minnchunk * sizeof(vm_amap_chunk_t *));
 		for (int i = amap->curnchunk; i < minnchunk; i++)
 			amap->chunks[i] = NULL;
@@ -504,6 +516,7 @@ vm_aobj_new(size_t size)
 {
 	vm_object_t *obj = kmem_alloc(sizeof(*obj));
 
+	mutex_init(&obj->lock);
 	obj->type = kVMObjAnon;
 	obj->anon.parent = NULL;
 	obj->anon.amap = kmem_alloc(sizeof(*obj->anon.amap));

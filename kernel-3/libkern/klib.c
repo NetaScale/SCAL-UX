@@ -9,11 +9,17 @@
  */
 
 #include <kern/sync.h>
+#include <kern/kmem.h>
+#include <kern/liballoc.h>
+
+#include <string.h>
+#include <libkern/klib.h>
 
 spinlock_t lock_msgbuf = SPINLOCK_INITIALISER;
 
 #define NANOPRINTF_IMPLEMENTATION
 #include "nanoprintf.h"
+
 
 int
 memcmp(const void *str1, const void *str2, size_t count)
@@ -78,14 +84,10 @@ strcmp(const char *s1, const char *s2)
 char *
 strdup(const char *src)
 {
-#if 0
 	size_t size = strlen(src) + 1;
-	char  *str = kmalloc(size);
+	char  *str = kmem_alloc(size);
 	memcpy(str, src, size);
 	return str;
-#else
-	return NULL;
-#endif
 }
 
 char *

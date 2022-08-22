@@ -76,6 +76,8 @@ typedef struct thread {
 	enum thread_state state;
 	/*! @} */
 
+	bool in_pagefault : 1;
+
 	/*! kernal stack */
 	vaddr_t kstack;
 	/*! user-mode stack (or NULL) */

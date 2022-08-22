@@ -2,6 +2,7 @@
 
 #include <kern/liballoc.h>
 #include <kern/sync.h>
+#include <kern/task.h>
 #include <vm/vm.h>
 
 static mutex_t alloclock = MUTEX_INITIALISER(alloclock);

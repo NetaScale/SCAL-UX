@@ -328,6 +328,26 @@ kmem_zonealloc(kmem_zone_t *zone)
 		SIMPLEQ_INSERT_TAIL(&zone->slablist, slab, slablist);
 		slab->firstfree = NULL;
 	} else {
+#ifdef KMEM_SANITY_CHECKS
+		void *slab_base, *slab_end, *next_data;
+
+		if (zone->size <= kSmallSlabMax) {
+			slab_base = (void *)PGROUNDDOWN(slab);
+			next_data = next;
+		} else {
+			slab_base = slab->data[0];
+			next_data = next->base;
+		}
+		slab_end = slab_base + slabsize(zone);
+
+		ASSERT_IN_KHEAP(next);
+
+		assert((void *)next_data >= slab_base
+		    && (void *)next_data < slab_end);
+		assert((uintptr_t)((void *)next_data - slab_base)
+		    % zone->size == 0);
+#endif
+
 		slab->firstfree = next;
 	}
 
@@ -435,12 +455,13 @@ zonenum(size_t size)
 		return -1;
 }
 
-void *
-kmem_alloc(size_t size)
+static void *
+_kmem_alloc(size_t size)
 {
 	int zoneidx;
 
 	assert(size > 0);
+
 	zoneidx = zonenum(size);
 
 	if (zoneidx == -1) {
@@ -448,6 +469,18 @@ kmem_alloc(size_t size)
 		return vm_kalloc(realsize / PGSIZE, kVMKSleep);
 	} else
 		return kmem_zonealloc(kmem_alloc_zones[zoneidx]);
+}
+
+void *
+kmem_alloc(size_t size)
+{
+	void *ret = _kmem_alloc(size);
+#if 0
+	memset(ret - 64, 0xDEAFBEEF, 64);
+	memset(ret + size, 0xDEADBEEF, 64);
+	memset(ret, 0x0, size);
+#endif
+	return ret;
 }
 
 void
@@ -472,6 +505,7 @@ kmem_realloc(void *ptr, size_t oldSize, size_t size)
 	ret = kmem_alloc(size);
 	if (ptr != NULL) {
 		assert(oldSize > 0);
+		assert(size > oldSize);
 		memcpy(ret, ptr, oldSize);
 		kmem_free(ptr, oldSize);
 	}

@@ -30,6 +30,7 @@ thread_t thread0 = {
         .task = &task0,
 	.lock = SPINLOCK_INITIALISER,
 	.wq = NULL,
+	.in_pagefault = false,
 };
 
 cpu_t cpu0 = {
@@ -225,6 +226,7 @@ waitq_await(waitq_t *wq, uint64_t nanosecs)
 	waitq_result_t r;
 
 	spinlock_lock(&wq->lock);
+	for (;;) ;
 	r = waitq_await_locked(wq, nanosecs);
 	md_intr_x(iff);
 	return r;

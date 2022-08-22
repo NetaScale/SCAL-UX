@@ -45,4 +45,8 @@ typedef struct tmpnode {
 	};
 } tmpnode_t;
 
+extern struct vfsops tmpfs_vfsops;
+extern struct vnops tmpfs_vnops;
+extern struct vnops tmpfs_spec_vnops;
+
 #endif /* TMPFS_H_ */

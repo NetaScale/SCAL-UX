@@ -486,4 +486,6 @@ void vm_kfree(vaddr_t addr, size_t pages);
 
 /*! @} */
 
+#define ASSERT_IN_KHEAP(PTR) assert((uintptr_t)PTR >= KHEAP_BASE && (uintptr_t)PTR < KHEAP_BASE +0x100000000 )
+
 #endif /* VM_H_ */

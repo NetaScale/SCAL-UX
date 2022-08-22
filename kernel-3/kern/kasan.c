@@ -13,10 +13,15 @@ kasan_check(vaddr_t addr, size_t size, bool isStore, void *ip)
 
 	in_check = true;
 
-	if (addr == 0xffff8001000043d8) {
-		kprintf("%p %s(%d) by %p. Old value: %d\n", addr,
+	if (addr == 0xffff8001005d4f00) {
+		kprintf("%p %s(%d) by %p. Old value: %p\n", addr,
 		    isStore ? "STORED" : "loaded", size,
-		    __builtin_return_address(1), *(bool *)addr);
+		    __builtin_return_address(1), *(void **)addr);
+
+		kprintf(" --> %p\n", __builtin_return_address(2));
+		kprintf(" --> %p\n", __builtin_return_address(3));
+		kprintf(" --> %p\n", __builtin_return_address(4));
+		kprintf(" --> %p\n", __builtin_return_address(5));
 	}
 
 	in_check = false;

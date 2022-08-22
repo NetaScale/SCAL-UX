@@ -61,6 +61,7 @@ typedef struct vfs {
 	TAILQ_ENTRY(vfs) list;
 	const struct vfsops *ops;
         vnode_t *vnodecovered; /* vnode this fs is mounted over */
+	void *data; /* fs-private data */
 } vfs_t;
 
 /*!
@@ -128,10 +129,26 @@ struct vnops {
 };
 
 struct vfsops {
+
+	/*!
+	 * Mount the filesystem.
+	 * @param vfs vfs structure to be mounted; mountee will need to fill in
+	 * relevant parts
+	 * @param path path to mount at (must point to a directory). If NULL,
+	 * the filesystem is mounted as root.
+	 * @param data per-filesystem specific data (e.g. )
+	 */
+	int (*mount)(vfs_t *vfs, const char *path, void *data);
+
 	/*!
 	 * Get the root vnode of the filesystem.
 	 */
 	int (*root)(vfs_t *vfs, vnode_t **out);
+
+	/*!
+	 * Get the vnode corresponding to the given inode number.
+	 */
+	int (*vget)(vfs_t*vfs, vnode_t **out, ino_t inode);
 };
 
 enum lookup_flags {
@@ -158,6 +175,7 @@ int vfs_read(vnode_t *vn, void *buf, size_t nbyte, off_t off);
  */
 int vfs_write(vnode_t *vn, void *buf, size_t nbyte, off_t off);
 
+extern vfs_t root_vfs;
 extern vnode_t *root_vnode;
 
 #endif /* VFS_H_ */

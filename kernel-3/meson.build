@@ -23,7 +23,7 @@ kern_srcs = files(
 
   'posix/posix_main.c', 'posix/vfs.c',
 
-  'tmpfs/tmpfs.c',
+  'tmpfs/tmpfs.c', 'tmpfs/tmp_vfsops.c',
 
   'vm/vm_kernel.c','vm/vm_page.c', 'vm/vm_pageout.c', 'vm/vm.c'
 )

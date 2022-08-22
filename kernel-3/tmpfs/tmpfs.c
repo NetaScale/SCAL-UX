@@ -20,55 +20,14 @@
 #include <posix/vfs.h>
 #include <string.h>
 
+#include "machine/vm.h"
 #include "tmpfs.h"
-
-extern struct vnops tmpfs_vnops;
-extern struct vnops tmpfs_spec_vnops;
-
-/*
- * vfsops
- */
-int
-tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
-{
-	tmpnode_t *node = (tmpnode_t *)ino;
-
-	if (node->vn != NULL) {
-		node->vn->refcnt++;
-		*vout = node->vn;
-		return 0;
-	} else {
-		vnode_t *vn = kmem_alloc(sizeof(*vn));
-		node->vn = vn;
-		vn->refcnt = 1;
-		vn->type = node->attr.type;
-		vn->ops = vn->type == VCHR ? &tmpfs_spec_vnops : &tmpfs_vnops;
-		if (node->attr.type == VREG) {
-			vn->vmobj = node->reg.vmobj;
-		} else if (node->attr.type == VCHR) {
-			// spec_setup_vnode(vn, node->chr.dev);
-		}
-		vn->data = node;
-		*vout = vn;
-		return 0;
-	}
-}
-
-void
-tmpfs_mountroot()
-{
-	tmpnode_t *root = kmem_alloc(sizeof(*root));
-
-	root->attr.type = VDIR;
-	root->vn = NULL;
-	TAILQ_INIT(&root->dir.entries);
-
-	tmpfs_vget(NULL, &root_vnode, (ino_t)root);
-}
 
 /*
  * vnops
  */
+
+//#define kmem_alloc liballoc_kmalloc
 
 #define VNTOTN(VN) ((tmpnode_t *)VN->data)
 
@@ -77,6 +36,7 @@ tlookup(tmpnode_t *node, const char *filename)
 {
 	tmpdirent_t *dent;
 	TAILQ_FOREACH (dent, &node->dir.entries, entries) {
+		assert(filename && dent && dent->name);
 		if (strcmp(dent->name, filename) == 0)
 			return dent;
 	}
@@ -87,7 +47,7 @@ static tmpnode_t *
 tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
     vattr_t *attr)
 {
-	tmpnode_t	  *n = kmem_alloc(sizeof(*n));
+	tmpnode_t   *n = kmem_alloc(sizeof(*n));
 	tmpdirent_t *td = kmem_alloc(sizeof(*td));
 
 	td->name = strdup(name);
@@ -103,10 +63,13 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
 	n->attr.size = 0;
 	n->vn = NULL;
 
+	ASSERT_IN_KHEAP(n);
+
 	switch (type) {
 	case VREG:
 		/* vnode object is associated as soon as needed */
 		n->reg.vmobj = vm_aobj_new(UINT32_MAX);
+		assert(n->reg.vmobj > KHEAP_BASE && n->reg.vmobj < KHEAP_BASE + 0x10000000)
 		n->reg.vmobj->refcnt++;
 		break;
 
@@ -138,7 +101,7 @@ tmp_create(vnode_t *dvn, vnode_t **out, const char *pathname, vattr_t *attr)
 	n = tmakenode(VNTOTN(dvn), attr->type, pathname, 0, attr);
 	assert(n != NULL);
 
-	return tmpfs_vget(dvn->vfsp, out, (ino_t)n);
+	return dvn->vfsp->ops->vget(dvn->vfsp, out, (ino_t)n);
 }
 
 int
@@ -162,7 +125,7 @@ tmp_lookup(vnode_t *vn, vnode_t **out, const char *pathname)
 	if (!tdent)
 		return -ENOENT;
 
-	r = tmpfs_vget(vn->vfsp, out, (ino_t)tdent->node);
+	r = vn->vfsp->ops->vget(vn->vfsp, out, (ino_t)tdent->node);
 
 	return r;
 }
