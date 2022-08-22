@@ -40,7 +40,6 @@ To-do
 - vm_kernel doesn't do TLB shotodowns for unmaps of kernel wired memory;
   problem?
 
-<!--
 Third-party components
 ----------------------
 
@@ -48,21 +47,22 @@ Several third-party components are used. These are some of them:
 - mlibc: Provides libc.
 - liballoc: Provides one of the in-kernel allocators.
 - nanoprintf: used for `kprintf`.
-- NetBSD: (`kernel/sys/queue.h`): NetBSD's `sys/queue.h`.
-  - (`kernel/dev/fbterm/nbsdbold.psfu`): Bold8x16 font used for FBTerminal.
-  - (`kernel/dev/nvmereg.h`): NVMe register definitions.
-- Solaris (`kernel/dev/fbterm/sun12x22.psfu`): Sun Demi Gallant font available
+- NetBSD:
+  - (`kernel-3/dev/fbterm/nbsdbold.psfu`): Bold8x16 font used for FBTerminal.
+  - (`kernel-3/dev/nvmereg.h`): NVMe register definitions.
+- Solaris (`kernel-3/dev/fbterm/sun12x22.psfu`): Sun Demi Gallant font available
   for FBTerminal
 - ObjFW: provides an Objective-C runtime.
-- limine/`limine-terminal-port` (some files in`kernel/dev/fbterm/`): used by
+- limine/`limine-terminal-port` (some files in`kernel-3/dev/fbterm/`): used by
   FBTerminal to provide a terminal.
-- Managarm LUX ACPI Implementation (`kernel/dev/acpi/lai`): Lightweight ACPI Implementation used by
-  Acpi* drivers.
-- LZ4 (`kernel/libkern/lz4.{c,h}`): Used by VM Compressor to compress pages.
-- libuuid (`kernel/libkern/uuid*`)
--->
+- LUX ACPI Implementation (`kernel-3/dev/acpi/lai`): ACPI implementation from
+  Managarm used by Acpi* drivers.
+- LZ4 (`kernel-3/libkern/lz4.{c,h}`): Used by VM Compressor to compress pages.
+- libuuid (`kernel-3/libkern/uuid*`)
+- Linux (`kernel-3/ext2fs/ext2_fs.h`): Ext2 filesystem definitions
 
 Licence
 -------
 
-SCAL/UX is available under the terms of the Mozilla Public Licence version 2.0.
+Code original to SCAL/UX is licenced under the Mozilla Public Licence v2.0.
+Other components are under their own licences

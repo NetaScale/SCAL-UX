@@ -14,6 +14,8 @@ kern_c_args += [ '--param', 'asan-globals=0', '--param', 'asan-stack=0',
 kern_srcs = files(
   'devicekit/DKDevice.m', 'devicekit/DKDisk.m', 'devicekit/DKLogicalDisk.m',
 
+  'ext2fs/ext2_vfsops.m',
+
   'kern/kasan.c', 'kern/kmem_slab.c', 'kern/liballoc.c',
   'kern/liballoc_sysdep.c', 'kern/task.c', 'kern/vmem.c',
 
