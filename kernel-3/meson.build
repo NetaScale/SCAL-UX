@@ -21,7 +21,9 @@ kern_srcs = files(
 
   'libkern/klib.c', 'libkern/uuid.c',
 
-  'posix/posix_main.c',
+  'posix/posix_main.c', 'posix/vfs.c',
+
+  'tmpfs/tmpfs.c',
 
   'vm/vm_kernel.c','vm/vm_page.c', 'vm/vm_pageout.c', 'vm/vm.c'
 )
