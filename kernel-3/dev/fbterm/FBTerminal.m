@@ -1,9 +1,9 @@
 #include <x86_64/boot.h>
 
 #include "FBTerminal.h"
+#include "dev/dev.h"
 #include "dev/fbterm/term.h"
 #include "devicekit/DKDevice.h"
-#include "vm/vm.h"
 
 extern char sun12x22[], nbsdbold[];
 
@@ -28,9 +28,6 @@ static int fbtputch(void *data, int ch);
 
 - (id)initWithFB:(LimineFB *)fb
 {
-#if 0
-	cdevsw_t cdev;
-#endif
 
 	self = [super initWithProvider:fb];
 
@@ -71,25 +68,25 @@ static int fbtputch(void *data, int ch);
 	term_init(&term, NULL, false);
 	term_vbe(&term, frm, font, style, back);
 
-#if 0
 	if (syscon == nil) {
+		cdevsw_t cdev;
 		int maj;
-		vnode_t *node;
-		syscon = self;
+
 		cdev.is_tty = true;
 		cdev.private = self;
-		cdev.open = fbtopen;
-		cdev.read = tty_read;
-		cdev.write = tty_write;
-		cdev.kqfilter = tty_kqfilter;
-		maj = cdevsw_attach(&cdev);
-		assert(root_dev->ops->mknod(root_dev, &node, "console",
-			   makedev(maj, 0)) == 0);
-		sctty = &tty;
-	}
-#else
-	if (syscon == nil) {
+		// cdev.open = fbtopen;
+		// cdev.read = tty_read;
+		// cdev.write = tty_write;
+		// cdev.kqfilter = tty_kqfilter;
+
 		syscon = self;
+
+		maj = cdevsw_attach(&cdev);
+		// assert(dev_vnode->ops->mknod(root_dev, &node, "console",
+		//	   makedev(maj, 0)) == 0);
+		// sctty = &tty;
+		(void)maj;
+
 		for (int i = msgbuf.read; i != msgbuf.write; i++) {
 			if (i >= sizeof(msgbuf.buf))
 				i = 0;
@@ -97,7 +94,6 @@ static int fbtputch(void *data, int ch);
 		}
 		term_double_buffer_flush(&term);
 	}
-#endif
 
 	[self registerDevice];
 	DKLogAttach(self);

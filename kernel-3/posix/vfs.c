@@ -13,6 +13,7 @@
 #include "vfs.h"
 
 vfs_t root_vfs;
+vnode_t *dev_vnode = NULL;
 vnode_t *root_vnode = NULL;
 
 static vnode_t *

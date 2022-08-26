@@ -65,7 +65,6 @@ unpack_ramdisk(void)
 	void    *initbin;
 	size_t	 size;
 	int	 r;
-	vnode_t *dev_vnode;
 	vattr_t	 devattr = { .mode = 0755 | S_IFDIR, .size = 0, .type = VDIR };
 
 	if (module_request.response->module_count != 1) {
@@ -79,8 +78,10 @@ unpack_ramdisk(void)
 
 	root_vfs.ops->root(&root_vfs, &root_vnode);
 
+	kprintf("Creating dev vnode\n");
 	r = root_vnode->ops->create(root_vnode, &dev_vnode, "dev", &devattr);
 	assert(r >= 0);
+	kprintf("Created vnode %p\n", dev_vnode);
 
 	initbin = module_request.response->modules[0]->address;
 	size = module_request.response->modules[0]->size;
@@ -145,10 +146,10 @@ unpack_ramdisk(void)
 int
 posix_main(void)
 {
+	unpack_ramdisk();
+
 	int autoconf(void);
 	autoconf();
-
-	unpack_ramdisk();
 
 	return 0;
 }

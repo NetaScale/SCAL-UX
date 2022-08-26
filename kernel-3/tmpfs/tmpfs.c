@@ -11,23 +11,21 @@
 #include <sys/param.h>
 #include <sys/queue.h>
 
+#include <dev/dev.h>
 #include <kern/kmem.h>
 #include <libkern/klib.h>
+#include <posix/vfs.h>
 #include <vm/vm.h>
 
 #include <dirent.h>
 #include <errno.h>
-#include <posix/vfs.h>
 #include <string.h>
 
-#include "machine/vm.h"
 #include "tmpfs.h"
 
 /*
  * vnops
  */
-
-//#define kmem_alloc liballoc_kmalloc
 
 #define VNTOTN(VN) ((tmpnode_t *)VN->data)
 
@@ -44,8 +42,7 @@ tlookup(tmpnode_t *node, const char *filename)
 }
 
 static tmpnode_t *
-tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
-    vattr_t *attr)
+tmakenode(tmpnode_t *dn, const char *name, vattr_t *attr)
 {
 	tmpnode_t   *n = kmem_alloc(sizeof(*n));
 	tmpdirent_t *td = kmem_alloc(sizeof(*td));
@@ -59,17 +56,13 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
 		memset(&n->attr, 0x0, sizeof(n->attr));
 	}
 
-	n->attr.type = type;
 	n->attr.size = 0;
 	n->vn = NULL;
 
-	ASSERT_IN_KHEAP(n);
-
-	switch (type) {
+	switch (attr->type) {
 	case VREG:
 		/* vnode object is associated as soon as needed */
 		n->reg.vmobj = vm_aobj_new(UINT32_MAX);
-		assert(n->reg.vmobj > KHEAP_BASE && n->reg.vmobj < KHEAP_BASE + 0x10000000)
 		n->reg.vmobj->refcnt++;
 		break;
 
@@ -79,7 +72,7 @@ tmakenode(tmpnode_t *dn, vtype_t type, const char *name, dev_t dev,
 		break;
 
 	case VCHR:
-		n->chr.dev = dev;
+		/* epsilon */
 		break;
 
 	default:
@@ -98,7 +91,7 @@ tmp_create(vnode_t *dvn, vnode_t **out, const char *pathname, vattr_t *attr)
 
 	assert(dvn->type == VDIR);
 
-	n = tmakenode(VNTOTN(dvn), attr->type, pathname, 0, attr);
+	n = tmakenode(VNTOTN(dvn), pathname, attr);
 	assert(n != NULL);
 
 	return dvn->vfsp->ops->vget(dvn->vfsp, out, (ino_t)n);
@@ -240,10 +233,8 @@ struct vnops tmpfs_vnops = {
 
 struct vnops tmpfs_spec_vnops = {
 	.getattr = tmp_getattr,
-#if 0
 	.open = spec_open,
 	.read = spec_read,
 	.write = spec_write,
-	.kqfilter = spec_kqfilter,
-#endif
+	//.kqfilter = spec_kqfilter,
 };

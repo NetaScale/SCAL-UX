@@ -8,6 +8,7 @@
  * All rights reserved.
  */
 
+#include <dev/dev.h>
 #include <kern/kmem.h>
 #include <libkern/klib.h>
 #include <posix/vfs.h>
@@ -63,7 +64,7 @@ tmpfs_vget(vfs_t *vfs, vnode_t **vout, ino_t ino)
 		if (node->attr.type == VREG) {
 			vn->vmobj = node->reg.vmobj;
 		} else if (node->attr.type == VCHR) {
-			// spec_setup_vnode(vn, node->chr.dev);
+			spec_setup_vnode(vn, node->attr.rdev);
 		}
 		vn->data = node;
 		*vout = vn;

@@ -226,7 +226,6 @@ waitq_await(waitq_t *wq, uint64_t nanosecs)
 	waitq_result_t r;
 
 	spinlock_lock(&wq->lock);
-	for (;;) ;
 	r = waitq_await_locked(wq, nanosecs);
 	md_intr_x(iff);
 	return r;
